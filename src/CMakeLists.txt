@@ -119,17 +119,13 @@ ENDIF()
   ####################################
   SET(UTILITIES
     Utilities/RandomGenerator.cpp 
-    Utilities/SpeciesSet.cpp 
     Utilities/OhmmsInform.cpp 
     Utilities/OhmmsInfo.cpp 
     Utilities/NewTimer.cpp
-    spline2/einspline_allocator.c
-    spline2/bspline_allocator.cpp
-    spline2/MultiBsplineData.cpp
     ${GITREV_TMP}
     )
 
-   ADD_LIBRARY(qmcutil ${UTILITIES} ${ADIOS})
+   ADD_LIBRARY(qmcutil ${UTILITIES})
 
 
   # For unit tests, enable use for the fake RNG
@@ -139,45 +135,6 @@ ENDIF()
 
   # Put the fake RNG in a separate library so production code doesn't
   # accidentally link to it
-
-  #IF(QMC_BUILD_STATIC)
-  #  ADD_LIBRARY(qmcutil STATIC ${UTILITIES})
-  #ELSE(QMC_BUILD_STATIC)
-  #  ADD_LIBRARY(qmcutil SHARED ${UTILITIES})
-  #ENDIF(QMC_BUILD_STATIC)
-
-
-  ####################################
-  # create libqmcbase 
-  ####################################
-  SET(PARTICLE ${PARTICLE}
-    Particle/ParticleSet.cpp 
-    Particle/ParticleSet.BC.cpp 
-    Particle/MCWalkerConfiguration.cpp 
-    Particle/DistanceTableAA.cpp
-    Particle/DistanceTableAB.cpp
-    Particle/DistanceTable.cpp
-    )
-
-
-  # IF(QMC_BUILD_LEVEL GREATER 2)
-  #   IF(NOT QMC_COMPLEX)
-  #     SET(PARTICLE ${PARTICLE} Particle/Bead_ParticleSet.cpp )
-  #   ENDIF(NOT QMC_COMPLEX)
-  # ENDIF(QMC_BUILD_LEVEL GREATER 2)
-
-  #SET(PARTICLEIO
-  #  ParticleIO/ParticleIOUtility.cpp
-  #  )
-
-  ADD_LIBRARY(qmcbase ${PARTICLE}  ${PARTICLEIO}) 
-
-  #IF(QMC_BUILD_STATIC)
-  #  ADD_LIBRARY(qmcbase STATIC ${PARTICLE}  ${PARTICLEIO})
-  #ELSE(QMC_BUILD_STATIC)
-  #  ADD_LIBRARY(qmcbase SHARED ${PARTICLE}  ${PARTICLEIO})
-  #ENDIF(QMC_BUILD_STATIC)
-  #SUBDIRS(einspline)
 
   if(QMC_BUILD_LEVEL GREATER 4)
 

@@ -167,14 +167,7 @@ iF(MIXED_PRECISION AND BUILD_LMYENGINE_INTERFACE)
   MESSAGE(STATUS "LMY engine is not compatiable with CPU mixed precision build! Disabling LMY engine")
   SET(BUILD_LMYENGINE_INTERFACE 0)
 ENDIF()
-SET(BUILD_AFQMC 0 CACHE BOOL "Build with AFQMC")
-SET(BUILD_FCIQMC 0 CACHE BOOL "Build with FCIQMC")
-#SET(BUILD_QMCTOOLS 1 CACHE BOOL "Build tools for QMCPACK")
-#SET(BUILD_SANDBOX 0 CACHE BOOL "Build snadbox for testing")
-#SET(MPIP_PROFILE 0 CACHE BOOL "Build with mpip for mpi profile")
-#SET(BUILD_QMCTOOLS 1)
-#SET(BUILD_SANDBOX 0)
-#SET(MPIP_PROFILE 0)
+SET(BUILD_AFQMC 1 CACHE BOOL "Build with AFQMC")
 SET(QMC_BUILD_STATIC 0 CACHE BOOL "Link to static libraries")
 SET(ENABLE_TIMERS 1 CACHE BOOL "Enable internal timers")
 
@@ -680,7 +673,7 @@ INCLUDE_DIRECTORIES( ${PROJECT_SOURCE_DIR}/src ${PROJECT_BINARY_DIR}/src)
 # - if everything fails, do not use it
 ######################################################################
 SET(HAVE_EINSPLINE 1)
-set(build_einspline 1)
+set(build_einspline 0)
 #if(HAVE_EINSPLINE_EXT)
 #  set(HAVE_EINSPLINE 0)
 #  INCLUDE(${PROJECT_CMAKE}/FindEinspline.cmake)
@@ -829,10 +822,10 @@ ENDIF(QMC_ADIOS)
 
 SUBDIRS(src)
 
-IF(NOT(QMC_BUILD_LEVEL GREATER 4))
-  SUBDIRS(tests)
-  SUBDIRS(examples)
-ENDIF()
+#IF(NOT(QMC_BUILD_LEVEL GREATER 4))
+#  SUBDIRS(tests)
+#  SUBDIRS(examples)
+#ENDIF()
 
 #ADD_CUSTOM_TARGET(print_settings ALL
 #      ${CMAKE_COMMAND} -E echo "Print build settings"
