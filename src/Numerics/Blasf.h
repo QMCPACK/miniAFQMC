@@ -114,6 +114,12 @@ float snrm2(const int &n, const float *dx, const int &incx);
 double dznrm2(const int &n, const std::complex<double> *dx, const int &incx);
 
 double dscal(const int &n, const double &, double *x, const int &);
+double sscal(const int &n, const float &, float *x, const int &);
+
+double cscal(const int &n, const std::complex<float> &, std::complex<float> *x, const int &);
+double zscal(const int &n, const std::complex<double>&, std::complex<double> *x, const int &);
+double zdscal(const int &n, const double&, std::complex<double> *x, const int &);
+double csscal(const int &n, const float&, std::complex<float> *x, const int &);
 
 void dsymv(const char &uplo, const int &n, const double &alpha, const double &a,
            const int &lda, const double *x, const int &incx, const double &beta,
