@@ -110,11 +110,36 @@ struct BLAS
     return snrm2(n, a, incx);
   }
 
-  inline static void scal(int n, double alpha, double *x)
+  inline static void scal(int n, float alpha, float *x, int incx = 1)
   {
-    dscal(n, alpha, x, INCX);
+    sscal(n, alpha, x, incx);
   }
 
+  inline static void scal(int n, std::complex<float> alpha, std::complex<float> *x, int incx = 1)
+  {
+    cscal(n, alpha, x, incx);
+  }
+  
+  inline static void scal(int n, double alpha, double *x, int incx = 1)
+  {
+    dscal(n, alpha, x, incx);
+  }  
+
+  inline static void scal(int n, std::complex<double> alpha, std::complex<double> *x, int incx = 1)
+  {
+    zscal(n, alpha, x, incx);
+  } 
+  
+  inline static void scal(int n, double alpha, std::complex<double> *x, int incx = 1)
+  {
+    zdscal(n, alpha, x, incx);
+  }
+  
+  inline static void scal(int n, float alpha, std::complex<float> *x, int incx = 1)
+  {
+    csscal(n, alpha, x, incx);
+  }  
+  
   // inline static
   // void gemv(char trans, int n, int m, const double* amat, const double* x,
   // double* y) {
