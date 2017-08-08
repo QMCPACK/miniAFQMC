@@ -7,9 +7,9 @@
 #include "Numerics/OhmmsBlas.h"
 #include<utility> //std::enable_if
 
-template<class MultiArray, typename = typename std::enable_if<std::decay<MultiArray>::type::dimensionality == 1>::type >
-MultiArray& scal(double a, MultiArray&& x){
-	dscal(x.size(), a, x.origin(), x.strides()[0]);
+template<class T, class MultiArray, typename = typename std::enable_if<std::decay<MultiArray>::type::dimensionality == 1>::type >
+MultiArray& scal(T a, MultiArray&& x){
+	scal(x.size(), a, x.origin(), x.strides()[0]);
 	return x;
 }
 
