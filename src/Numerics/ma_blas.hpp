@@ -59,10 +59,10 @@ MultiArray2DC gemm(T alpha, MultiArray2DA const& a, MultiArray2DB const& b, T be
 	assert( a.strides()[1] == 1 );
 	assert( b.strides()[1] == 1 );
 	assert( c.strides()[1] == 1 );
-	if(TA == 'T' and TB == 'T') assert(a.shape()[1] == b.shape()[0] and c.shape()[0] == b.shape()[1] and c.shape()[1] == a.shape()[0]);
+	if((TA == 'T' or TA == 'H') and (TB == 'T' or TB == 'H')) assert(a.shape()[1] == b.shape()[0] and c.shape()[0] == b.shape()[1] and c.shape()[1] == a.shape()[0]);
 	if(TA == 'N' and TB == 'N') assert(a.shape()[0] == b.shape()[1] and c.shape()[0] == b.shape()[0] and c.shape()[1] == a.shape()[1]);
-	if(TA == 'T' and TB == 'N') assert(a.shape()[1] == b.shape()[1] and c.shape()[0] == b.shape()[0] and c.shape()[1] == a.shape()[0]);
-	if(TA == 'N' and TB == 'T') assert(a.shape()[0] == b.shape()[0] and c.shape()[1] == b.shape()[1] and c.shape()[0] == a.shape()[1]);
+	if((TA == 'T' or TA == 'H') and TB == 'N') assert(a.shape()[1] == b.shape()[1] and c.shape()[0] == b.shape()[0] and c.shape()[1] == a.shape()[0]);
+	if(TA == 'N' and (TB == 'T' or TB == 'H')) assert(a.shape()[0] == b.shape()[0] and c.shape()[1] == b.shape()[1] and c.shape()[0] == a.shape()[1]);
 	BLAS::gemm(
 		TA, TB, 
 		c.shape()[1] /*m*/, c.shape()[0] /*n*/, a.shape()[1] /*k*/, alpha, 
