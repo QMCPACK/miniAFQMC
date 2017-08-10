@@ -9,6 +9,8 @@
 #include<cassert>
 #include<iostream>
 
+namespace ma{
+
 template<class T, class MultiArray1D, typename = typename std::enable_if<std::decay<MultiArray1D>::type::dimensionality == 1>::type >
 MultiArray1D scal(T a, MultiArray1D&& x){
 	BLAS::scal(x.size(), a, x.origin(), x.strides()[0]);
@@ -33,7 +35,7 @@ template<char IN, class T, class MultiArray2DA, class MultiArray1DX, class Multi
 	typename = typename std::enable_if< MultiArray2DA::dimensionality == 2 and MultiArray1DX::dimensionality == 1 and std::decay<MultiArray1DY>::type::dimensionality == 1>::type
 >
 MultiArray1DY gemv(T alpha, MultiArray2DA const& A, MultiArray1DX const& x, T beta, MultiArray1DY&& y){
-	if(IN == 'T') assert( x.shape()[0] == A.shape()[1] and y.shape()[0] == A.shape()[0]);
+	if(IN == 'T' or IN == 'H') assert( x.shape()[0] == A.shape()[1] and y.shape()[0] == A.shape()[0]);
 	else if(IN == 'N') assert( x.shape()[0] == A.shape()[0] and y.shape()[0] == A.shape()[1]);
 	assert( A.strides()[1] == 1 ); // gemv is not implemented for arrays with non-leading stride != 1
 	BLAS::gemv(IN, A.shape()[1], A.shape()[0], alpha, A.origin(), A.strides()[0], x.origin(), x.strides()[0], beta, y.origin(), y.strides()[0]);
@@ -42,8 +44,42 @@ MultiArray1DY gemv(T alpha, MultiArray2DA const& A, MultiArray1DX const& x, T be
 
 template<char IN, class MultiArray2DA, class MultiArray1DX, class MultiArray1DY>
 MultiArray1DY gemv(MultiArray2DA const& A, MultiArray1DX const& x, MultiArray1DY&& y){
-	return gemv<IN>(1., A, x, 0., y);
+	return gemv<IN>(1., A, x, 0., std::forward<MultiArray1DY>(y));
 } //y := alpha*A*x
+
+//	gemm<'T', 'T'>(1., A, B, 0., C); // C = T(A*B) = T(B)*T(A) or T(C) = A*B
+//	gemm<'N', 'N'>(1., A, B, 0., C); // C = B*A = T(T(A)*T(B)) or T(C) = T(A)*T(B)
+//	gemm<'T', 'N'>(1., A, B, 0., C); // C = T(A*T(B)) = B*T(A) or T(C) = A*T(B)
+//	gemm<'N', 'T'>(1., A, B, 0., C); // C =  T(T(A)*B) = T(B)*A or T(C) = T(A)*B
+
+template<char TA, char TB, class T, class MultiArray2DA, class MultiArray2DB, class MultiArray2DC, 
+	typename = typename std::enable_if< MultiArray2DA::dimensionality == 2 and MultiArray2DB::dimensionality == 2 and std::decay<MultiArray2DC>::type::dimensionality == 2>::type
+>
+MultiArray2DC gemm(T alpha, MultiArray2DA const& a, MultiArray2DB const& b, T beta, MultiArray2DC&& c){
+	assert( a.strides()[1] == 1 );
+	assert( b.strides()[1] == 1 );
+	assert( c.strides()[1] == 1 );
+	if(TA == 'T' and TB == 'T') assert(a.shape()[1] == b.shape()[0] and c.shape()[0] == b.shape()[1] and c.shape()[1] == a.shape()[0]);
+	if(TA == 'N' and TB == 'N') assert(a.shape()[0] == b.shape()[1] and c.shape()[0] == b.shape()[0] and c.shape()[1] == a.shape()[1]);
+	if(TA == 'T' and TB == 'N') assert(a.shape()[1] == b.shape()[1] and c.shape()[0] == b.shape()[0] and c.shape()[1] == a.shape()[0]);
+	if(TA == 'N' and TB == 'T') assert(a.shape()[0] == b.shape()[0] and c.shape()[1] == b.shape()[1] and c.shape()[0] == a.shape()[1]);
+	BLAS::gemm(
+		TA, TB, 
+		c.shape()[1] /*m*/, c.shape()[0] /*n*/, a.shape()[1] /*k*/, alpha, 
+		a.origin(), a.strides()[0], 
+		b.origin(), b.strides()[0],
+		beta, 
+		c.origin(), c.strides()[0]
+	);
+	return std::forward<MultiArray2DC>(c);
+}
+
+template<char TA, char TB, class T, class MultiArray2DA, class MultiArray2DB, class MultiArray2DC>
+MultiArray2DC gemm(MultiArray2DA const& a, MultiArray2DB const& b, MultiArray2DC&& c){
+	return gemm(1., a, b, 0., std::forward<MultiArray2DC>(c));
+}
+
+}
 
 #ifdef _TEST_MA_BLAS
 
@@ -57,7 +93,7 @@ int main(){
 	std::vector<double> v = {1.,2.,3.};
 	{
 		boost::multi_array_ref<double, 1> V(v.data(), boost::extents[v.size()]);
-		scal(2., V);
+		ma::scal(2., V);
 		{
 			std::vector<double> v2 = {2.,4.,6.};
 			boost::multi_array_ref<double, 1> V2(v2.data(), boost::extents[v2.size()]);
@@ -72,7 +108,7 @@ int main(){
 	};
 	boost::multi_array_ref<double, 2> M(m.data(), boost::extents[3][3]);
 	assert( M.num_elements() == m.size());
-	scal(2., M[2]);
+	ma::scal(2., M[2]);
 	{
 		std::vector<double> m2 = {
 			1.,2.,3.,
@@ -85,7 +121,7 @@ int main(){
 	typedef boost::multi_array_types::index_range range_t;
 	boost::multi_array_types::index_gen indices;
 
-	scal(2., M[ indices[range_t(0,3)][2] ]);
+	ma::scal(2., M[ indices[range_t(0,3)][2] ]);
 	{
 		std::vector<double> m2 = {
 			1.,2.,6.,
@@ -95,7 +131,7 @@ int main(){
 		boost::multi_array_ref<double, 2> M2(m2.data(), boost::extents[3][3]);
 		assert( M == M2 );
 	}
-	scal(2., M[ indices[range_t(0,2)][1] ]);
+	ma::scal(2., M[ indices[range_t(0,2)][1] ]);
 	{
 		std::vector<double> m2 = {
 			1.,4.,6.,
@@ -105,7 +141,7 @@ int main(){
 		boost::multi_array_ref<double, 2> M2(m2.data(), boost::extents[3][3]);
 		assert( M == M2 );
 	}
-	axpy(2., M[1], M[0]); // M[0] += a*M[1]
+	ma::axpy(2., M[1], M[0]); // M[0] += a*M[1]
 	{
 		std::vector<double> m2 = {
 			9.,24.,30.,
@@ -127,7 +163,7 @@ int main(){
 		boost::multi_array_ref<double, 1> X(x.data(), boost::extents[x.size()]);
 		std::vector<double> y = {4.,5.,6.};
 		boost::multi_array_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
-		gemv<'T'>(1., M, X, 0., Y); // y := M x
+		ma::gemv<'T'>(1., M, X, 0., Y); // y := M x
 
 		std::vector<double> y2 = {183., 88.,158.};
 		boost::multi_array_ref<double, 1> Y2(y2.data(), boost::extents[y2.size()]);
@@ -149,7 +185,7 @@ int main(){
 		boost::multi_array_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
 		
 		auto const& mm = M[ indices[range_t(0,2,1)][range_t(0,2,1)] ];//, X, 0., Y); // y := M x
-		gemv<'T'>(1., M[ indices[range_t(0,2,1)][range_t(0,2,1)] ], X, 0., Y); // y := M x
+		ma::gemv<'T'>(1., M[ indices[range_t(0,2,1)][range_t(0,2,1)] ], X, 0., Y); // y := M x
 
 		std::vector<double> y2 = {57., 24.};
 		boost::multi_array_ref<double, 1> Y2(y2.data(), boost::extents[y2.size()]);
@@ -168,7 +204,7 @@ int main(){
 		boost::multi_array_ref<double, 1> X(x.data(), boost::extents[x.size()]);
 		std::vector<double> y = {4.,5.,6., 7.};
 		boost::multi_array_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
-		gemv<'T'>(1., M, X, 0., Y); // y := M x
+		ma::gemv<'T'>(1., M, X, 0., Y); // y := M x
 		std::vector<double> y2 = {147., 60.,154.,25.};
 		boost::multi_array_ref<double, 1> Y2(y2.data(), boost::extents[y2.size()]);
 		assert( Y == Y2 );
@@ -185,26 +221,112 @@ int main(){
 		boost::multi_array_ref<double, 1> X(x.data(), boost::extents[x.size()]);
 		std::vector<double> y = {4.,5.,6.,7.};
 		boost::multi_array_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
-		gemv<'N'>(1., M, X, 0., Y); // y := M^T x
+		ma::gemv<'N'>(1., M, X, 0., Y); // y := M^T x
 		std::vector<double> y2 = {59., 92., 162., 26.};
 		boost::multi_array_ref<double, 1> Y2(y2.data(), boost::extents[y2.size()]);
 		assert( Y == Y2 );
 	}
 	{
-		std::vector<double> m = {
-			9.,24.,30., 3.,
-			4.,10.,12., 1.,
-			14.,16.,36., 5.
+		std::vector<double> a = {
+			9.,24.,30.,
+			4.,10.,12.,
+			14.,16.,36.
 		};
-		boost::multi_array_ref<double, 2> M(m.data(), boost::extents[3][4]);
-		std::vector<double> x = {1.,2.,3., 4.};
-		boost::multi_array_ref<double, 1> X(x.data(), boost::extents[x.size()]);
-		std::vector<double> y = {4.,5.,6.};
-		boost::multi_array_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
-		gemv<'T'>(1., M, X, 0., Y); // y := M x
-		std::vector<double> y2 = {159.,64.,174.};
-		boost::multi_array_ref<double, 1> Y2(y2.data(), boost::extents[y2.size()]);
-		assert( Y == Y2 );
+		boost::multi_array_ref<double, 2> A(a.data(), boost::extents[3][3]);
+		assert( A.num_elements() == a.size() );
+		std::vector<double> b = {
+			9.,24., 4.,
+			4.,10., 1.,
+			14.,16.,3.
+		};
+		boost::multi_array_ref<double, 2> B(b.data(), boost::extents[3][3]);
+		assert( B.num_elements() == b.size());
+		std::vector<double> c = {
+			9.,24., 4.,
+			4.,10., 9.,
+			14.,16., 1.
+		};
+		boost::multi_array_ref<double, 2> C(c.data(), boost::extents[3][3]);
+		assert( C.num_elements() == c.size());
+		cout << "B = \n";
+		for(int i = 0; i != B.shape()[0]; ++i){
+			for(int j = 0; j != B.shape()[1]; ++j){
+				cout << B[i][j] << ' ';
+			}
+			cout << '\n';
+		}
+		ma::gemm<'T', 'T'>(1., A, B, 0., C); // C = T(A*B) = T(B)*T(A) or T(C) = A*B
+		ma::gemm<'N', 'N'>(1., A, B, 0., C); // C = B*A = T(T(A)*T(B)) or T(C) = T(A)*T(B)
+		ma::gemm<'T', 'N'>(1., A, B, 0., C); // C = T(A*T(B)) = B*T(A) or T(C) = A*T(B)
+		ma::gemm<'N', 'T'>(1., A, B, 0., C); // C =  T(T(A)*B) = T(B)*A or T(C) = T(A)*B
+		cout << "C = \n";
+		for(int i = 0; i != C.shape()[0]; ++i){
+			for(int j = 0; j != C.shape()[1]; ++j){
+				cout << C[i][j] << ' ';
+			}
+			cout << '\n';
+		}
+		cout << '\n';
+	}
+	{
+		std::vector<double> a = {
+			9.,24.,30.,
+			4.,10.,12.
+		};
+		boost::multi_array_ref<double, 2> A(a.data(), boost::extents[2][3]);
+		assert( A.num_elements() == a.size() );
+		std::vector<double> b = {
+			9.,24., 
+			4.,10., 
+			14.,16.,
+		};
+		boost::multi_array_ref<double, 2> B(b.data(), boost::extents[3][2]);
+		assert( B.num_elements() == b.size());
+		std::vector<double> c = {
+			9.,24.,
+			4.,10.
+		};
+		boost::multi_array_ref<double, 2> C(c.data(), boost::extents[2][2]);
+		assert( C.num_elements() == c.size());
+		cout << "B = \n";
+		for(int i = 0; i != B.shape()[0]; ++i){
+			for(int j = 0; j != B.shape()[1]; ++j){
+				cout << B[i][j] << ' ';
+			}
+			cout << '\n';
+		}
+		ma::gemm<'T', 'T'>(1., A, B, 0., C); // C = T(A*B) = T(B)*T(A) or T(C) = A*B
+		cout << "C = \n";
+		for(int i = 0; i != C.shape()[0]; ++i){
+			for(int j = 0; j != C.shape()[1]; ++j){
+				cout << C[i][j] << ' ';
+			}
+			cout << '\n';
+		}
+		cout << '\n';
+	}
+	{
+		std::vector<double> a = {
+			9.,24.,30., 45.,
+			4.,10.,12., 12.
+		};
+		boost::multi_array_ref<double, 2> A(a.data(), boost::extents[2][4]);
+		assert( A.num_elements() == a.size() );
+		std::vector<double> b = {
+			9.,24., 56.,
+			4.,10., 78.,
+			14.,16., 90.,
+			6., 9., 18.
+		};
+		boost::multi_array_ref<double, 2> B(b.data(), boost::extents[4][3]);
+		assert( B.num_elements() == b.size());
+		std::vector<double> c = {
+			9.,24., 8.,
+			4.,10., 9.
+		};
+		boost::multi_array_ref<double, 2> C(c.data(), boost::extents[3][2]);
+		assert( C.num_elements() == c.size());
+		ma::gemm<'T', 'T'>(1., A, B, 0., C); // C = T(A*B) = T(B)*T(A) or T(C) = A*B
 	}
 
 }
