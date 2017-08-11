@@ -1,5 +1,5 @@
 #if COMPILATION_INSTRUCTIONS
-(echo "#include<"$0">" > $0x.cpp) && c++ -O3 -std=c++11 `#-Wfatal-errors` -I.. -D_TEST_MA_OPERATIONS -DADD_ -Drestrict=__restrict__ $0x.cpp -lblas -o $0x.x && time $0x.x $@ && rm -f $0x.cpp; exit
+(echo "#include<"$0">" > $0x.cpp) && c++ -O3 -std=c++11 -Wfatal-errors -I.. -D_TEST_MA_OPERATIONS -DADD_ -Drestrict=__restrict__ $0x.cpp -lblas -o $0x.x && time $0x.x $@ && rm -f $0x.cpp; exit
 #endif
 #ifndef MA_OPERATIONS_HPP
 #define MA_OPERATIONS_HPP
@@ -39,6 +39,68 @@ MultiArray2D transpose(MultiArray2D&& A){
 			swap(A[i][j], A[j][i]);
 	return std::forward<MultiArray2D>(A);
 }
+
+template<class MA> struct op_tag : std::integral_constant<char, 'N'>{}; // see specializations
+template<class MA> MA arg(MA&& ma){return std::forward<MA>(ma);} // see specializations below
+
+template<class T, class MultiArray2DA, class MultiArray2DB, class MultiArray2DC>
+MultiArray2DC product(T alpha, MultiArray2DA const& A, MultiArray2DB const& B, T beta, MultiArray2DC&& C){
+	return ma::gemm<
+		op_tag<MultiArray2DB>::value,
+		op_tag<MultiArray2DA>::value
+	>
+	(alpha, arg(B), arg(A), beta, std::forward<MultiArray2DC>(C));
+}
+
+template<class MultiArray2DA, class MultiArray2DB, class MultiArray2DC>
+MultiArray2DC product(MultiArray2DA const& A, MultiArray2DB const& B, MultiArray2DC&& C){
+	return product(1., A, B, 0., std::forward<MultiArray2DC>(C));
+}
+
+template<class MultiArray2D> struct normal_tag{
+	MultiArray2D arg1; 
+	normal_tag(normal_tag const&) = delete;
+	static const char tag = 'N';
+};
+
+template<class MultiArray2D> struct op_tag<normal_tag<MultiArray2D>> : std::integral_constant<char, 'N'>{};
+
+template<class MultiArray2D> normal_tag<MultiArray2D> N(MultiArray2D&& arg){
+	return {std::forward<MultiArray2D>(arg)};
+}
+
+template<class MultiArray2D>
+MultiArray2D arg(normal_tag<MultiArray2D> const& nt){return nt.arg1;}
+
+template<class MultiArray2D> struct transpose_tag{
+	MultiArray2D arg1; 
+	transpose_tag(transpose_tag const&) = delete;
+	static const char tag = 'T';
+};
+
+template<class MultiArray2D> struct op_tag<transpose_tag<MultiArray2D>> : std::integral_constant<char, 'T'>{};
+
+template<class MultiArray2D> transpose_tag<MultiArray2D> T(MultiArray2D&& arg){
+	return {std::forward<MultiArray2D>(arg)};
+}
+
+template<class MultiArray2D>
+MultiArray2D arg(transpose_tag<MultiArray2D> const& tt){return tt.arg1;}
+
+template<class MultiArray2D> struct hermitian_tag{
+	MultiArray2D arg1; 
+	hermitian_tag(hermitian_tag const&) = delete;
+	static const char tag = 'H';
+};
+
+template<class MultiArray2D> hermitian_tag<MultiArray2D> H(MultiArray2D&& arg){
+	return {std::forward<MultiArray2D>(arg)};
+}
+
+template<class MultiArray2D> struct op_tag<hermitian_tag<MultiArray2D>> : std::integral_constant<char, 'H'>{};
+
+template<class MultiArray2D>
+MultiArray2D arg(hermitian_tag<MultiArray2D>& ht){return ht.arg1;}
 
 }
 
@@ -439,8 +501,13 @@ void GeneralizedGramSchmidt(std::complex<double>* A, int LDA, int nR, int nC);
 #endif
 
 #ifdef _TEST_MA_OPERATIONS
-#include<vector>
+
 #include<boost/multi_array.hpp>
+
+#include<vector>
+#include<iostream>
+
+using std::cout;
 
 int main(){
 
@@ -469,7 +536,50 @@ int main(){
 	boost::multi_array_ref<double, 2> M(m.data(), boost::extents[3][3]);
 	assert( ma::is_hermitian(M) );
 	}
+	{
+	std::vector<double> a = {
+		1.,0.,1.,
+		3.,5.,8.,
+		4.,8.,9.
+	};
+	boost::multi_array_ref<double, 2> A(a.data(), boost::extents[3][3]);
+	std::vector<double> b = {
+		6.,2.,8.,
+		9.,5.,5.,
+		1.,7.,9.
+	};
+	boost::multi_array_ref<double, 2> B(b.data(), boost::extents[3][3]);
+	std::vector<double> c(9);
+	boost::multi_array_ref<double, 2> C(c.data(), boost::extents[3][3]);
+
+	ma::product(A, B, C);
+	std::vector<double> ab = {7., 9., 17., 71., 87., 121., 105., 111., 153.};
+	boost::multi_array_ref<double, 2> AB(ab.data(), boost::extents[3][3]);
+	assert(C == AB);
 	
+	using ma::N;
+	ma::product(N(A), N(B), C); // same as ma::product(A, B, C);
+	assert(C == AB);
+
+	using ma::T;
+	
+	ma::product(T(A), B, C);
+	std::vector<double> atb = {37., 45., 59., 53., 81., 97., 87., 105., 129.};
+	boost::multi_array_ref<double, 2> AtB(atb.data(), boost::extents[3][3]);
+	assert(C == AtB);
+	
+	ma::product(A, T(B), C);
+	std::vector<double> abt = {14., 14., 10., 92., 92., 110., 112., 121., 141.};
+	boost::multi_array_ref<double, 2> ABt(abt.data(), boost::extents[3][3]);
+	assert(C == ABt);
+
+	ma::product(T(A), T(B), C);
+	std::vector<double> atbt = {44., 44., 58., 74., 65., 107., 94., 94., 138.};
+	boost::multi_array_ref<double, 2> AtBt(atbt.data(), boost::extents[3][3]);
+	assert(C == AtBt);
+
+	
+	}
 
 }
 #endif
