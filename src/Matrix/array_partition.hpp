@@ -9,6 +9,9 @@
 ////// File created by: Miguel Morales, moralessilva2@llnl.gov, Lawrence Livermore National Laboratory 
 //////////////////////////////////////////////////////////////////////////////////////////
 
+#ifndef QMCPLUSPLUS_AFQMC_ARRAY_PARTITION_HPP
+#define QMCPLUSPLUS_AFQMC_ARRAY_PARTITION_HPP
+
 #include<cassert>
 #include<complex>
 #include<cstdlib>
@@ -23,11 +26,9 @@
 #include "Configuration.h"
 #include "Utilities/UtilityFunctions.h"
 #include "io/hdf_archive.h"
-#include "Message/CommOperators.h"
 #include "Utilities/UtilityFunctions.h"
 
-#include "AFQMC/Utilities/Utils.h"
-#include<AFQMC/config.0.h>
+//#include "Utilities/Utils.h"
 
 namespace qmcplusplus
 {
@@ -289,3 +290,4 @@ struct simple_matrix_partition
 
 }
 
+#endif

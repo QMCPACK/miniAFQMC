@@ -26,8 +26,6 @@
 #include <stack>
 #include <bitset>
 
-class Communicate;
-
 namespace qmcplusplus
 {
 /** class to handle hdf file
@@ -57,12 +55,12 @@ struct hdf_archive
    * @param c communicator
    * @param use_collective turn on/off collective
    */
-  hdf_archive(Communicate* c=0, bool use_collective=false);
+  hdf_archive();
   ///destructor
   ~hdf_archive();
 
   ///set the access property
-  void set_access_plist(bool use_collective, Communicate* comm);
+  void set_access_plist();
 
   ///return true if collective i/o
   inline bool is_collective() const

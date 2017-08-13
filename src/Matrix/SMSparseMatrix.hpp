@@ -96,7 +96,7 @@ class SMSparseMatrix
     APP_ABORT(" Error: SMSparseMatrix copy constructor has been disabled.");
   }
 
-  inline void setup(bool hd, std::string ii, MPI_Comm comm_) {
+  inline void setup(bool hd, std::string ii, MPI_Comm comm_=MPI_COMM_SELF) {
     head=hd;
     ID=ii;
     remover.ID=ii;

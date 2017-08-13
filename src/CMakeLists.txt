@@ -122,6 +122,7 @@ ENDIF()
     Utilities/OhmmsInform.cpp 
     Utilities/OhmmsInfo.cpp 
     Utilities/NewTimer.cpp
+    io/hdf_archive.cpp
     ${GITREV_TMP}
     )
 

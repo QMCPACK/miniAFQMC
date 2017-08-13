@@ -9,6 +9,8 @@
 //// File created by: Miguel Morales, moralessilva2@llnl.gov, Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////////////
 
+#ifndef QMCPLUSPLUS_AFQMC_HDF5_READERS_HPP
+#define QMCPLUSPLUS_AFQMC_HDF5_READERS_HPP
 
 #include<cassert>
 #include<complex>
@@ -24,9 +26,6 @@
 #include "Configuration.h"
 #include "Utilities/UtilityFunctions.h"
 #include "io/hdf_archive.h"
-#include "Message/CommOperators.h"
-
-#include<AFQMC/config.0.h>
 
 #define MORE  1555
 #define LAST  2777
@@ -494,3 +493,5 @@ inline std::tuple<int,int> write_hdf5_SpMat(SpMatrix& SpM, hdf_archive& dump, st
 }
 
 }
+
+#endif

@@ -16,12 +16,12 @@
 namespace qmcplusplus
 {
 //const hid_t hdf_archive::is_closed;
-hdf_archive::hdf_archive(Communicate* c, bool use_collective)
+hdf_archive::hdf_archive()
   : file_id(is_closed), access_id(H5P_DEFAULT), xfer_plist(H5P_DEFAULT)
 {
   H5Eget_auto (&err_func, &client_data);
   H5Eset_auto (NULL, NULL);
-  set_access_plist(use_collective,c);
+  set_access_plist();
 }
 
 hdf_archive::~hdf_archive()
@@ -48,36 +48,11 @@ void hdf_archive::close()
   file_id=is_closed;
 }
 
-void hdf_archive::set_access_plist(bool use_collective, Communicate* comm)
+void hdf_archive::set_access_plist()
 {
   access_id=H5P_DEFAULT;
-  if(comm && comm->size()>1) //for parallel communicator
-  {
-    bool use_pdf=false;
-    if(use_collective)
-    {
-#if defined(H5_HAVE_PARALLEL) && defined(ENABLE_PHDF5)
-//      MPI_Info info=MPI_INFO_NULL;
-//      access_id = H5Pcreate(H5P_FILE_ACCESS);
-//      hid_t ret=H5Pset_fapl_mpio(access_id,comm->getMPI(),info);
-//      xfer_plist = H5Pcreate(H5P_DATASET_XFER);
-//      H5Pset_dxpl_mpio(xfer_plist,H5FD_MPIO_COLLECTIVE);
-//      use_pdf=true;
-//      use_collective=false; // everynode writes something
-#endif
-    }
-    Mode.set(IS_PARALLEL,use_pdf);
-    //true, if this task does not need to participate in I/O
-    if(use_collective)
-      Mode.set(NOIO,comm->rank());
-    else
-      Mode.set(NOIO,false);
-  }
-  else
-  {
     Mode.set(IS_PARALLEL,false);
     Mode.set(NOIO,false);
-  }
 }
 
 bool hdf_archive::create(const std::string& fname, unsigned flags)

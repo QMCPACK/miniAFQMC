@@ -7,7 +7,9 @@
 #include<tuple>
 #include<assert.h>
 #include<algorithm>
-#include"AFQMC/config.0.h"
+#include <mpi.h>
+
+#include "Utilities/tuple_iterator.hpp"
 
 #define ASSERT_SPARSEMATRIX 
 
@@ -24,21 +26,26 @@ class SparseMatrix
   typedef T            value_type;
   typedef T*           pointer;
   typedef const T*     const_pointer;
-  typedef const int*   const_indxPtr;
-  typedef int*           indxPtr;
+  typedef const int    const_intType;
+  typedef const int*   const_intPtr;
+  typedef int           intType;
+  typedef int*           intPtr;
   typedef typename std::vector<T>::iterator iterator;
   typedef typename std::vector<T>::const_iterator const_iterator;
+  typedef typename std::vector<intType>::iterator int_iterator;
+  typedef typename std::vector<intType>::const_iterator const_int_iterator;
   typedef SparseMatrix<T>  This_t;
 
-  SparseMatrix<T>():vals(),colms(),myrows(),rowIndex(),nr(0),nc(0),compressed(false),zero_based(true),storage_format(0)
+
+  SparseMatrix<T>():vals(),colms(),myrows(),rowIndex(),nr(0),nc(0),compressed(false),zero_based(true)
   {
   }
 
-  SparseMatrix<T>(int n):vals(),colms(),myrows(),rowIndex(),nr(n),nc(n),compressed(false),zero_based(true),storage_format(0)
+  SparseMatrix<T>(int n):vals(),colms(),myrows(),rowIndex(),nr(n),nc(n),compressed(false),zero_based(true)
   {
   }
 
-  SparseMatrix<T>(int n,int m):vals(),colms(),myrows(),rowIndex(),nr(n),nc(m),compressed(false),zero_based(true),storage_format(0)
+  SparseMatrix<T>(int n,int m):vals(),colms(),myrows(),rowIndex(),nr(n),nc(m),compressed(false),zero_based(true)
   {
   }
 
@@ -46,39 +53,17 @@ class SparseMatrix
   {
   }
 
-  SparseMatrix(const SparseMatrix<T> &rhs)
-  {
-    compressed=rhs.compressed;
-    zero_based=true;
-    nr=rhs.nr;
-    nc=rhs.nc;
-    vals=rhs.vals;
-    myrows=rhs.myrows;
-    colms=rhs.colms;
-    rowIndex=rhs.rowIndex;
-    storage_format=rhs.storage_format;
-  }
+  SparseMatrix<T>(const SparseMatrix<T> &rhs) = delete;
 
-  inline void reserve(int n)
+  inline void reserve(unsigned long n)
   {
     vals.reserve(n);
     myrows.reserve(n);
     colms.reserve(n); 
-    rowIndex.reserve(nr+1);
+    rowIndex.resize(nr+1);
   }
 
-  inline bool allocateMemoryAndReserve(int n)
-  {
-    reserve(n);
-    return true;
-  }
-
-  inline bool initializeChildren()
-  {
-    return true;
-  }
-
-  inline void resize_arrays(int nnz)
+  inline void resize(unsigned long nnz)
   {
     vals.resize(nnz);
     myrows.resize(nnz);
@@ -94,6 +79,9 @@ class SparseMatrix
     compressed=false;
     zero_based=true;
   }
+
+  // does nothing, needed for compatibility with shared memory version
+  inline void setup(bool hd=true, std::string ii=std::string(""), MPI_Comm comm_=MPI_COMM_SELF) {}
 
   inline void setDims(int n, int m)
   {
@@ -113,7 +101,7 @@ class SparseMatrix
   {
     return compressed;
   }
-  inline int size() const
+  inline unsigned long size() const
   {
     return vals.size();
   }
@@ -126,56 +114,48 @@ class SparseMatrix
     return nc;
   }
 
-  inline const_pointer values() const 
+  inline const_pointer values(long n=0) const 
   {
-    return vals.data();
+    return vals.data()+n;
   }
 
-  inline pointer values() 
+  inline pointer values(long n=0) 
   {
-    return vals.data();
+    return vals.data()+n;
   }
 
-  inline const_indxPtr column_data() const 
+  inline const_intPtr column_data(long n=0) const 
   {
-    return colms.data();
+    return colms.data()+n;
   }
-  inline indxPtr column_data() 
+  inline intPtr column_data(long n=0) 
   {
-    return colms.data();
-  }
-
-  inline const_indxPtr row_data() const 
-  {
-    return myrows.data();
-  }
-  inline indxPtr row_data() 
-  {
-    return myrows.data();
+    return colms.data()+n;
   }
 
-  inline const_indxPtr row_index() const 
+  inline const_intPtr row_data(long n=0) const 
   {
-    return rowIndex.data();
+    return myrows.data()+n;
   }
-  inline indxPtr row_index() 
+  inline intPtr row_data(long n=0) 
   {
-    return rowIndex.data();
+    return myrows.data()+n;
   }
 
-  inline This_t& operator=(const SparseMatrix<T> &rhs) 
-  { 
-    compressed=rhs.compressed;
-    zero_based=rhs.zero_based;
-    nr=rhs.nr;
-    nc=rhs.nc;
-    vals=rhs.vals;
-    myrows=rhs.myrows;
-    colms=rhs.colms;
-    rowIndex=rhs.rowIndex;
-  }  
+  inline const_intPtr row_index(long n=0) const 
+  {
+    return rowIndex.data()+n;
+  }
+  inline intPtr row_index(long n=0) 
+  {
+    return rowIndex.data()+n;
+  }
 
-  inline int find_element(int i, int j) {
+  inline This_t& operator=(const SparseMatrix<T> &rhs) = delete; 
+
+  // should be using binary search, but this should not be used in performance critical 
+  // areas in any case
+  inline intType find_element(int i, int j) {
     for (int k = rowIndex[i]; k < rowIndex[i+1]; k++) {
       if (colms[k] == j) return k;
     }
@@ -190,7 +170,7 @@ class SparseMatrix
 #ifdef ASSERT_SPARSEMATRIX
     assert(i>=0 && i<nr && j>=0 && j<nc && compressed); 
 #endif
-    int idx = find_element(i,j);
+    intType idx = find_element(i,j);
     if (idx == -1) return zero;
     return vals[idx];
   }
@@ -200,7 +180,7 @@ class SparseMatrix
 #ifdef ASSERT_SPARSEMATRIX
     assert(i>=0 && i<nr && j>=0 && j<nc && compressed); 
 #endif
-    int idx = find_element(i,j);
+    intType idx = find_element(i,j);
     if (idx == -1) return 0;
     return vals[idx];
   }
@@ -216,429 +196,201 @@ class SparseMatrix
     vals.push_back(v);
   }
 
-  inline bool remove_repeated() 
+  inline void add(const std::vector<std::tuple<intType,intType,T>>& v, bool dummy=false)
+  {
+    compressed=false;
+    for(auto&& a: v) {
+#ifdef ASSERT_SPARSEMATRIX
+      assert(std::get<0>(a)>=0 && std::get<0>(a)<nr && std::get<1>(a)>=0 && std::get<1>(a)<nc);
+#endif
+      myrows.push_back(std::get<0>(a));
+      colms.push_back(std::get<1>(a));
+      vals.push_back(std::get<2>(a));
+    }
+    assert(vals->size()<static_cast<unsigned long>(INT_MAX)); // right now limited to INT_MAX due to indexing problem.
+  }
+
+  inline void compress()
+  {
+    // define comparison operator for tuple_iterator
+    auto comp = [](std::tuple<intType, intType, value_type> const& a, std::tuple<intType, intType, value_type> const& b){return std::get<0>(a) < std::get<0>(b) || (!(std::get<0>(b) < std::get<0>(a)) && std::get<1>(a) < std::get<1>(b));};
+
+    // use std::sort on tuple_iterator
+    std::sort(make_tuple_iterator<int_iterator,int_iterator,iterator>(myrows.begin(),colms.begin(),vals.begin()),
+              make_tuple_iterator<int_iterator,int_iterator,iterator>(myrows.end(),colms.end(),vals.end()),
+              comp);
+
+    // define rowIndex
+    rowIndex.resize(nr+1);
+    intType curr=-1;
+    for(intType n=0; n<myrows.size(); n++) {
+      if( myrows[n] != curr ) {
+        intType old = curr;
+        curr = myrows[n];
+        for(int i=old+1; i<=curr; i++) rowIndex[i] = n;
+      }
+    }
+    for(int i=myrows.back()+1; i<rowIndex.size(); i++)
+      rowIndex[i] = static_cast<intType>(vals.size());
+    compressed=true;
+
+  }
+
+  inline bool remove_repeated_and_compress()
   {
 #ifdef ASSERT_SPARSEMATRIX
     assert(myrows.size() == colms.size() && myrows.size() == vals.size());
 #endif
 
-    compressed=false;
-    for(std::vector<int>::iterator itri=myrows.begin(); itri<myrows.end(); itri++)
-    {
-      int ki = std::distance( myrows.begin(), itri ); 
-      for(std::vector<int>::iterator itrj=itri+1; itrj<myrows.end(); itrj++)
+    if(myrows.size() <= 1) return true;
+    compress();
+
+      int_iterator first_r=myrows.begin(), last_r=myrows.end();
+      int_iterator first_c=colms.begin(), last_c=colms.end();
+      iterator first_v=vals.begin(), last_v = vals.end();
+      int_iterator result_r = first_r;
+      int_iterator result_c = first_c;
+      iterator result_v = first_v;
+
+      while ( ( (first_r+1) != last_r)  )
       {
-        int kj = std::distance( myrows.begin(), itrj ); 
-        if( *itri == *itrj && colms[ki] == colms[kj] ) {
-          if(vals[ki] != vals[kj]) {
-            app_error()<<" Error in call to SparseMatrix::remove_repeated. Same indexes with different values. \n";
-            app_error()<<"i: ri, ci, vi: " 
-                       <<ki <<" "
-                       <<*itri <<" "
-                       <<colms[ki] <<" "
-                       <<vals[ki] <<"\n"
-                       <<"j: rj, cj, vj: " 
-                       <<kj <<" "
-                       <<*itrj <<" "
-                       <<colms[kj] <<" "
-                       <<vals[kj] <<std::endl;
+        ++first_r;
+        ++first_c;
+        ++first_v;
+        if (!( (*result_r == *first_r) && (*result_c == *first_c) ) ) {
+          *(++result_r)=*first_r;
+          *(++result_c)=*first_c;
+          *(++result_v)=*first_v;
+        } else {
+          if( std::abs(*result_v - *first_v) > 1e-8 ) { //*result_v != *first_v) {
+            std::cerr<<" Error in call to SMSparseMatrix::remove_repeate_and_compressd. Same indexes with different values. \n";
+            std::cerr<<"ri, ci, vi: "
+                       <<*result_r <<" "
+                       <<*result_c <<" "
+                       <<*result_v <<" "
+                       <<"rj, cj, vj: "
+                       <<*first_r <<" "
+                       <<*first_c <<" "
+                       <<*first_v <<std::endl;
+            std::cerr.flush();
             return false;
           }
-          itrj = myrows.erase(itrj); 
-          colms.erase( colms.begin()+kj );
-          vals.erase( vals.begin()+kj ); 
         }
       }
-    }
+      ++result_r;
+      ++result_c;
+      ++result_v;
+
+      long sz1 = std::distance(myrows.begin(),result_r);
+      long sz2 = std::distance(colms.begin(),result_c);
+      long sz3 = std::distance(vals.begin(),result_v);
+      if(sz1 != sz2 || sz1 != sz2) {
+        std::cerr<<"Error: Different number of erased elements in SMSparseMatrix::remove_repeate_and_compressed. \n" <<std::endl;
+        return false;
+      }
+      myrows.resize(sz1);
+      colms.resize(sz1);
+      vals.resize(sz1);
+
+      // define rowIndex
+      intType curr=-1;
+      for(intType n=0; n<myrows.size(); n++) {
+        if( myrows[n] != curr ) {
+          intType old = curr;
+          curr = myrows[n];
+          for(int i=old+1; i<=curr; i++) rowIndex[i] = n;
+        }
+      }
+      for(int i=myrows.back()+1; i<rowIndex.size(); i++)
+        rowIndex[i] = static_cast<intType>(vals.size());
+
     return true;
-  }
-
-  inline void compress_old() 
-  {
-#ifdef ASSERT_SPARSEMATRIX
-    assert(myrows.size() == colms.size() && myrows.size() == vals.size());
-#endif
-
-   
-    // This is not efficient. Write your own iterator to swap all arrays simultaneously during sort  
-    // Simple options for now:
-    // 1. use memory and efficient std::sort
-    // 2. no memory but my inefficient algorithm???
-    // Using #1 for now!!!
-    
-    // order along myrows
-    int n=myrows.size(); 
-    std::vector<std::tuple<int,int> > toSort;
-    toSort.reserve(n);
-    for(int i=0; i<n; i++) toSort.push_back(std::forward_as_tuple(myrows[i],i));  
-    std::sort(toSort.begin(),toSort.end());
-    std::vector<T> tmp;
-    tmp=vals; 
-    myrows=colms;
-    for(int i=0; i<n; i++) {
-      int k=std::get<1>(toSort[i]);
-      colms[i] = myrows[k]; 
-      vals[i] = tmp[k];
-    }
-    for(int i=0; i<n; i++) 
-      myrows[i] = std::get<0>(toSort[i]); 
-
-    if(!std::is_sorted(myrows.begin(),myrows.end())) 
-      std::cout<<"ERROR: list is not sorted. \n" <<std::endl;
-
-    // define rowIndex
-
-    rowIndex.resize(nr+1);
-    int curr=-1;
-    for(int n=0; n<myrows.size(); n++) {
-      if( myrows[n] != curr ) {
-        int old = curr;
-        curr = myrows[n];
-        for(int i=old+1; i<=curr; i++) rowIndex[i] = n;
-      }
-    }
-    for(int i=myrows.back()+1; i<rowIndex.size(); i++)
-      rowIndex[i] = vals.size();
-   
-    // order within each rowIndex block
-    for(int k=0; k<nr; k++) {
-      if(rowIndex[k] == rowIndex[k+1]) continue;       
-      toSort.clear();
-      tmp.clear();
-      for(int i=rowIndex[k],p=0; i<rowIndex[k+1]; i++,p++) toSort.push_back(std::forward_as_tuple(colms[i],p));
-      for(int i=rowIndex[k]; i<rowIndex[k+1]; i++) tmp.push_back(vals[i]);
-      std::sort(toSort.begin(),toSort.end());
-      for(int i=rowIndex[k],p=0; i<rowIndex[k+1]; i++,p++) {
-        colms[i] = std::get<0>(toSort[p]);
-        vals[i] = tmp[std::get<1>(toSort[p])];
-      }      
-    } 
-   
-    compressed=true;
-  }
-
-  inline void compress() 
-  {
-#ifdef ASSERT_SPARSEMATRIX
-    assert(myrows.size() == colms.size() && myrows.size() == vals.size());
-#endif
-
-    // order along myrows
-    int n=myrows.size(); 
-    sort_rows(0,n-1);
-    if(!std::is_sorted(myrows.begin(),myrows.end())) 
-      std::cout<<"ERROR: list is not sorted. \n" <<std::endl;
-
-    // define rowIndex
-    rowIndex.resize(nr+1);
-    int curr=-1;
-    for(int n=0; n<myrows.size(); n++) {
-      if( myrows[n] != curr ) {
-        int old = curr;
-        curr = myrows[n];
-        for(int i=old+1; i<=curr; i++) rowIndex[i] = n;
-      }
-    }
-    for(int i=myrows.back()+1; i<rowIndex.size(); i++)
-      rowIndex[i] = vals.size();
-   
-    // order within each rowIndex block
-    for(int k=0; k<nr; k++) {
-      if(rowIndex[k] == rowIndex[k+1]) continue;       
-      sort_colms(rowIndex[k],rowIndex[k+1]-1);
-    } 
-   
-    compressed=true;
-  }
-
-  void sort_rows(int left, int right) {
-    int i = left, j = right;
-    auto pivot = myrows[(left + right) / 2];
-
-    /* partition */
-    while (i <= j) {
-      while (myrows[i] < pivot)
-        i++;
-      while (myrows[j] > pivot)
-        j--;
-      if (i <= j) {
-        std::swap(myrows[i],myrows[j]);
-        std::swap(colms[i],colms[j]);
-        std::swap(vals[i++],vals[j--]);
-      }
-    };
-
-    /* recursion */
-    if (left < j)
-      sort_rows(left, j);
-    if (i < right)
-      sort_rows(i, right);
-  }
-
-  void sort_colms(int left, int right) {
-    int i = left, j = right;
-    auto pivot = colms[(left + right) / 2];
-
-    /* partition */
-    while (i <= j) {
-      while (colms[i] < pivot)
-        i++;
-      while (colms[j] > pivot)
-        j--;
-      if (i <= j) {
-        std::swap(colms[i],colms[j]);
-        std::swap(vals[i++],vals[j--]);
-      }
-    };
-
-    /* recursion */
-    if (left < j)
-      sort_colms(left, j);
-    if (i < right)
-      sort_colms(i, right);
   }
 
   inline void transpose() {
     assert(myrows.size() == colms.size() && myrows.size() == vals.size());
-    for(std::vector<int>::iterator itR=myrows.begin(),itC=colms.begin(); itR!=myrows.end(); ++itR,++itC)
+    for(std::vector<intType>::iterator itR=myrows.begin(),itC=colms.begin(); itR!=myrows.end(); ++itR,++itC)
       std::swap(*itR,*itC);
     std::swap(nr,nc);
     compress();
   }
 
-  inline void initFroms1D(std::vector<std::tuple<IndexType,RealType> >& V, bool sorted)
-  {
-#ifdef ASSERT_SPARSEMATRIX
-    assert(nr==1);
-#endif
-    if(!sorted) 
-      std::sort(V.begin(),V.end(),my_sort);
-    myrows.clear();
-    rowIndex.clear();
-    vals.clear();
-    colms.clear();
-  
-    int nnz=V.size();
-    myrows.resize(nnz);
-    vals.resize(nnz);
-    colms.resize(nnz);
-    rowIndex.resize(nr+1);
-    rowIndex[0]=0;
-    for(int i=0; i<V.size(); i++) {
-      vals[i] = static_cast<T>(std::get<1>(V[i]));
-      myrows[i] = 0; 
-      colms[i] = std::get<0>(V[i]); 
-#ifdef ASSERT_SPARSEMATRIX
-      assert(std::get<0>(V[i]) >= 0 && std::get<0>(V[i]) < nc);
-#endif
-    }
-    rowIndex[1]=V.size();
-    compressed=true;
-  }
-
-  inline void initFroms1D(std::vector<s1D<std::complex<RealType> > >& V, bool sorted)
-  {
-#ifdef ASSERT_SPARSEMATRIX
-    assert(nr==1);
-#endif
-    if(!sorted) 
-      std::sort(V.begin(),V.end(),my_sort);
-    myrows.clear();
-    rowIndex.clear();
-    vals.clear();
-    colms.clear();
-  
-    int nnz=V.size();
-    myrows.resize(nnz);
-    vals.resize(nnz);
-    colms.resize(nnz);
-    rowIndex.resize(nr+1);
-    rowIndex[0]=0;
-    for(int i=0; i<V.size(); i++) {
-      if( std::is_same<T,std::complex<double> >::value  ) {
-        vals[i] = std::get<1>(V[i]);
-      } else {
-       assert(false);
-      }
-      myrows[i] = 0; 
-      colms[i] = std::get<0>(V[i]); 
-#ifdef ASSERT_SPARSEMATRIX
-      assert(std::get<0>(V[i]) >= 0 && std::get<0>(V[i]) < nc);
-#endif
-    }
-    rowIndex[1]=V.size();
-    compressed=true;
-  }
-
-  inline void initFroms2D(std::vector<s2D<std::complex<RealType> > >&  V, bool sorted)
-  {
-    if(!sorted) 
-      std::sort(V.begin(),V.end(),my_sort);
-    myrows.clear();
-    rowIndex.clear();
-    vals.clear();
-    colms.clear();
-
-    int nnz=V.size();
-    myrows.resize(nnz);
-    vals.resize(nnz);
-    colms.resize(nnz);
-    rowIndex.resize(nr+1);
-    for(int i=0; i<V.size(); i++) {
-      if( std::is_same<T,std::complex<double> >::value  ) {
-        vals[i] = std::get<2>(V[i]);
-      } else {
-       assert(false);
-      }
-      myrows[i] = std::get<0>(V[i]);
-      colms[i] = std::get<1>(V[i]);
-#ifdef ASSERT_SPARSEMATRIX
-      assert(std::get<0>(V[i]) >= 0 && std::get<0>(V[i]) < nr);
-      assert(std::get<1>(V[i]) >= 0 && std::get<1>(V[i]) < nc);
-#endif
-    }
-    int curr=-1;
-    for(int n=0; n<myrows.size(); n++) {
-      if( myrows[n] != curr ) {
-        int old = curr;
-        curr = myrows[n];
-        for(int i=old+1; i<=curr; i++) rowIndex[i] = n;
-      }
-    }
-    if (myrows.size() > 0) {
-      for(int i=myrows.back()+1; i<rowIndex.size(); i++)
-        rowIndex[i] = vals.size();
-    }
-    compressed=true;
-  }
-
-  inline void initFroms2D(std::vector<s2D<RealType> >&  V, bool sorted)
-  {
-    if(!sorted) 
-      std::sort(V.begin(),V.end(),my_sort);
-    myrows.clear();
-    rowIndex.clear();
-    vals.clear();
-    colms.clear();
-
-    int nnz=V.size();
-    myrows.resize(nnz);
-    vals.resize(nnz);
-    colms.resize(nnz);
-    rowIndex.resize(nr+1);
-    for(int i=0; i<V.size(); i++) {
-      vals[i] = static_cast<T>(std::get<2>(V[i]));
-      myrows[i] = std::get<0>(V[i]);
-      colms[i] = std::get<1>(V[i]);
-#ifdef ASSERT_SPARSEMATRIX
-      assert(std::get<0>(V[i]) >= 0 && std::get<0>(V[i]) < nr);
-      assert(std::get<1>(V[i]) >= 0 && std::get<1>(V[i]) < nc);
-#endif
-    }
-    int curr=-1;
-    for(int n=0; n<myrows.size(); n++) {
-      if( myrows[n] != curr ) {
-        int old = curr;
-        curr = myrows[n];
-        for(int i=old+1; i<=curr; i++) rowIndex[i] = n;
-      }
-    }
-    if (myrows.size() > 0) {
-      for(int i=myrows.back()+1; i<rowIndex.size(); i++)
-        rowIndex[i] = vals.size();
-    }
-    compressed=true;
-  }
-
-  inline void check()
-  {
-    for(int i=0; i<rowIndex.size()-1; i++)
-    {
-      if(rowIndex[i+1] < rowIndex[i]) std::cout<<"Error: SparseMatrix::check(): rowIndex. \n" <<std::endl; 
-  
-    }
-
-  }
-
-  inline SparseMatrix<T>& operator*=(const RealType rhs ) 
+  inline SparseMatrix<T>& operator*=(const double rhs ) 
   {
     for(iterator it=vals.begin(); it!=vals.end(); it++)
       (*it) *= rhs;
     return *this; 
   }
 
-  inline SparseMatrix<T>& operator*=(const std::complex<RealType> rhs ) 
+  inline SparseMatrix<T>& operator*=(const std::complex<double> rhs ) 
   {
     for(iterator it=vals.begin(); it!=vals.end(); it++)
       (*it) *= rhs;
     return *this; 
+  }
+
+  inline SparseMatrix<T>& operator*=(const float rhs )  
+  {
+    for(iterator it=vals.begin(); it!=vals.end(); it++)
+      (*it) *= rhs;
+    return *this;
+  }
+
+  inline SparseMatrix<T>& operator*=(const std::complex<float> rhs )  
+  {
+    for(iterator it=vals.begin(); it!=vals.end(); it++)
+      (*it) *= rhs;
+    return *this;
   }
 
   inline void toZeroBase() {
     if(zero_based) return;
     zero_based=true;
-    for (int& i : colms ) i--; 
-    for (int& i : myrows ) i--; 
-    for (int& i : rowIndex ) i--; 
+    for (intType& i : colms ) i--; 
+    for (intType& i : myrows ) i--; 
+    for (intType& i : rowIndex ) i--; 
   }
 
   inline void toOneBase() {
     if(!zero_based) return;
     zero_based=false;
-    for (int& i : colms ) i++; 
-    for (int& i : myrows ) i++; 
-    for (int& i : rowIndex ) i++; 
+    for (intType& i : colms ) i++; 
+    for (intType& i : myrows ) i++; 
+    for (intType& i : rowIndex ) i++; 
   }
 
   friend std::ostream& operator<<(std::ostream& out, const SparseMatrix<T>& rhs)
   {
-    for(int i=0; i<rhs.vals.size(); i++)
+    for(unsigned long i=0; i<rhs.vals.size(); i++)
       out<<"(" <<rhs.myrows[i] <<"," <<rhs.colms[i] <<":" <<rhs.vals[i] <<")\n"; 
     return out;
-  }
-
-  friend std::istream& operator>>(std::istream& in, SparseMatrix<T>& rhs)
-  {
-    T v;
-    int c,r;
-    in>>r >>c >>v;
-    rhs.vals.push_back(v); 
-    rhs.myrows.push_back(r);
-    rhs.colms.push_back(c);
-    return in;
   }
 
   // this is ugly, but I need to code quickly 
   // so I'm doing this to avoid adding hdf5 support here 
   inline std::vector<T>* getVals() { return &vals; } 
-  inline std::vector<int>* getRows() { return &myrows; }
-  inline std::vector<int>* getCols() { return &colms; }
-  inline std::vector<int>* getRowIndex() { return &rowIndex; }
+  inline std::vector<intType>* getRows() { return &myrows; }
+  inline std::vector<intType>* getCols() { return &colms; }
+  inline std::vector<intType>* getRowIndex() { return &rowIndex; }
 
   void setRowsFromRowIndex()
   {
-    int shift = zero_based?0:1;
+    intType shift = zero_based?0:1;
     myrows.resize(vals.size());
     for(int i=0; i<nr; i++)
-     for(int j=rowIndex[i]; j<rowIndex[i+1]; j++)
+     for(intType j=rowIndex[i]; j<rowIndex[i+1]; j++)
       myrows[j]=i+shift;
   }
   bool zero_base() const { return zero_based; }
-  int row_max() const { return max_in_row; }
-  int format() const { return storage_format; }
 
   private:
 
   bool compressed;
   int nr,nc;
   std::vector<T> vals;
-  std::vector<int> colms,myrows,rowIndex;
+  std::vector<intType> colms,myrows,rowIndex;
   bool zero_based;
-  int storage_format; // 0: CSR, 1: Compressed Matrix (ESSL) 
-  int max_in_row;
   Type_t zero; // zero for return value
-
-  _mySort_snD_ my_sort;
 
 };
 
