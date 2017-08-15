@@ -284,6 +284,30 @@ struct BLAS
   {
     cgemm(Atrans, Btrans, M, N, K, alpha, A, lda, B, ldb, beta, C, ldc);
   }
+  
+void getrf(
+	const int &n, const int &m, double *a, const int &n0, int *piv, int &st
+){
+	dgetrf(n, m, a, n0, piv, st)
+}
+
+void getrf(
+	const int &n, const int &m, float *a, const int &n0, int *piv, int &st
+){
+	sgetrf(n, m, a, n0, piv, st)
+}
+
+void getrf(
+	const int &n, const int &m, std::complex<double> *a, const int &n0, int *piv, int &st
+){
+	zgetrf(n, m, a, n0, piv, st)
+}
+
+void getrf(
+	const int &n, const int &m, std::complex<float> *a, const int &n0, int *piv, int &st
+){
+	cgetrf(n, m, a, n0, piv, st)
+}
 
   template <typename T>
   inline static T dot(int n, const T *restrict a, const T *restrict b)
