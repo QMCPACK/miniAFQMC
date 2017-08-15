@@ -288,25 +288,25 @@ struct BLAS
 void getrf(
 	const int &n, const int &m, double *a, const int &n0, int *piv, int &st
 ){
-	dgetrf(n, m, a, n0, piv, st)
+	dgetrf(n, m, a, n0, piv, st);
 }
 
 void getrf(
 	const int &n, const int &m, float *a, const int &n0, int *piv, int &st
 ){
-	sgetrf(n, m, a, n0, piv, st)
+	sgetrf(n, m, a, n0, piv, st);
 }
 
 void getrf(
 	const int &n, const int &m, std::complex<double> *a, const int &n0, int *piv, int &st
 ){
-	zgetrf(n, m, a, n0, piv, st)
+	zgetrf(n, m, a, n0, piv, st);
 }
 
 void getrf(
 	const int &n, const int &m, std::complex<float> *a, const int &n0, int *piv, int &st
 ){
-	cgetrf(n, m, a, n0, piv, st)
+	cgetrf(n, m, a, n0, piv, st);
 }
 
   template <typename T>
