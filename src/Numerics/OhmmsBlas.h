@@ -15,7 +15,8 @@
 //    University of Illinois at Urbana-Champaign
 // Mark A. Berrill, berrillma@ornl.gov,
 //    Oak Ridge National Laboratory
-//
+// Alfredo A. Correa, correaa@llnl.gov
+//    Lawrence Livermore National Laboratory
 // File created by:
 // Jeongnim Kim, jeongnim.kim@gmail.com,
 //    University of Illinois at Urbana-Champaign
@@ -285,29 +286,44 @@ struct BLAS
     cgemm(Atrans, Btrans, M, N, K, alpha, A, lda, B, ldb, beta, C, ldc);
   }
   
-void getrf(
+void static getrf(
 	const int &n, const int &m, double *a, const int &n0, int *piv, int &st
 ){
 	dgetrf(n, m, a, n0, piv, st);
 }
 
-void getrf(
+void static getrf(
 	const int &n, const int &m, float *a, const int &n0, int *piv, int &st
 ){
 	sgetrf(n, m, a, n0, piv, st);
 }
 
-void getrf(
+void static getrf(
 	const int &n, const int &m, std::complex<double> *a, const int &n0, int *piv, int &st
 ){
 	zgetrf(n, m, a, n0, piv, st);
 }
 
-void getrf(
+void static getrf(
 	const int &n, const int &m, std::complex<float> *a, const int &n0, int *piv, int &st
 ){
 	cgetrf(n, m, a, n0, piv, st);
 }
+
+#if 1
+void static getri(int n, float* restrict a, int n0, int const* restrict piv, float* restrict work, int n1, int status){
+	sgetri(n, a, n0, piv, work, n1, status);
+}
+void static getri(int n, double* restrict a, int n0, int const* restrict piv, double* restrict work, int n1, int status){
+	dgetri(n, a, n0, piv, work, n1, status);
+}
+void static getri(int n, std::complex<float>* restrict a, int n0, int const* restrict piv, std::complex<float>* restrict work, int n1, int status){
+	cgetri(n, a, n0, piv, work, n1, status);
+}
+void static getri(int n, std::complex<double>* restrict a, int n0, int const* restrict piv, std::complex<double>* restrict work, int n1, int status){
+	zgetri(n, a, n0, piv, work, n1, status);
+}
+#endif
 
   template <typename T>
   inline static T dot(int n, const T *restrict a, const T *restrict b)

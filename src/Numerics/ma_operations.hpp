@@ -1,10 +1,16 @@
 #if COMPILATION_INSTRUCTIONS
-(echo "#include<"$0">" > $0x.cpp) && c++ -O3 -std=c++11 -Wfatal-errors -I.. -D_TEST_MA_OPERATIONS -DADD_ -Drestrict=__restrict__ $0x.cpp -lblas -o $0x.x && time $0x.x $@ && rm -f $0x.cpp; exit
+(echo "#include<"$0">" > $0x.cpp) && c++ -O3 -std=c++11 -Wfatal-errors -I.. -D_TEST_MA_OPERATIONS -DADD_ -Drestrict=__restrict__ $0x.cpp -lblas -llapack -o $0x.x && time $0x.x $@ && rm -f $0x.cpp; exit
 #endif
 #ifndef MA_OPERATIONS_HPP
 #define MA_OPERATIONS_HPP
 
+// File created and developed by:
+// Alfredo Correa, correaa@llnl.gov
+//    Lawrence Livermore National Laboratory
+
 #include "ma_blas.hpp"
+
+#include<vector>
 
 namespace ma{
 
@@ -102,7 +108,37 @@ template<class MultiArray2D> struct op_tag<hermitian_tag<MultiArray2D>> : std::i
 template<class MultiArray2D>
 MultiArray2D arg(hermitian_tag<MultiArray2D>& ht){return ht.arg1;}
 
+
+template<class MultiArray2D>
+MultiArray2D invert_lu(MultiArray2D&& m){
+	assert(m.shape()[0] == m.shape()[1]);
+	std::vector<int> pivot(m.shape()[0]);
+	getrf(std::forward<MultiArray2D>(m), pivot);
+	std::vector<typename std::decay<MultiArray2D>::type::element> work(m.shape()[0]);
+	getri(std::forward<MultiArray2D>(m), pivot, work);
+	return std::forward<MultiArray2D>(m);
 }
+
+template<class MultiArray2D>
+MultiArray2D set_identity(MultiArray2D&& m){
+	assert(m.shape()[0] == m.shape()[1]);
+	for(int i = 0; i != m.shape()[0]; ++i)
+		for(int j = 0; j != m.shape()[1]; ++j)
+			m[i][j] = ((i==j)?1:0);
+	return std::forward<MultiArray2D>(m);
+}
+
+template<class MultiArray2DA, class MultiArray2DB, class T>
+bool equal(MultiArray2DB const& a, MultiArray2DA const& b, T tol = 0){
+	if(a.shape()[0] != b.shape()[0] or a.shape()[0] != b.shape()[0]) return false; 
+	using std::abs;
+	for(int i = 0; i != a.shape()[0]; ++i)
+		for(int j = 0; j != a.shape()[1]; ++j)
+			if(abs(a[i][j] - b[i][j]) > tol) return false;
+	return true;
+}
+
+} 
 
 #if 0
 namespace DenseMatrixOperators
@@ -579,6 +615,21 @@ int main(){
 	assert(C == AtBt);
 
 	
+	}
+	{
+		std::vector<double> a = {37., 45., 59., 53., 81., 97., 87., 105., 129.};
+		boost::multi_array_ref<double, 2> A(a.data(), boost::extents[3][3]);
+		assert(A.num_elements() == a.size());
+		boost::multi_array<double, 2> B = A;
+		ma::invert_lu(A);
+				
+		boost::multi_array<double, 2> Id(boost::extents[3][3]);
+		ma::set_identity(Id);
+
+		boost::multi_array<double, 2> Id2(boost::extents[3][3]);
+		ma::product(A, B, Id2);
+						
+		assert( ma::equal(Id, Id2, 1e-14) );
 	}
 
 }

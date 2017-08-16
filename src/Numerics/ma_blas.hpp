@@ -1,6 +1,11 @@
 #if COMPILATION_INSTRUCTIONS
-(echo "#include<"$0">" > $0x.cpp) && c++ -O3 -std=c++11 `#-Wfatal-errors` -I.. -D_TEST_MA_BLAS -DADD_ -Drestrict=__restrict__ $0x.cpp -lblas -o $0x.x && time $0x.x $@ && rm -f $0x.cpp; exit
+(echo "#include<"$0">" > $0x.cpp) && c++ -O3 -std=c++11 -Wfatal-errors -I.. -D_TEST_MA_BLAS -DADD_ -Drestrict=__restrict__ $0x.cpp -lblas -llapack -o $0x.x && time $0x.x $@ && rm -f $0x.cpp; exit
 #endif
+
+// File created and developed by:
+// Alfredo Correa, correaa@llnl.gov
+//    Lawrence Livermore National Laboratory
+
 #ifndef MA_BLAS_HPP
 #define MA_BLAS_HPP
 
@@ -78,6 +83,24 @@ template<char TA, char TB, class T, class MultiArray2DA, class MultiArray2DB, cl
 MultiArray2DC gemm(MultiArray2DA const& a, MultiArray2DB const& b, MultiArray2DC&& c){
 	return gemm(1., a, b, 0., std::forward<MultiArray2DC>(c));
 }
+
+template<class MultiArray2D, class Array1D>
+MultiArray2D getrf(MultiArray2D&& m, Array1D& pivot){
+	assert(pivot.size() >= std::min(m.shape()[0], m.shape()[1]));
+	assert(m.strides()[1] == 1);
+	int status = -1;
+	BLAS::getrf(m.shape()[1], m.shape()[0], m.origin(), m.strides()[0], pivot.data(), status);
+	return std::forward<MultiArray2D>(m);
+}
+
+#if 1
+template<class MultiArray2D, class MultiArray1D, class MultiArray1DW>
+MultiArray2D getri(MultiArray2D&& m, MultiArray1D const& pivot, MultiArray1DW&& work){
+	assert(m.strides()[1] == 1);
+	int status = -1;
+	BLAS::getri(m.shape()[0], m.origin(), m.strides()[0], pivot.data(), work.data(), work.size(), status); 
+}
+#endif
 
 }
 
@@ -328,10 +351,21 @@ int main(){
 		assert( C.num_elements() == c.size());
 		ma::gemm<'T', 'T'>(1., A, B, 0., C); // C = T(A*B) = T(B)*T(A) or T(C) = A*B
 	}
+	{
+		std::vector<double> a = {
+			1.,2.,
+			3.,4.,
+		};
+		boost::multi_array_ref<double, 2> A(a.data(), boost::extents[2][2]);
+		std::vector<int> p(std::min(A.shape()[0], A.shape()[1]));
+		ma::getrf(A, p);
+		for(int i = 0; i != A.shape()[0]; ++i, std::cout << '\n')
+			for(int j = 0; j != A.shape()[1]; ++j)
+				std::cout << A[i][j] << ' ';
+	}
 
 }
 
 #endif
 #endif
-
 

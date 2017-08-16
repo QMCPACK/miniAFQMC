@@ -230,16 +230,16 @@ void zgetrf(const int &n, const int &m, std::complex<double> *a, const int &n0,
 void cgetrf(const int &n, const int &m, std::complex<float> *a, const int &n0,
             int *piv, int &st);
 
-void dgetri(const int &n, double *a, const int &n0, int *piv, double *work,
+void dgetri(const int &n, double *a, const int &n0, int  const*piv, double *work,
             const int &, int &st);
 
-void sgetri(const int &n, float *a, const int &n0, int *piv, float *work,
+void sgetri(const int &n, float *a, const int &n0, int const*piv, float *work,
             const int &, int &st);
 
-void zgetri(const int &n, std::complex<double> *a, const int &n0, int *piv,
+void zgetri(const int &n, std::complex<double> *a, const int &n0, int  const*piv,
             std::complex<double> *work, const int &, int &st);
 
-void cgetri(const int &n, std::complex<float> *a, const int &n0, int *piv,
+void cgetri(const int &n, std::complex<float> *a, const int &n0, int  const*piv,
             std::complex<float> *work, const int &, int &st);
 
 void dgesvd(char *JOBU, char *JOBVT, int *M, int *N, double *A, int *LDA,
