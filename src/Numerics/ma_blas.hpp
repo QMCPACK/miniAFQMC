@@ -43,7 +43,9 @@ MultiArray1DY gemv(T alpha, MultiArray2DA const& A, MultiArray1DX const& x, T be
 	if(IN == 'T' or IN == 'H') assert( x.shape()[0] == A.shape()[1] and y.shape()[0] == A.shape()[0]);
 	else if(IN == 'N') assert( x.shape()[0] == A.shape()[0] and y.shape()[0] == A.shape()[1]);
 	assert( A.strides()[1] == 1 ); // gemv is not implemented for arrays with non-leading stride != 1
-	BLAS::gemv(IN, A.shape()[1], A.shape()[0], alpha, A.origin(), A.strides()[0], x.origin(), x.strides()[0], beta, y.origin(), y.strides()[0]);
+	int M = A.shape()[1];
+	int N = A.shape()[0];
+	BLAS::gemv(IN, M, N, alpha, A.origin(), A.strides()[0], x.origin(), x.strides()[0], beta, y.origin(), y.strides()[0]);
 	return std::forward<MultiArray1DY>(y);
 } //y := alpha*A*x + beta*y,
 

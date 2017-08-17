@@ -51,8 +51,6 @@ MultiArray2D transpose(MultiArray2D&& A){
 template<class MA> struct op_tag : std::integral_constant<char, 'N'>{}; // see specializations
 template<class MA> MA arg(MA&& ma){return std::forward<MA>(ma);} // see specializations below
 
-
-
 template<class T, class MultiArray2DA, class MultiArray1DB, class MultiArray1DC,
 	typename = typename std::enable_if<
 		MultiArray2DA::dimensionality == 2 and 
@@ -62,7 +60,7 @@ template<class T, class MultiArray2DA, class MultiArray1DB, class MultiArray1DC,
 >
 MultiArray1DC product(T alpha, MultiArray2DA const& A, MultiArray1DB const& B, T beta, MultiArray1DC&& C){
 	return ma::gemv<
-		op_tag<MultiArray1DC>::value=='N'?'T':'N'
+		(op_tag<MultiArray2DA>::value=='N')?'T':'N'
 	>
 	(alpha, arg(A), B, beta, std::forward<MultiArray1DC>(C));
 }
@@ -129,6 +127,9 @@ template<class MultiArray2D> struct hermitian_tag{
 template<class MultiArray2D> hermitian_tag<MultiArray2D> H(MultiArray2D&& arg){
 	return {std::forward<MultiArray2D>(arg)};
 }
+
+template<class MultiArray2D>
+MultiArray2D arg(hermitian_tag<MultiArray2D> const& nt){return nt.arg1;}
 
 template<class MultiArray2D> struct op_tag<hermitian_tag<MultiArray2D>> : std::integral_constant<char, 'H'>{};
 
@@ -593,6 +594,67 @@ int main(){
 
 	{
 		std::vector<double> m = {
+			9.,24.,30.,
+			4.,10.,12.,
+			14.,16.,36.//,
+		//	9., 6., 1.
+		};
+		boost::multi_array_ref<double, 2> M(m.data(), boost::extents[3][3]);
+		assert(M.num_elements() == m.size());
+		std::vector<double> x = {1.,2.,3.};
+		boost::multi_array_ref<double, 1> X(x.data(), boost::extents[x.size()]);
+		std::vector<double> y(3);
+		boost::multi_array_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
+
+		using ma::T;
+		ma::product(M, X, Y); // Y := M X
+		
+		std::vector<double> mx = {147., 60.,154.};
+		boost::multi_array_ref<double, 1> MX(mx.data(), boost::extents[mx.size()]);
+		assert( MX == Y );
+	}
+	{
+		std::vector<double> m = {
+			9.,24.,30., 2.,
+			4.,10.,12., 1.,
+			14.,16.,36., 20.
+		};
+		boost::multi_array_ref<double, 2> M(m.data(), boost::extents[3][4]);
+		assert(M.num_elements() == m.size());
+		std::vector<double> x = {1.,2.,3., 4.};
+		boost::multi_array_ref<double, 1> X(x.data(), boost::extents[x.size()]);
+		std::vector<double> y(3);
+		boost::multi_array_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
+
+		using ma::T;
+		ma::product(M, X, Y); // Y := M X
+
+		std::vector<double> mx = {155., 64.,234.};
+		boost::multi_array_ref<double, 1> MX(mx.data(), boost::extents[mx.size()]);
+		assert( MX == Y );
+	}
+	{
+		std::vector<double> m = {
+			9.,24.,30., 2.,
+			4.,10.,12., 1.,
+			14.,16.,36., 20.
+		};
+		boost::multi_array_ref<double, 2> M(m.data(), boost::extents[3][4]);
+		assert(M.num_elements() == m.size());
+		std::vector<double> x = {1.,2.,3.};
+		boost::multi_array_ref<double, 1> X(x.data(), boost::extents[x.size()]);
+		std::vector<double> y(4);
+		boost::multi_array_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
+
+		using ma::T;
+		ma::product(T(M), X, Y); // Y := T(M) X
+		
+		std::vector<double> mx = {59., 92., 162., 64.};
+		boost::multi_array_ref<double, 1> MX(mx.data(), boost::extents[mx.size()]);
+		assert( MX == Y );
+	}
+	{
+		std::vector<double> m = {
 			9.,24.,30., 9.,
 			4.,10.,12., 7.,
 			14.,16.,36., 1.
@@ -608,6 +670,7 @@ int main(){
 		boost::multi_array_ref<double, 1> Y2(y2.data(), boost::extents[y2.size()]);
 		assert( Y == Y2 );
 	}
+
 	{
 	std::vector<double> m = {
 		1.,2.,1.,
