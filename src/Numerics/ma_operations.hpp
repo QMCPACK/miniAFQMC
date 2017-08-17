@@ -39,6 +39,7 @@ bool is_symmetric(MultiArray2D const& A){
 
 template<class MultiArray2D, typename = typename std::enable_if<(std::decay<MultiArray2D>::type::dimensionality > 1)>::type>
 MultiArray2D transpose(MultiArray2D&& A){
+	assert(A.shape()[0] == A.shape()[1]);
 	using std::swap;
 	for(int i = 0; i != A.shape()[0]; ++i)
 		for(int j = 0; j != i; ++j)
@@ -575,24 +576,41 @@ int main(){
 	{
 	std::vector<double> a = {
 		1.,0.,1.,
-		3.,5.,8.,
+		3.,5.,8., 
 		4.,8.,9.
 	};
 	boost::multi_array_ref<double, 2> A(a.data(), boost::extents[3][3]);
+	assert( A.num_elements() == a.size() );
 	std::vector<double> b = {
 		6.,2.,8.,
 		9.,5.,5.,
 		1.,7.,9.
 	};
 	boost::multi_array_ref<double, 2> B(b.data(), boost::extents[3][3]);
+	assert( B.num_elements() == b.size() );
+
 	std::vector<double> c(9);
 	boost::multi_array_ref<double, 2> C(c.data(), boost::extents[3][3]);
-
-	ma::product(A, B, C);
-	std::vector<double> ab = {7., 9., 17., 71., 87., 121., 105., 111., 153.};
-	boost::multi_array_ref<double, 2> AB(ab.data(), boost::extents[3][3]);
-	assert(C == AB);
+	assert( C.num_elements() == c.size() );
 	
+	ma::product(A, B, C);
+
+	std::vector<double> ab = {
+		7., 9., 17.,
+		71., 87., 121.,
+		105., 111., 153.
+	};
+	boost::multi_array_ref<double, 2> AB(ab.data(), boost::extents[3][3]);
+	assert( AB.num_elements() == ab.size() );
+
+	for(int i = 0; i != C.shape()[0]; ++i, cout << '\n')
+		for(int j = 0; j != C.shape()[1]; ++j)
+			cout << C[i][j] << ' ';
+	cout << '\n';
+
+	assert(C == AB);
+
+
 	using ma::N;
 	ma::product(N(A), N(B), C); // same as ma::product(A, B, C);
 	assert(C == AB);
@@ -622,7 +640,7 @@ int main(){
 		assert(A.num_elements() == a.size());
 		boost::multi_array<double, 2> B = A;
 		ma::invert_lu(A);
-				
+
 		boost::multi_array<double, 2> Id(boost::extents[3][3]);
 		ma::set_identity(Id);
 
@@ -631,7 +649,7 @@ int main(){
 						
 		assert( ma::equal(Id, Id2, 1e-14) );
 	}
-
+	cout << "test ended" << std::endl;
 }
 #endif
 
