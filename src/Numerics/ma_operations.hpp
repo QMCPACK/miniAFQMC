@@ -1,5 +1,5 @@
 #if COMPILATION_INSTRUCTIONS
-(echo "#include<"$0">" > $0x.cpp) && c++ -O3 -std=c++11 -Wfatal-errors -I.. -D_TEST_MA_OPERATIONS -DADD_ -Drestrict=__restrict__ $0x.cpp -lblas -llapack -o $0x.x && time $0x.x $@ && rm -f $0x.cpp; exit
+(echo "#include<"$0">" > $0x.cpp) && clang++ -O3 -std=c++11 -Wfatal-errors -I.. -D_TEST_MA_OPERATIONS -DADD_ -Drestrict=__restrict__ $0x.cpp -lblas -llapack -o $0x.x && time $0x.x $@ && rm -f $0x.cpp; exit
 #endif
 #ifndef MA_OPERATIONS_HPP
 #define MA_OPERATIONS_HPP
@@ -10,6 +10,7 @@
 
 #include "ma_blas.hpp"
 
+#include<type_traits> // enable_if
 #include<vector>
 
 namespace ma{
@@ -50,7 +51,29 @@ MultiArray2D transpose(MultiArray2D&& A){
 template<class MA> struct op_tag : std::integral_constant<char, 'N'>{}; // see specializations
 template<class MA> MA arg(MA&& ma){return std::forward<MA>(ma);} // see specializations below
 
-template<class T, class MultiArray2DA, class MultiArray2DB, class MultiArray2DC>
+
+
+template<class T, class MultiArray2DA, class MultiArray1DB, class MultiArray1DC,
+	typename = typename std::enable_if<
+		MultiArray2DA::dimensionality == 2 and 
+		MultiArray1DB::dimensionality == 1 and
+		std::decay<MultiArray1DC>::type::dimensionality == 1
+	>::type, typename = void // TODO change to use dispatch
+>
+MultiArray1DC product(T alpha, MultiArray2DA const& A, MultiArray1DB const& B, T beta, MultiArray1DC&& C){
+	return ma::gemv<
+		op_tag<MultiArray1DC>::value=='N'?'T':'N'
+	>
+	(alpha, arg(A), B, beta, std::forward<MultiArray1DC>(C));
+}
+
+template<class T, class MultiArray2DA, class MultiArray2DB, class MultiArray2DC,
+	typename = typename std::enable_if<
+		MultiArray2DA::dimensionality == 2 and 
+		MultiArray2DB::dimensionality == 2 and
+		std::decay<MultiArray2DC>::type::dimensionality == 2
+	>::type
+>
 MultiArray2DC product(T alpha, MultiArray2DA const& A, MultiArray2DB const& B, T beta, MultiArray2DC&& C){
 	return ma::gemm<
 		op_tag<MultiArray2DB>::value,
@@ -65,7 +88,8 @@ MultiArray2DC product(MultiArray2DA const& A, MultiArray2DB const& B, MultiArray
 }
 
 template<class MultiArray2D> struct normal_tag{
-	MultiArray2D arg1; 
+	MultiArray2D arg1;
+	static auto const dimensionality = std::decay<MultiArray2D>::type::dimensionality;
 	normal_tag(normal_tag const&) = delete;
 	static const char tag = 'N';
 };
@@ -81,6 +105,7 @@ MultiArray2D arg(normal_tag<MultiArray2D> const& nt){return nt.arg1;}
 
 template<class MultiArray2D> struct transpose_tag{
 	MultiArray2D arg1; 
+	static auto const dimensionality = std::decay<MultiArray2D>::type::dimensionality;
 	transpose_tag(transpose_tag const&) = delete;
 	static const char tag = 'T';
 };
@@ -96,6 +121,7 @@ MultiArray2D arg(transpose_tag<MultiArray2D> const& tt){return tt.arg1;}
 
 template<class MultiArray2D> struct hermitian_tag{
 	MultiArray2D arg1; 
+	static auto const dimensionality = std::decay<MultiArray2D>::type::dimensionality;
 	hermitian_tag(hermitian_tag const&) = delete;
 	static const char tag = 'H';
 };
@@ -109,7 +135,6 @@ template<class MultiArray2D> struct op_tag<hermitian_tag<MultiArray2D>> : std::i
 template<class MultiArray2D>
 MultiArray2D arg(hermitian_tag<MultiArray2D>& ht){return ht.arg1;}
 
-
 template<class MultiArray2D>
 MultiArray2D invert_lu(MultiArray2D&& m){
 	assert(m.shape()[0] == m.shape()[1]);
@@ -118,6 +143,24 @@ MultiArray2D invert_lu(MultiArray2D&& m){
 	std::vector<typename std::decay<MultiArray2D>::type::element> work(m.shape()[0]);
 	getri(std::forward<MultiArray2D>(m), pivot, work);
 	return std::forward<MultiArray2D>(m);
+}
+
+template<class MultiArray2D, class MultiArray1D, class T = typename std::decay<MultiArray2D>::type::element>
+T invert(MultiArray2D& m, MultiArray2D& work, MultiArray1D& pivot){
+	assert(m.shape()[0] == m.shape()[1]);
+	assert(pivot.shape()[0] >= m.shape()[0]);
+	assert(work.shape()[0] >= m.shape()[0]);
+	getrf(std::forward<MultiArray2D>(m), pivot);
+	T detvalue(1.0);
+	for(int i=0,ip=1,m_=m.shape()[0]; i<m_; i++, ip++)
+	{
+	  if(pivot[i]==ip)
+		detvalue *= static_cast<T>(m[i][i]);
+	  else
+		detvalue *= -static_cast<T>(m[i][i]);
+	}
+	getri(std::forward<MultiArray2D>(m), pivot, work);
+	return detvalue;
 }
 
 template<class MultiArray2D>
@@ -548,6 +591,23 @@ using std::cout;
 
 int main(){
 
+	{
+		std::vector<double> m = {
+			9.,24.,30., 9.,
+			4.,10.,12., 7.,
+			14.,16.,36., 1.
+		};
+		boost::multi_array_ref<double, 2> M(m.data(), boost::extents[3][4]);
+		std::vector<double> x = {1.,2.,3., 4.};
+		boost::multi_array_ref<double, 1> X(x.data(), boost::extents[x.size()]);
+		std::vector<double> y = {4.,5.,6.};
+		boost::multi_array_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
+		ma::product(M, X, Y); // y := M x
+		
+		std::vector<double> y2 = {183., 88.,158.};
+		boost::multi_array_ref<double, 1> Y2(y2.data(), boost::extents[y2.size()]);
+		assert( Y == Y2 );
+	}
 	{
 	std::vector<double> m = {
 		1.,2.,1.,

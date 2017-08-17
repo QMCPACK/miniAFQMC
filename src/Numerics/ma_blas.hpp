@@ -121,7 +121,8 @@ template<class MultiArray2D, class MultiArray1D, class MultiArray1DW>
 MultiArray2D getri(MultiArray2D&& m, MultiArray1D const& pivot, MultiArray1DW&& work){
 	assert(m.strides()[1] == 1);
 	int status = -1;
-	BLAS::getri(m.shape()[0], m.origin(), m.strides()[0], pivot.data(), work.data(), work.size(), status); 
+	BLAS::getri(m.shape()[0], m.origin(), m.strides()[0], pivot.data(), work.data(), work.size(), status);
+	return std::forward<MultiArray2D>(m);
 }
 #endif
 
