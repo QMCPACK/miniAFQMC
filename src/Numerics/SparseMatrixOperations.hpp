@@ -4,43 +4,14 @@
 #include<iterator>
 #include<tuple>
 
-#include "AFQMC/config.h"
-
-#include "AFQMC/Numerics/sparse.h"
+#include "Configuration.h"
+#include "Numerics/sparse.hpp"
 
 namespace qmcplusplus
 {
 
 namespace SparseMatrixOperators
 {
-
-// Performs a product between a sparse matrix stored in format s2D and a dense 
-// matrix stored in c format
-//   N: number of rows in B/C 
-//   M: number of columns in B/C
-//   LDB: leading dimension of B
-//
-//   For eack term in A, aik 
-//   C(i,:) += aik * B(k.:) 
-template<typename T>
-inline void product_SD(const IndexType K,
-             const s2D<T>* A, const int nterms,
-             ComplexType* B, const IndexType LDB,
-             ComplexType* C, IndexType LDC )
-{
-  T aik=0;
-  IndexType ii=0,kk=0;
-  ComplexType* lit;
-  ComplexType* rit;
-  for(int cnt1=0; cnt1<nterms; cnt1++) {
-    std::tie(ii,kk,aik) = *(A++);
-    lit=C+ii*LDC;
-    rit=B+kk*LDB;
-    for(int cnt2=0; cnt2<K; cnt2++)
-      *(lit++) += aik*(*(rit++));
-  }
-
-}
 
 template<class T, typename T1>
 inline void product_SpMatV(int N, 
@@ -339,8 +310,8 @@ inline void transpose_SpMat(const T& A, T& AT)
   AT.compress();
 }
 
-bool sparseEigenSystem(ComplexSpMat &A, int& m0, RealType *eigval, ComplexType* eigVec, double Emin ); 
-bool sparseEigenSystem(RealSpMat &A, int& m0, RealType *eigval, RealType* eigVec, double Emin  ); 
+//bool sparseEigenSystem(ComplexSpMat &A, int& m0, RealType *eigval, ComplexType* eigVec, double Emin ); 
+//bool sparseEigenSystem(RealSpMat &A, int& m0, RealType *eigval, RealType* eigVec, double Emin  ); 
 
 } // namespace SparseMatrixOperators
 

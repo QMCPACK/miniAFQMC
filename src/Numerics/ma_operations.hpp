@@ -65,6 +65,17 @@ MultiArray1DC product(T alpha, MultiArray2DA const& A, MultiArray1DB const& B, T
 	(alpha, arg(A), B, beta, std::forward<MultiArray1DC>(C));
 }
 
+template<class MultiArray2DA, class MultiArray1DB, class MultiArray1DC,
+        typename = typename std::enable_if<
+                MultiArray2DA::dimensionality == 2 and
+                MultiArray1DB::dimensionality == 1 and
+                std::decay<MultiArray1DC>::type::dimensionality == 1
+        >::type, typename = void // TODO change to use dispatch 
+>
+MultiArray1DC product(MultiArray2DA const& A, MultiArray1DB const& B, MultiArray1DC&& C){
+        return product(1., A, B, 0., std::forward<MultiArray1DC>(C));
+}
+
 template<class T, class MultiArray2DA, class MultiArray2DB, class MultiArray2DC,
 	typename = typename std::enable_if<
 		MultiArray2DA::dimensionality == 2 and 
@@ -80,7 +91,13 @@ MultiArray2DC product(T alpha, MultiArray2DA const& A, MultiArray2DB const& B, T
 	(alpha, arg(B), arg(A), beta, std::forward<MultiArray2DC>(C));
 }
 
-template<class MultiArray2DA, class MultiArray2DB, class MultiArray2DC>
+template<class MultiArray2DA, class MultiArray2DB, class MultiArray2DC,
+        typename = typename std::enable_if<
+                MultiArray2DA::dimensionality == 2 and
+                MultiArray2DB::dimensionality == 2 and
+                std::decay<MultiArray2DC>::type::dimensionality == 2
+        >::type
+>
 MultiArray2DC product(MultiArray2DA const& A, MultiArray2DB const& B, MultiArray2DC&& C){
 	return product(1., A, B, 0., std::forward<MultiArray2DC>(C));
 }
@@ -146,11 +163,11 @@ MultiArray2D invert_lu(MultiArray2D&& m){
 	return std::forward<MultiArray2D>(m);
 }
 
-template<class MultiArray2D, class MultiArray1D, class T = typename std::decay<MultiArray2D>::type::element>
-T invert(MultiArray2D& m, MultiArray2D& work, MultiArray1D& pivot){
+template<class MultiArray2D, class MultiArray1D, class MultiArray1DW, class T = typename std::decay<MultiArray2D>::type::element>
+T invert(MultiArray2D& m, MultiArray1D& pivot, MultiArray1DW& work){
 	assert(m.shape()[0] == m.shape()[1]);
-	assert(pivot.shape()[0] >= m.shape()[0]);
-	assert(work.shape()[0] >= m.shape()[0]);
+	assert(pivot.size() >= m.shape()[0]);
+	assert(work.size() >= m.shape()[0]);
 	getrf(std::forward<MultiArray2D>(m), pivot);
 	T detvalue(1.0);
 	for(int i=0,ip=1,m_=m.shape()[0]; i<m_; i++, ip++)

@@ -14,6 +14,12 @@
 
 #include "Numerics/ma_operations.hpp"
 
+namespace qmcplusplus
+{
+
+namespace base 
+{
+
 /*
  * Calculates the 1-body mixed density matrix:
  *   < A | c+i cj | B > / <A|B> = conj(A) * ( T(B) * conj(A) )^-1 * T(B) 
@@ -32,21 +38,25 @@
  */
 // Serial Implementation
 template< class Tp,
-	  class ValueMat,
-	  typename = typename std::enable_if<(ValueMat::dimensionality == 2)>::type>		
+          class ValueMatA,
+          class ValueMatB,
+          class ValueMatC,
+          class ValueMat,
+          class IntVec,
+	  typename = typename std::enable_if<(ValueMat::dimensionality == 2)>::type		
         >
-inline Tp MixedDensityMatrix(const ValueMat& conjA, const ValueMat& B, ValueMat& C, ValueMatrix& I1, ValueMat& T1, ValueMat& T2, bool compact=true)
+inline Tp MixedDensityMatrix(const ValueMatA& conjA, const ValueMatB& B, ValueMatC& C, IntVec& I1, ValueMat& T1, ValueMat& T2, bool compact=true)
 {
   // check dimensions are consistent
   assert( conjA.shape()[0] == B.shape()[0] );
   assert( conjA.shape()[1] == T1.shape()[1] );
   assert( B.shape()[1] == T1.shape()[0] );
   assert( T1.shape()[1] == B.shape()[1] );
+  assert( T2.shape()[0] == T1.shape()[0] );
   if(compact) {
     assert( C.shape()[0] == T1.shape()[0] );
     assert( C.shape()[1] == B.shape()[0] );
   } else {
-    assert( T2.shape()[0] == T1.shape()[0] );
     assert( T2.shape()[1] == B.shape()[0] );
     assert( C.shape()[0] == conjA.shape()[0] );
     assert( C.shape()[1] == T2.shape()[1] );
@@ -59,7 +69,7 @@ inline Tp MixedDensityMatrix(const ValueMat& conjA, const ValueMat& B, ValueMat&
 
   // NOTE: Using C as temporary 
   // T1 = T1^(-1)
-  Tp ovlp = static_cast<Tp>(Invert(T1,C,I1));
+  Tp ovlp = static_cast<Tp>(ma::invert(T1,I1,T2));
 
   if(compact) {
 
@@ -79,5 +89,8 @@ inline Tp MixedDensityMatrix(const ValueMat& conjA, const ValueMat& B, ValueMat&
   return ovlp;
 }
 
+} // namespace base
+
+} // namespace qmcplusplus 
 
 #endif

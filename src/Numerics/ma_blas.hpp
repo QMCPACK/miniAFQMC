@@ -40,6 +40,7 @@ template<char IN, class T, class MultiArray2DA, class MultiArray1DX, class Multi
 	typename = typename std::enable_if< MultiArray2DA::dimensionality == 2 and MultiArray1DX::dimensionality == 1 and std::decay<MultiArray1DY>::type::dimensionality == 1>::type
 >
 MultiArray1DY gemv(T alpha, MultiArray2DA const& A, MultiArray1DX const& x, T beta, MultiArray1DY&& y){
+        assert( (IN == 'N') || (IN == 'T') || (IN == 'H')  );
 	if(IN == 'T' or IN == 'H') assert( x.shape()[0] == A.shape()[1] and y.shape()[0] == A.shape()[0]);
 	else if(IN == 'N') assert( x.shape()[0] == A.shape()[0] and y.shape()[0] == A.shape()[1]);
 	assert( A.strides()[1] == 1 ); // gemv is not implemented for arrays with non-leading stride != 1
@@ -66,6 +67,8 @@ MultiArray2DC gemm(T alpha, MultiArray2DA const& a, MultiArray2DB const& b, T be
 	assert( a.strides()[1] == 1 );
 	assert( b.strides()[1] == 1 );
 	assert( c.strides()[1] == 1 );
+        assert( (TA == 'N') || (TA == 'T') || (TA == 'H')  );
+        assert( (TB == 'N') || (TB == 'T') || (TB == 'H')  );
 	int M = -1;
 	int N = -1;
 	int K = -1;

@@ -7,8 +7,11 @@ echo for guidance.
 setenv CXX mpicxx
 setenv CC mpicc
 
+module load mkl
 source /usr/tce/packages/mkl/mkl-2017.1/mkl/bin/mklvars.csh intel64
 
-cmake -DBLA_VENDOR=Intel10_64lp_seq -DCMAKE_PREFIX_PATH=$MKLROOT/lib -DBUILD_AFQMC=1 -DQMC_COMPLEX=1 ..; 
+cmake -DBLA_VENDOR=Intel10_64lp_seq -DCMAKE_PREFIX_PATH=$MKLROOT/lib \
+      -DCMAKE_BUILD_TYPE=Debug \
+      -DBUILD_AFQMC=1 -DQMC_COMPLEX=1 ..; 
 make
 

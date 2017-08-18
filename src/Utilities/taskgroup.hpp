@@ -250,6 +250,8 @@ class TaskGroup {
 */
   } 
 
+  int getGlobalRank() const { return global_rank; }
+
   int getTotalNodes() const { return tot_nodes; }
 
   int getTotalCores() const { return tot_cores; }

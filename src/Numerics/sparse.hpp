@@ -2,7 +2,7 @@
 #ifndef AFQMC_SPARSE_H
 #define AFQMC_SPARSE_H
 
-#include "AFQMC/Numerics/spblas.h"
+#include "Numerics/spblas.hpp"
 #include<cassert>
 #include<complex>
 

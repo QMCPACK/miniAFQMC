@@ -89,7 +89,6 @@ class SparseMatrix
     nc=m;
     compressed=false;
     zero_based=true;
-    clear();
   }
 
   inline void setCompressed() 
@@ -372,6 +371,22 @@ class SparseMatrix
   inline std::vector<intType>* getRows() { return &myrows; }
   inline std::vector<intType>* getCols() { return &colms; }
   inline std::vector<intType>* getRowIndex() { return &rowIndex; }
+
+  inline iterator vals_begin() { return vals.begin(); }
+  inline int_iterator rows_begin() { return myrows.begin(); }
+  inline int_iterator cols_begin() { return colms.begin(); }
+  inline int_iterator rowIndex_begin() { return rowIndex.begin(); }
+  inline const_iterator vals_begin() const { return vals.begin(); }
+  inline const_int_iterator cols_begin() const { return colms.begin(); }
+  inline const_int_iterator rowIndex_begin() const { return rowIndex.begin(); }
+  inline const_iterator vals_end() const { return vals.end(); }
+  inline const_int_iterator rows_end() const { return myrows.end(); }
+  inline const_int_iterator cols_end() const { return colms.end(); }
+  inline const_int_iterator rowIndex_end() const { return rowIndex.end(); }
+  inline iterator vals_end() { return vals.end(); }
+  inline int_iterator rows_end() { return myrows.end(); }
+  inline int_iterator cols_end() { return colms.end(); }
+  inline int_iterator rowIndex_end() { return rowIndex.end(); }
 
   void setRowsFromRowIndex()
   {

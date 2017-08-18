@@ -47,6 +47,8 @@
 #endif
 
 
+#include<boost/multi_array.hpp>
+
 #include <OhmmsPETE/OhmmsVector.h>
 #include <OhmmsPETE/OhmmsMatrix.h>
 #include "Matrix/SparseMatrix.hpp"
@@ -55,6 +57,10 @@
 
 namespace qmcplusplus
 {
+
+  using boost::multi_array_types::index_gen;
+  using boost::extents;
+  typedef boost::multi_array_types::index_range range_t;
 
   typedef OHMMS_INDEXTYPE                 IndexType;
   typedef OHMMS_INDEXTYPE                 OrbitalType;
@@ -72,26 +78,44 @@ namespace qmcplusplus
   typedef std::complex<SPRealType>       SPComplexType;
 
 
+/*
   typedef Vector<IndexType>     IndexVector;
   typedef Vector<RealType>      RealVector;
   typedef Vector<ValueType>     ValueVector;
   typedef Vector<SPValueType>   SPValueVector;
   typedef Vector<ComplexType>   ComplexVector;
   typedef Vector<SPComplexType>   SPComplexVector;
-/*
+
   typedef SMDenseVector<IndexType>     IndexSMVector;
   typedef SMDenseVector<RealType>      RealSMVector;
   typedef SMDenseVector<ValueType>     ValueSMVector;
   typedef SMDenseVector<SPValueType>   SPValueSMVector;
   typedef SMDenseVector<ComplexType>   ComplexSMVector;
   typedef SMDenseVector<SPComplexType>   SPComplexSMVector;
-*/
+
   typedef Matrix<IndexType>     IndexMatrix;
   typedef Matrix<RealType>      RealMatrix;
   typedef Matrix<ValueType>     ValueMatrix;
   typedef Matrix<SPValueType>     SPValueMatrix;
   typedef Matrix<ComplexType>   ComplexMatrix;
   typedef Matrix<SPComplexType>   SPComplexMatrix;
+*/
+
+  typedef boost::multi_array<IndexType,1> IndexVector;
+  typedef boost::multi_array<RealType,1> RealVector;
+  typedef boost::multi_array<SPRealType,1> SPRealVector;
+  typedef boost::multi_array<ValueType,1> ValueVector;
+  typedef boost::multi_array<SPValueType,1> SPValueVector;
+  typedef boost::multi_array<ComplexType,1> ComplexVector;
+  typedef boost::multi_array<SPComplexType,1> SPComplexVector;
+
+  typedef boost::multi_array<IndexType,2> IndexMatrix;  
+  typedef boost::multi_array<RealType,2> RealMatrix;  
+  typedef boost::multi_array<SPRealType,2> SPRealMatrix;  
+  typedef boost::multi_array<ValueType,2> ValueMatrix;  
+  typedef boost::multi_array<SPValueType,2> SPValueMatrix;  
+  typedef boost::multi_array<ComplexType,2> ComplexMatrix;  
+  typedef boost::multi_array<SPComplexType,2> SPComplexMatrix;  
 
   typedef SparseMatrix<IndexType>     IndexSpMat;
   typedef SparseMatrix<RealType>      RealSpMat;
@@ -122,6 +146,24 @@ inline std::ostream &app_warning()
 }
 
 inline std::ostream &app_debug() { return OhmmsInfo::Debug->getStream(); }
+}
+
+namespace std{
+
+inline  void swap(std::tuple<int &, int &, qmcplusplus::RealType &> const& a, std::tuple<int &, int &, qmcplusplus::RealType &> const& b) {
+    using std::swap;
+    swap(std::get<0>(a), std::get<0>(b));
+    swap(std::get<1>(a), std::get<1>(b));
+    swap(std::get<2>(a), std::get<2>(b));
+  }
+
+inline  void swap(std::tuple<int &, int &, std::complex<qmcplusplus::RealType> &> const & a, std::tuple<int &, int &, std::complex<qmcplusplus::RealType> &> const& b) {
+    using std::swap;
+    swap(std::get<0>(a), std::get<0>(b));
+    swap(std::get<1>(a), std::get<1>(b));
+    swap(std::get<2>(a), std::get<2>(b));
+  }
+
 }
 
 #endif
