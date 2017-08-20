@@ -13,6 +13,7 @@
 #define  AFQMC_OPS_HPP 
 
 #include "Configuration.h"
+#include "Numerics/ma_blas.hpp"
 #include "Numerics/ma_operations.hpp"
 #include "AFQMC/AFQMCInfo.hpp"
 #include "AFQMC/energy.hpp"
@@ -31,12 +32,12 @@ struct afqmc_sys: public AFQMCInfo
 
     ~afqmc_sys() {}
 
-    ValueMatrix trialwfn_alpha;
-    ValueMatrix trialwfn_beta;
+    ComplexMatrix trialwfn_alpha;
+    ComplexMatrix trialwfn_beta;
 
     void setup(int nmo_, int na) {
       NMO = nmo_;
-      NAEA = na;
+      NAEA = NAEB = na;
       TWORK1.resize(extents[NAEA][NAEA]);
       TWORK2.resize(extents[NAEA][NMO]);
       TWORK3.resize(extents[NAEA][NMO]);
@@ -57,15 +58,15 @@ struct afqmc_sys: public AFQMCInfo
       assert(W_data.shape()[0] >= nwalk);
       assert(W_data.shape()[1] >= 4);
       int N_ = compact?NAEA:NMO;
-      boost::multi_array_ref<ValueType,2> DMr(DM.data(), extents[N_][NMO]); 
-      boost::multi_array_ref<ValueType,4> G_4D(G.data(), extents[2][N_][NMO][nwalk]); 
+      boost::multi_array_ref<ComplexType,2> DMr(DM.data(), extents[N_][NMO]); 
+      boost::multi_array_ref<ComplexType,4> G_4D(G.data(), extents[2][N_][NMO][nwalk]); 
       for(int n=0; n<nwalk; n++) {
-        W_data[n][2] = base::MixedDensityMatrix<ValueType>(trialwfn_alpha,W[n][0],
-                       DMr,IWORK1,TWORK1,TWORK2,compact);
+        W_data[n][2] = base::MixedDensityMatrix<ComplexType>(trialwfn_alpha,W[n][0],
+                       DMr,IWORK1,TWORK1,TWORK2,TWORKV1,compact);
         G_4D[ indices[0][range_t(0,N_)][range_t(0,NMO)][n] ] = DMr;
 
-        W_data[n][3] = base::MixedDensityMatrix<ValueType>(trialwfn_beta,W[n][1],
-                       DMr,IWORK1,TWORK1,TWORK2,compact);
+        W_data[n][3] = base::MixedDensityMatrix<ComplexType>(trialwfn_beta,W[n][1],
+                       DMr,IWORK1,TWORK1,TWORK2,TWORKV1,compact);
         G_4D[ indices[1][range_t(0,N_)][range_t(0,NMO)][n] ] = DMr;
       }
     }
@@ -93,8 +94,8 @@ struct afqmc_sys: public AFQMCInfo
       assert(W_data.shape()[0] >= W.shape()[0]);
       assert(W_data.shape()[1] >= 4);
       for(int n=0, nw=W.shape()[0]; n<nw; n++) {
-        W_data[n][2] = base::Overlap<ValueType>(trialwfn_alpha,W[n][0],IWORK1,TWORK1);
-        W_data[n][3] = base::Overlap<ValueType>(trialwfn_beta,W[n][1],IWORK1,TWORK1);
+        W_data[n][2] = base::Overlap<ComplexType>(trialwfn_alpha,W[n][0],IWORK1,TWORK1);
+        W_data[n][3] = base::Overlap<ComplexType>(trialwfn_beta,W[n][1],IWORK1,TWORK1);
       }
     }
 
@@ -112,6 +113,7 @@ struct afqmc_sys: public AFQMCInfo
       for(int nw=0, nwalk=W.shape()[0]; nw<nwalk; nw++) {
 
         ma::product(Propg,W[nw][0],S0);
+        // need deep-copy, since stride()[1] == nw otherwise
         DM = V[ indices[range_t(0,NMO)][range_t(0,NMO)][nw] ];
         base::apply_expM(DM,S0,TWORK2r,TWORK3r,6);
         ma::product(Propg,S0,W[nw][0]);
@@ -124,19 +126,53 @@ struct afqmc_sys: public AFQMCInfo
 
     }    
 
+    template<class WSet>
+    void orthogonalize(WSet& W)
+    {
+      for(int i=0; i<W.shape()[0]; i++) {
+
+        // QR on the transpose
+        for(int r=0; r<NMO; r++)
+          for(int c=0; c<NAEA; c++)
+            TWORK2[c][r] = W[i][0][r][c];   
+        ma::geqrf(TWORK2,TAU,TWORKV2);
+        ma::gqr(TWORK2,TAU,TWORKV2);
+        for(int r=0; r<NMO; r++)
+          for(int c=0; c<NAEA; c++)
+            W[i][0][r][c] = TWORK2[c][r];   
+        for(int r=0; r<NMO; r++)
+          for(int c=0; c<NAEA; c++)
+            TWORK2[c][r] = W[i][1][r][c];
+        ma::geqrf(TWORK2,TAU,TWORKV2);
+        ma::gqr(TWORK2,TAU,TWORKV2);
+        for(int r=0; r<NMO; r++)
+          for(int c=0; c<NAEA; c++)
+            W[i][1][r][c] = TWORK2[c][r];
+
+        // LQ on the direct matrix
+        //ma::gelqf(W[i][0],TAU,TWORKV2);
+        //ma::glq(W[i][0],TAU,TWORKV2);
+        //ma::gelqf(W[i][1],TAU,TWORKV2);
+        //ma::glq(W[i][1],TAU,TWORKV2);
+
+      }
+    }
+
   private:
 
     index_gen indices;
 
     // work arrays
-    ValueMatrix TWORK1;
-    ValueMatrix TWORK2;
-    ValueMatrix TWORK3;
+    ComplexMatrix TWORK1;
+    ComplexMatrix TWORK2;
+    ComplexMatrix TWORK3;
     IndexVector IWORK1;
-    ValueVector TWORKV1;
-    ValueMatrix S0; 
-    ValueMatrix DM;
-    ValueMatrix Gcloc;
+    ComplexVector TWORKV1;
+    ComplexMatrix S0; 
+    ComplexMatrix DM;
+    ComplexMatrix Gcloc;
+    ComplexVector TWORKV2;  
+    ComplexVector TAU;
 };
    
 }

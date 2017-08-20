@@ -112,24 +112,97 @@ MultiArray2DC gemm(MultiArray2DA const& a, MultiArray2DB const& b, MultiArray2DC
 	return gemm(1., a, b, 0., std::forward<MultiArray2DC>(c));
 }
 
+// temporary hack 
+template<class T>
+void my_resize(std::vector<T>& v, int n) { v.resize(n); }
+template<class T>
+void my_resize(boost::multi_array<T,1>& v, int n) { v.resize(boost::extents[n]); }
+template<class T>
+void my_resize(boost::multi_array_ref<T,1>& v, int n) { v.resize(boost::extents[n]); }
+
+
 template<class MultiArray2D, class Array1D>
 MultiArray2D getrf(MultiArray2D&& m, Array1D& pivot){
 	assert(pivot.size() >= std::min(m.shape()[0], m.shape()[1]));
 	assert(m.strides()[1] == 1);
 	int status = -1;
 	BLAS::getrf(m.shape()[1], m.shape()[0], m.origin(), m.strides()[0], pivot.data(), status);
+        assert(status==0);
 	return std::forward<MultiArray2D>(m);
 }
 
 #if 1
 template<class MultiArray2D, class MultiArray1D, class MultiArray1DW>
-MultiArray2D getri(MultiArray2D&& m, MultiArray1D const& pivot, MultiArray1DW&& work){
+MultiArray2D getri(MultiArray2D&& m, MultiArray1D const& pivot, MultiArray1DW& work){
 	assert(m.strides()[1] == 1);
-	int status = -1;
-	BLAS::getri(m.shape()[0], m.origin(), m.strides()[0], pivot.data(), work.data(), work.size(), status);
+	int status = -1, lwork=-1;
+        if(work.size() == 0) my_resize(work,1);
+	BLAS::getri(m.shape()[0], m.origin(), m.strides()[0], pivot.data(), work.data(), lwork, status);
+        my_resize(work,lwork); 
+	BLAS::getri(m.shape()[0], m.origin(), m.strides()[0], pivot.data(), work.data(), lwork, status);
+        assert(status==0);
 	return std::forward<MultiArray2D>(m);
 }
 #endif
+
+template<class MultiArray2D, class Array1D>
+MultiArray2D geqrf(MultiArray2D&& A, Array1D& TAU, Array1D& WORK){
+        assert(A.strides()[1] == 1);
+        int status = -1, lwork = -1; 
+        TAU.resize(boost::extents[std::min(A.shape()[0],A.shape()[1])]);
+        if(WORK.size()==0) WORK.resize(boost::extents[1]);
+        BLAS::geqrf(A.shape()[1], A.shape()[0], A.origin(), A.strides()[0], TAU.data(), 
+               WORK.data(),lwork,status);
+        WORK.resize(boost::extents[lwork]);
+        BLAS::geqrf(A.shape()[1], A.shape()[0], A.origin(), A.strides()[0], TAU.data(), 
+               WORK.data(),lwork,status);
+        assert(status==0);
+        return std::forward<MultiArray2D>(A);
+}
+
+template<class MultiArray2D, class Array1D>
+MultiArray2D gelqf(MultiArray2D&& A, Array1D& TAU, Array1D& WORK){
+        assert(A.strides()[1] == 1);
+        int status = -1, lwork = -1;
+        TAU.resize(boost::extents[std::min(A.shape()[0],A.shape()[1])]);
+        if(WORK.size()==0) WORK.resize(boost::extents[1]);
+        BLAS::gelqf(A.shape()[1], A.shape()[0], A.origin(), A.strides()[0], TAU.data(),
+               WORK.data(),lwork,status);
+        WORK.resize(boost::extents[lwork]);
+        BLAS::gelqf(A.shape()[1], A.shape()[0], A.origin(), A.strides()[0], TAU.data(),
+               WORK.data(),lwork,status);
+        assert(status==0);
+        return std::forward<MultiArray2D>(A);
+}
+
+template<class MultiArray2D, class Array1D>
+MultiArray2D gqr(MultiArray2D&& A, Array1D& TAU, Array1D& WORK){
+        assert(A.strides()[1] == 1);
+        int status = -1, lwork = -1;
+        if(WORK.size()==0) WORK.resize(boost::extents[1]);
+        BLAS::gqr(A.shape()[1], A.shape()[0], TAU.size(), A.origin(), A.strides()[0], 
+               TAU.data(),WORK.data(),lwork,status);
+        WORK.resize(boost::extents[lwork]);
+        BLAS::gqr(A.shape()[1], A.shape()[0], TAU.size(), A.origin(), A.strides()[0], 
+               TAU.data(), WORK.data(),lwork,status);
+        assert(status==0);
+        return std::forward<MultiArray2D>(A);
+}
+
+template<class MultiArray2D, class Array1D>
+MultiArray2D glq(MultiArray2D&& A, Array1D& TAU, Array1D& WORK){
+        assert(A.strides()[1] == 1);
+        int status = -1, lwork = -1;
+        if(WORK.size()==0) WORK.resize(boost::extents[1]);
+        BLAS::glq(A.shape()[1], A.shape()[0], TAU.size(), A.origin(), A.strides()[0], 
+               TAU.data(),WORK.data(),lwork,status);
+        WORK.resize(boost::extents[lwork]);
+        BLAS::glq(A.shape()[1], A.shape()[0], TAU.size(), A.origin(), A.strides()[0], 
+               TAU.data(), WORK.data(),lwork,status);
+        assert(status==0);
+        return std::forward<MultiArray2D>(A);
+}
+
 
 }
 

@@ -32,6 +32,8 @@ inline bool Initialize(hdf_archive& dump, const double dt, afqmc_sys& sys, Mat& 
 {
   int NMO, NAEA;
 
+  std::cout<<"  Serial hdf5 read. \n";
+
   if(!dump.is_group( std::string("/Wavefunctions/PureSingleDeterminant") )) {
     app_error()<<" ERROR: H5Group /Wavefunctions/PureSingleDeterminant does not exist. \n";
     return false;

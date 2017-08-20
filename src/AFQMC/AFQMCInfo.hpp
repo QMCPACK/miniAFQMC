@@ -15,7 +15,7 @@ struct AFQMCInfo
   public:
 
   // default constructor
-  AFQMCInfo():name(""),NMO(-1),NAEA(-1),NAEB(-1),MS2(0)
+  AFQMCInfo():name("miniAFQMC"),NMO(-1),NAEA(-1),NAEB(-1),MS2(0)
   {}
 
   // destructor
@@ -41,12 +41,11 @@ struct AFQMCInfo
   } 
 
   void print(std::ostream& out) {
-    out<<"AFQMC info: \n"
-       <<"name: " <<name <<"\n"
-       <<"NMO: " <<NMO <<"\n"
-       <<"NAEA: " <<NAEA  <<"\n"
-       <<"NAEB: " <<NAEB  <<"\n"
-       <<"MS2: " <<MS2  <<std::endl;
+    out<<"  AFQMC info: \n"
+       <<"    name: " <<name <<"\n"
+       <<"    # of molecular orbitals: " <<NMO <<"\n"
+       <<"    # of up electrons: " <<NAEA  <<"\n"
+       <<"    # of down electrons: " <<NAEB  <<std::endl;
   }
 
 };

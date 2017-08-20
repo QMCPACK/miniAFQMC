@@ -153,6 +153,8 @@ template<class MultiArray2D> struct op_tag<hermitian_tag<MultiArray2D>> : std::i
 template<class MultiArray2D>
 MultiArray2D arg(hermitian_tag<MultiArray2D>& ht){return ht.arg1;}
 
+/*
+ * MAM: I need to somehow overload resize(n) for multi_array<T,1>
 template<class MultiArray2D>
 MultiArray2D invert_lu(MultiArray2D&& m){
 	assert(m.shape()[0] == m.shape()[1]);
@@ -162,6 +164,7 @@ MultiArray2D invert_lu(MultiArray2D&& m){
 	getri(std::forward<MultiArray2D>(m), pivot, work);
 	return std::forward<MultiArray2D>(m);
 }
+*/
 
 template<class MultiArray2D, class MultiArray1D, class MultiArray1DW, class T = typename std::decay<MultiArray2D>::type::element>
 T invert(MultiArray2D& m, MultiArray1D& pivot, MultiArray1DW& work){
@@ -180,6 +183,21 @@ T invert(MultiArray2D& m, MultiArray1D& pivot, MultiArray1DW& work){
 	getri(std::forward<MultiArray2D>(m), pivot, work);
 	return detvalue;
 }
+
+/*
+ * MAM: not sure how I want to handle this
+template<class MultiArray2D, class MultiArray1D, class MultiArray1DW>
+void qr(MultiArray2D& A, MultiArray1D& tau, MultiArray1DW& work){
+        geqrf(std::forward<MultiArray2D>(A), tau, work);
+        gqr(std::forward<MultiArray2D>(A), tau, work);
+}
+
+template<class MultiArray2D, class MultiArray1D, class MultiArray1DW>
+void lq(MultiArray2D& A, MultiArray1D& tau, MultiArray1DW& work){
+        gelqf(std::forward<MultiArray2D>(A), tau, work);
+        glq(std::forward<MultiArray2D>(A), tau, work);
+}
+*/
 
 template<class MultiArray2D, class MultiArray1D, class T = typename std::decay<MultiArray2D>::type::element>
 T determinant(MultiArray2D& m, MultiArray1D& pivot){

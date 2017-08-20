@@ -311,19 +311,155 @@ void static getrf(
 }
 
 #if 1
-void static getri(int n, float* restrict a, int n0, int const* restrict piv, float* restrict work, int n1, int status){
+void static getri(int n, float* restrict a, int n0, int const* restrict piv, float* restrict work, int& n1, int& status){
+        int l_ = n1;
 	sgetri(n, a, n0, piv, work, n1, status);
+        if(l_ == -1) n1 = int(work[0]);
 }
-void static getri(int n, double* restrict a, int n0, int const* restrict piv, double* restrict work, int n1, int status){
+void static getri(int n, double* restrict a, int n0, int const* restrict piv, double* restrict work, int& n1, int& status){
+        int l_ = n1;
 	dgetri(n, a, n0, piv, work, n1, status);
+        if(l_ == -1) n1 = int(work[0]);
 }
-void static getri(int n, std::complex<float>* restrict a, int n0, int const* restrict piv, std::complex<float>* restrict work, int n1, int status){
+void static getri(int n, std::complex<float>* restrict a, int n0, int const* restrict piv, std::complex<float>* restrict work, int& n1, int& status){
+        int l_ = n1;
 	cgetri(n, a, n0, piv, work, n1, status);
+        if(l_ == -1) n1 = int(work[0].real());
 }
-void static getri(int n, std::complex<double>* restrict a, int n0, int const* restrict piv, std::complex<double>* restrict work, int n1, int status){
+void static getri(int n, std::complex<double>* restrict a, int n0, int const* restrict piv, std::complex<double>* restrict work, int& n1, int& status){
+        int l_ = n1;
 	zgetri(n, a, n0, piv, work, n1, status);
+        if(l_ == -1) n1 = int(work[0].real());
 }
 #endif
+
+  void static geqrf(int M, int N, std::complex<double> *A, const int LDA, 
+                    std::complex<double> *TAU, std::complex<double> *WORK, int& LWORK, int& INFO)
+  {
+    int l_ = LWORK;
+    zgeqrf(M,N,A,LDA,TAU,WORK,LWORK,INFO);        
+    if(l_ == -1) LWORK = int(WORK[0].real());
+  }
+
+  void static geqrf(int M, int N, double *A, const int LDA, 
+                    double *TAU, double *WORK, int& LWORK, int& INFO) 
+  {
+    int l_ = LWORK;
+    dgeqrf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
+    if(l_ == -1) LWORK = int(WORK[0]);
+  }
+
+  void static geqrf(int M, int N, std::complex<float> *A, const int LDA, 
+                    std::complex<float> *TAU, std::complex<float> *WORK, int& LWORK, int& INFO) 
+  {
+    int l_ = LWORK;
+    cgeqrf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
+    if(l_ == -1) LWORK = int(WORK[0].real());
+  }
+
+  void static geqrf(int M, int N, float *A, const int LDA, 
+                    float *TAU, float *WORK, int& LWORK, int& INFO) 
+  {
+    int l_ = LWORK;
+    sgeqrf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
+    if(l_ == -1) LWORK = int(WORK[0]);
+  }
+
+  void static gelqf(int M, int N, std::complex<double> *A, const int LDA, 
+                    std::complex<double> *TAU, std::complex<double> *WORK, int& LWORK, int& INFO) 
+  {
+    int l_ = LWORK;
+    zgelqf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
+    if(l_ == -1) LWORK = int(WORK[0].real());
+  }
+
+  void static gelqf(int M, int N, double *A, const int LDA,              
+                    double *TAU, double *WORK, int& LWORK, int& INFO)                            
+  {
+    int l_ = LWORK;
+    dgelqf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
+    if(l_ == -1) LWORK = int(WORK[0]);
+  }
+
+  void static gelqf(int M, int N, std::complex<float> *A, const int LDA, 
+                    std::complex<float> *TAU, std::complex<float> *WORK, int& LWORK, int& INFO)  
+  {
+    int l_ = LWORK;
+    cgelqf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
+    if(l_ == -1) LWORK = int(WORK[0].real());
+  }
+
+  void static gelqf(int M, int N, float *A, const int LDA, 
+                    float *TAU, float *WORK, int& LWORK, int& INFO)  
+  {
+    int l_ = LWORK;
+    sgelqf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
+    if(l_ == -1) LWORK = int(WORK[0]);
+  }
+
+  void static gqr(int M, int N, int K, std::complex<double> *A, const int LDA,
+                    std::complex<double> *TAU, std::complex<double> *WORK, int& LWORK, int& INFO)
+  {
+    int l_ = LWORK;
+    zungqr(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
+    if(l_ == -1) LWORK = int(WORK[0].real());
+  }
+
+  void static gqr(int M, int N, int K, double *A, const int LDA,
+                    double *TAU, double *WORK, int& LWORK, int& INFO)
+  {
+    int l_ = LWORK;
+    dorgqr(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
+    if(l_ == -1) LWORK = int(WORK[0]);
+  }
+
+  void static gqr(int M, int N, int K, std::complex<float> *A, const int LDA,
+                    std::complex<float> *TAU, std::complex<float> *WORK, int& LWORK, int& INFO)
+  {
+    int l_ = LWORK;
+    cungqr(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
+    if(l_ == -1) LWORK = int(WORK[0].real());
+  }
+
+  void static gqr(int M, int N, int K, float *A, const int LDA,
+                    float *TAU, float *WORK, int& LWORK, int& INFO)
+  {
+    int l_ = LWORK;
+    sorgqr(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
+    if(l_ == -1) LWORK = int(WORK[0]);
+  }
+
+  void static glq(int M, int N, int K, std::complex<double> *A, const int LDA,
+                    std::complex<double> *TAU, std::complex<double> *WORK, int& LWORK, int& INFO)
+  {
+    int l_ = LWORK;
+    zunglq(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
+    if(l_ == -1) LWORK = int(WORK[0].real());
+  }
+
+  void static glq(int M, int N, int K, double *A, const int LDA,
+                    double *TAU, double *WORK, int& LWORK, int& INFO)
+  {
+    int l_ = LWORK;
+    dorglq(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
+    if(l_ == -1) LWORK = int(WORK[0]);
+  }
+
+  void static glq(int M, int N, int K, std::complex<float> *A, const int LDA,
+                    std::complex<float> *TAU, std::complex<float> *WORK, int& LWORK, int& INFO)
+  {
+    int l_ = LWORK;
+    cunglq(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
+    if(l_ == -1) LWORK = int(WORK[0].real());
+  }
+    
+  void static glq(int M, int N, int K, float *A, const int LDA,
+                    float *TAU, float *WORK, int& LWORK, int& INFO)
+  { 
+    int l_ = LWORK;
+    sorglq(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
+    if(l_ == -1) LWORK = int(WORK[0]);
+  }
 
   template <typename T>
   inline static T dot(int n, const T *restrict a, const T *restrict b)

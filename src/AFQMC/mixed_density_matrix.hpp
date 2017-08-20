@@ -42,9 +42,10 @@ template< class Tp,
           class ValueMatB,
           class ValueMatC,
           class ValueMat,
-          class IntVec
+          class IntVec,
+          class ValueVec
         >
-inline Tp MixedDensityMatrix(const ValueMatA& conjA, const ValueMatB& B, ValueMatC& C, IntVec& I1, ValueMat& T1, ValueMat& T2, bool compact=true)
+inline Tp MixedDensityMatrix(const ValueMatA& conjA, const ValueMatB& B, ValueMatC& C, IntVec& I1, ValueMat& T1, ValueMat& T2, ValueVec& TV1, bool compact=true)
 {
   // check dimensions are consistent
   assert( conjA.shape()[0] == B.shape()[0] );
@@ -68,7 +69,7 @@ inline Tp MixedDensityMatrix(const ValueMatA& conjA, const ValueMatB& B, ValueMa
 
   // NOTE: Using C as temporary 
   // T1 = T1^(-1)
-  Tp ovlp = static_cast<Tp>(ma::invert(T1,I1,T2));
+  Tp ovlp = static_cast<Tp>(ma::invert(T1,I1,TV1));
 
   if(compact) {
 
