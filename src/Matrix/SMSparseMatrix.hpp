@@ -21,13 +21,6 @@
 
 #define ASSERT_SPARSEMATRIX 
 
-#if defined(USE_EIGEN)
-namespace qmcplusplus
-{
-}
-
-#else  // In this case, use OhhmsPETE and your sparse matrix class
-
 namespace qmcplusplus
 {
 
@@ -1102,5 +1095,4 @@ class SMSparseMatrix
 
 }
 
-#endif
 #endif

@@ -16,6 +16,7 @@
 #include <io/hdf_datatype.h>
 #include <io/hdf_dataspace.h>
 #include <io/hdf_dataproxy.h>
+#include "boost/array.hpp"
 namespace qmcplusplus
 {
 /** class to use hyperslab with a serialized container
@@ -32,11 +33,14 @@ struct hyperslab_proxy: public container_proxy<CT>
   ///true, if hyperslab is used
   bool use_slab;
   ///global dimension of the hyperslab
-  TinyVector<hsize_t,MAXDIM+1> slab_dims;
+  //TinyVector<hsize_t,MAXDIM+1> slab_dims;
+  boost::array<hsize_t,MAXDIM+1> slab_dims;
   ///local dimension of the hyperslab
-  TinyVector<hsize_t,MAXDIM+1> slab_dims_local;
+  //TinyVector<hsize_t,MAXDIM+1> slab_dims_local;
+  boost::array<hsize_t,MAXDIM+1> slab_dims_local;
   ///offset of the hyperslab
-  TinyVector<hsize_t,MAXDIM+1> slab_offset;
+  //TinyVector<hsize_t,MAXDIM+1> slab_offset;
+  boost::array<hsize_t,MAXDIM+1> slab_offset;
   ///1D
   hyperslab_proxy(CT& a): container_proxy<CT>(a), slab_rank(a.slab_rank),
     slab_dims(a.slab_dims), slab_offset(a.slab_offset)

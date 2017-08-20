@@ -18,7 +18,6 @@
 #define QMCPLUSPLUS_MPI_CONTAINER_PROXY_H
 
 #include <type_traits/scalar_traits.h>
-#include <OhmmsPETE/Tensor.h>
 
 namespace qmcplusplus
 {
@@ -37,40 +36,6 @@ struct container_proxy
   inline pointer data()
   {
     return scalar_traits<T>::get_address(&ref);
-  }
-};
-
-template<typename T, unsigned D>
-struct container_proxy<TinyVector<T,D> >
-{
-  enum {DIM=scalar_traits<T>::DIM*D};
-  typedef typename scalar_traits<T>::real_type* pointer;
-  TinyVector<T,D>& ref;
-  inline container_proxy(TinyVector<T,D>& a):ref(a) { }
-  inline size_t size() const
-  {
-    return DIM;
-  }
-  inline pointer data()
-  {
-    return scalar_traits<T>::get_address(ref.data());
-  }
-};
-
-template<typename T, unsigned D>
-struct container_proxy<Tensor<T,D> >
-{
-  enum {DIM=scalar_traits<T>::DIM*D*D};
-  typedef typename scalar_traits<T>::real_type* pointer;
-  Tensor<T,D>& ref;
-  inline container_proxy(Tensor<T,D>& a):ref(a) {}
-  inline size_t size() const
-  {
-    return DIM;
-  }
-  inline pointer data()
-  {
-    return scalar_traits<T>::get_address(ref.data());
   }
 };
 
@@ -130,64 +95,6 @@ struct container_proxy<std::vector<bool> >
   }
 };
 
-template<typename T, unsigned D>
-struct container_proxy<std::vector<TinyVector<T,D> > >
-{
-  enum {DIM=D*scalar_traits<T>::DIM};
-  typedef typename container_proxy<T>::pointer pointer;
-  typedef std::vector<TinyVector<T,D> > data_type;
-  data_type& ref;
-  inline container_proxy(data_type& a):ref(a) { }
-  inline size_t size() const
-  {
-    return ref.size()*DIM;
-  }
-  inline pointer data()
-  {
-    return scalar_traits<T>::get_address(ref[0].data());
-  }
-};
-
-
-template<typename T>
-struct container_proxy<Vector<T> >
-{
-  enum {DIM=scalar_traits<T>::DIM};
-  typedef typename container_proxy<T>::pointer pointer;
-  Vector<T>& ref;
-  inline container_proxy(Vector<T>& a):ref(a) {}
-  inline size_t size() const
-  {
-    return ref.size()*container_proxy<T>::DIM;
-  }
-  inline pointer data()
-  {
-    return scalar_traits<T>::get_address(ref.data());
-  }
-  template<typename I>
-  inline void resize(I* n)
-  {
-    ref.resize(static_cast<size_t>(n[0]));
-  }
-};
-
-template<typename T, unsigned D>
-struct container_proxy<Vector<TinyVector<T,D> > >
-{
-  enum {DIM=D*scalar_traits<T>::DIM};
-  typedef typename container_proxy<T>::pointer pointer;
-  typedef Vector<TinyVector<T,D> > data_type;
-  data_type& ref;
-  inline container_proxy(data_type& a):ref(a) { }
-  inline size_t size() const
-  {
-    return ref.size()*DIM;
-  }
-  inline pointer data()
-  {
-    return scalar_traits<T>::get_address(ref[0].data());
-  }
-};
 
 }
 #endif

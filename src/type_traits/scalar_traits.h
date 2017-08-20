@@ -18,10 +18,6 @@
 #ifndef QMCPLUSPLUS_SCLAR_TRAITS_H
 #define QMCPLUSPLUS_SCLAR_TRAITS_H
 #include <complex>
-#include <OhmmsPETE/OhmmsMatrix.h>
-#include <OhmmsPETE/Tensor.h>
-#include <OhmmsPETE/OhmmsVector.h>
-#include <OhmmsPETE/TinyVector.h>
 namespace qmcplusplus
 {
 
@@ -70,33 +66,6 @@ inline void convert(const std::complex<T1>& in, float& out)
   out=in.real();
 }
 
-/* specialization of D-dim vectors
- *
- */
-template<typename T1, typename T2, unsigned D>
-inline void convert(const TinyVector<T1,D>& in, TinyVector<T2,D>& out)
-{
-  for(int i=0; i<D; ++i)
-    convert(in[i],out[i]);
-}
-
-/** specialization for 3D */
-template<typename T1, typename T2>
-inline void convert(const TinyVector<T1,3>& in, TinyVector<T2,3>& out)
-{
-  convert(in[0],out[0]);
-  convert(in[1],out[1]);
-  convert(in[2],out[2]);
-}
-
-/** specialization for D tensory*/
-template<typename T1, typename T2, unsigned D>
-inline void convert(const Tensor<T1,D>& in, Tensor<T2,D>& out)
-{
-  for(int i=0; i<D*D; ++i)
-    convert(in[i],out[i]);
-}
-
 /** generic function to convert arrays
  * @param in starting address of type T1
  * @param out starting address of type T2
@@ -108,28 +77,6 @@ inline void convert(const T1* restrict in, T2* restrict out, std::size_t n)
   for(int i=0; i<n; ++i)
     convert(in[i],out[i]);
 }
-
-/** specialization for a vector */
-template<typename T1, typename T2>
-inline void convert(const Vector<T1>& in, Vector<T2>& out)
-{
-  convert(in.data(),out.data(),in.size());
-}
-
-/** specialization for a vector */
-template<typename T1, typename T2>
-inline void convert(const Matrix<T1>& in, Matrix<T2>& out)
-{
-  convert(in.data(),out.data(),in.size());
-}
-
-/** specialization for a vector */
-template<typename T1, typename T2>
-inline void convert(const Tensor<T1,3>& in, Tensor<T2,3>& out)
-{
-  convert(in.data(),out.data(),in.size());
-}
-
 
 // Fix to allow real, imag, conj on scalar and complex types
 ///real part of a scalar
@@ -234,69 +181,6 @@ inline T prod_imag(const std::complex<T>& a, const std::complex<T>& b)
 {
   return a.real()*b.imag()+a.imag()*b.real();
 }
-
-
-///real part of dot product
-template<typename T, unsigned D>
-inline T dot_real(const TinyVector<T,D>& v1, const TinyVector<T,D>& v2)
-{
-  return dot(v1,v2);
-}
-
-template<typename T, unsigned D>
-inline T dot_real(const TinyVector<T,D>& v1, const TinyVector<std::complex<T>,D>& v2)
-{
-  T res = prod_real(v1[0],v2[0]);
-  for(unsigned d=1; d<D; ++d)
-    res += prod_real(v1[d],v2[d]);
-  return res;
-}
-
-template<typename T, unsigned D>
-inline T dot_real(const TinyVector<std::complex<T>,D>& v1, const TinyVector<T,D>& v2)
-{
-  T res = prod_real(v1[0],v2[0]);
-  for(unsigned d=1; d<D; ++d)
-    res += prod_real(v1[d],v2[d]);
-  return res;
-}
-
-
-///imaginary part of dot product
-template<typename T, unsigned D>
-inline T dot_imag(const TinyVector<T,D>& v1, const TinyVector<T,D>& v2)
-{
-  return dot(v1,v2);
-}
-
-template<typename T, unsigned D>
-inline T dot_imag(const TinyVector<std::complex<T>,D>& v1, const TinyVector<std::complex<T>,D>& v2)
-{
-  T res = prod_imag(v1[0],v2[0]);
-  for(unsigned d=1; d<D; ++d)
-    res += prod_imag(v1[d],v2[d]);
-  return res;
-}
-
-template<typename T, unsigned D>
-inline T dot_imag(const TinyVector<T,D>& v1, const TinyVector<std::complex<T>,D>& v2)
-{
-  T res = prod_imag(v1[0],v2[0]);
-  for(unsigned d=1; d<D; ++d)
-    res += prod_imag(v1[d],v2[d]);
-  return res;
-}
-
-template<typename T, unsigned D>
-inline T dot_imag(const TinyVector<std::complex<T>,D>& v1, const TinyVector<T,D>& v2)
-{
-  T res = prod_imag(v1[0],v2[0]);
-  for(unsigned d=1; d<D; ++d)
-    res += prod_imag(v1[d],v2[d]);
-  return res;
-}
-
-
 
 
 }

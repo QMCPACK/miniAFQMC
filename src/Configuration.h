@@ -49,8 +49,6 @@
 
 #include<boost/multi_array.hpp>
 
-//#include <OhmmsPETE/OhmmsVector.h>
-//#include <OhmmsPETE/OhmmsMatrix.h>
 #include "Matrix/SparseMatrix.hpp"
 //#include "Matrix/SMSparseMatrix.hpp"
 //#include "Matrix/SMDenseVector.hpp"
