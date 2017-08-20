@@ -174,17 +174,13 @@ int main(int argc, char **argv)
   
   std::cout<<" Starting steps. \n";
 
-//for(int i=0; i<NMO; i++)
-//for(int j=0; j<NMO; j++)
-//std::cout<<i <<" " <<j <<" " <<Propg1[i][j] <<std::endl;
-
   for(int step = 0; step < nsteps; step++) {
   
     for(int substep = 0; substep < nsubsteps; substep++) {
 
       // propagate walker forward 
       
-      // 1. calculate density matrix 
+      // 1. calculate density matrix and bias potential 
       
       if(transposed_Spvn) {
 
@@ -192,19 +188,17 @@ int main(int argc, char **argv)
 
         AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc,true);
 
-        // 2. calculate bias potential
         base::get_vbias(SpvnT,Gc,vbias,true);  
   
       } else {
 
         AFQMCSys.calculate_mixed_density_matrix(W,W_data,G,false); 
 
-        // 2. calculate bias potential
         base::get_vbias(Spvn,G,vbias,false);
 
       } 
 
-      // 3. calculate X and weight
+      // 2. calculate X and weight
       //  X(chol,nw) = rand + i*vbias(chol,nw)
       random_th.generate_normal(X.data(),X.num_elements()); 
 
@@ -214,18 +208,18 @@ int main(int argc, char **argv)
           X[n][nw] += im*vbias[n][nw];
         }
 
-      // 4. calculate vHS
+      // 3. calculate vHS
       // vHS(i,k,nw) = sum_n Spvn(i,k,n) * X(n,nw) 
       base::get_vHS(Spvn,X,vHS);      
 
-      // 5. propagate walker
+      // 4. propagate walker
       // W(new) = Propg1 * exp(vHS) * Propg1 * W(old)
       AFQMCSys.propagate(W,Propg1,vHS);
 
-      // 6. update overlaps
+      // 5. update overlaps
       AFQMCSys.calculate_overlaps(W,W_data);
 
-      // 7. adjust weights and walker data      
+      // 6. adjust weights and walker data      
     }
 
 //    orthogonalize(wset);
