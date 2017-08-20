@@ -36,6 +36,7 @@ class SparseMatrix
   typedef typename std::vector<intType>::const_iterator const_int_iterator;
   typedef SparseMatrix<T>  This_t;
 
+  const static int dimensionality = 2;
 
   SparseMatrix<T>():vals(),colms(),myrows(),rowIndex(),nr(0),nc(0),compressed(false),zero_based(true)
   {

@@ -18,7 +18,7 @@
 #include "Configuration.h"
 #include "io/hdf_archive.h"
 
-#include "AFQMC/AFQMCInfo.hpp"
+#include "AFQMC/afqmc_sys.hpp"
 
 namespace qmcplusplus
 {
@@ -28,9 +28,9 @@ namespace afqmc
 
 template< class SpMat,
           class Mat>
-inline bool Initialize(hdf_archive& dump, const double dt, AFQMCInfo& sys, Mat& Propg1, SpMat& Spvn, Mat& haj, SpMat& Vakbl, Mat& trialwfn)
+inline bool Initialize(hdf_archive& dump, const double dt, afqmc_sys& sys, Mat& Propg1, SpMat& Spvn, Mat& haj, SpMat& Vakbl)
 {
-  int NMO, NAEA, NAEB;
+  int NMO, NAEA;
 
   if(!dump.is_group( std::string("/Wavefunctions/PureSingleDeterminant") )) {
     app_error()<<" ERROR: H5Group /Wavefunctions/PureSingleDeterminant does not exist. \n";
@@ -56,15 +56,21 @@ inline bool Initialize(hdf_archive& dump, const double dt, AFQMCInfo& sys, Mat& 
   std::vector<int> Idata(8);
   if(!dump.read(Idata,"dims")) return false;
 
-  NMO = sys.NMO = Idata[4];
-  NAEA = sys.NAEA = Idata[5];
-  NAEB = sys.NAEB = Idata[6];
+  if(Idata[5] != Idata[6] ) {
+    std::cerr<<" Error: Expecting NAEA==NAEB. \n"; 
+;
+    return false;
+  } 
+  sys.setup(Idata[4],Idata[5]); 
+  NMO = Idata[4];
+  NAEA = Idata[5];
   if(Idata[7] != 0) {
     std::cerr<<" Error: Found spin unrestricted integrals." <<std::endl;  
     return false;
   }
   if(Idata[2] != 2*NMO*NMO || Idata[3] != 2*NMO*NMO) {
-    std::cerr<<" Incorrect dimensions on 2-body hamiltonian: " <<Idata[2] <<" " <<Idata[3] <<std::endl; 
+    std::cerr<<" Incorrect dimensions on 2-body hamiltonian: " 
+             <<Idata[2] <<" " <<Idata[3] <<std::endl; 
     return false;
   }
 
@@ -101,11 +107,18 @@ inline bool Initialize(hdf_archive& dump, const double dt, AFQMCInfo& sys, Mat& 
     std::cerr<<" Inconsistent dimensions in Wavefun. " <<std::endl;
     return false;
   }
-  trialwfn.resize(extents[2*NMO][NAEA]);
-  for(int i=0, ij=0; i<2*NMO; i++)
+  sys.trialwfn_alpha.resize(extents[NMO][NAEA]);
+  sys.trialwfn_beta.resize(extents[NMO][NAEA]);
+  int ij=0;
+  for(int i=0; i<NMO; i++)
    for(int j=0; j<NAEA; j++, ij++) {
     using std::conj;
-    trialwfn[i][j] = conj(vvec[ij]);
+    sys.trialwfn_alpha[i][j] = conj(vvec[ij]);
+   }
+  for(int i=0; i<NMO; i++)
+   for(int j=0; j<NAEA; j++, ij++) {
+    using std::conj;
+    sys.trialwfn_beta[i][j] = conj(vvec[ij]);
    }
 
   // read half-rotated hamiltonian
@@ -197,7 +210,7 @@ inline bool Initialize(hdf_archive& dump, const double dt, AFQMCInfo& sys, Mat& 
     
   }
   Spvn.compress();
-  Spvn *= dt;
+  Spvn *= std::sqrt(dt);
 
   dump.pop();
   dump.pop();

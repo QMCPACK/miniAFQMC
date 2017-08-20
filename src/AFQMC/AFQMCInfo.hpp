@@ -33,15 +33,6 @@ struct AFQMCInfo
   // ms2
   int MS2; 
 
-  // copies values from object
-  void copyInfo(const AFQMCInfo& a) {
-    name=a.name;
-    NMO=a.NMO;
-    NAEA=a.NAEA;
-    NAEB=a.NAEB;
-    MS2=a.MS2;
-  }
-
   // no fully spin polarized yet, not sure what it will break 
   bool checkAFQMCInfoState() {
     if(NMO < 1 || NAEA<1 || NAEB<1 || NAEA > NMO || NAEB > NMO ) 

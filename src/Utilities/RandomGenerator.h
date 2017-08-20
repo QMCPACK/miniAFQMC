@@ -42,6 +42,7 @@
 #include <ctime>
 
 #include <stdint.h>
+#include <complex>
 
 struct BoxMuller2
 {
@@ -63,6 +64,38 @@ struct BoxMuller2
 
   template <typename RNG>
   static inline void generate(RNG &rng, float *restrict a, int n)
+  {
+    for (int i = 0; i + 1 < n; i += 2)
+    {
+      float temp1 = 1.0f - 0.9999999999f * rng(), temp2 = rng();
+      a[i]     = sqrtf(-2.0f * logf(temp1)) * cosf(6.283185306f * temp2);
+      a[i + 1] = sqrtf(-2.0f * logf(temp1)) * sinf(6.283185306f * temp2);
+    }
+    if (n % 2 == 1)
+    {
+      float temp1 = 1.0f - 0.9999999999f * rng(), temp2 = rng();
+      a[n - 1] = sqrtf(-2.0f * logf(temp1)) * cosf(6.283185306f * temp2);
+    }
+  }
+
+  template <typename RNG>
+  static inline void generate(RNG &rng, std::complex<double> *restrict a, int n)
+  {
+    for (int i = 0; i + 1 < n; i += 2)
+    {
+      double temp1 = 1.0 - 0.9999999999 * rng(), temp2 = rng();
+      a[i]     = sqrt(-2.0 * log(temp1)) * cos(6.283185306 * temp2);
+      a[i + 1] = sqrt(-2.0 * log(temp1)) * sin(6.283185306 * temp2);
+    }
+    if (n % 2 == 1)
+    {
+      double temp1 = 1 - 0.9999999999 * rng(), temp2 = rng();
+      a[n - 1] = sqrt(-2.0 * log(temp1)) * cos(6.283185306 * temp2);
+    }
+  }
+
+  template <typename RNG>
+  static inline void generate(RNG &rng, std::complex<float> *restrict a, int n)
   {
     for (int i = 0; i + 1 < n; i += 2)
     {

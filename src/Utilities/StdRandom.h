@@ -108,6 +108,11 @@ template <typename T, typename RNG = std::mt19937> struct StdRandom
     BoxMuller2::generate(*this, d, n);
   }
 
+  inline void generate_normal(std::complex<T> *restrict d, int n)
+  {
+    BoxMuller2::generate(*this, d, n);
+  }
+
   /** return a random integer
   */
   inline uint32_t irand()

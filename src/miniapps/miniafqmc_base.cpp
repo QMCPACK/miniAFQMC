@@ -21,6 +21,7 @@
  \page 
  */
 // clang-format on
+#include <random>
 
 #include <Configuration.h>
 #include <Utilities/PrimeNumberSet.h>
@@ -29,9 +30,12 @@
 #include <getopt.h>
 #include "io/hdf_archive.h"
 
-#include "AFQMC/AFQMCInfo.hpp"
+#include "AFQMC/afqmc_sys.hpp"
 #include "Matrix/initialize_serial.hpp"
 #include "AFQMC/mixed_density_matrix.hpp"
+#include "AFQMC/energy.hpp"
+#include "AFQMC/vHS.hpp"
+#include "AFQMC/vbias.hpp"
 
 // temporary
 #include "Numerics/SparseMatrixOperations.hpp"
@@ -71,11 +75,17 @@ int main(int argc, char **argv)
   int iseed   = 11;
   std::string init_file = "afqmc.h5";
 
-  bool transposed_Spvn = true;
+  // if half-tranformed transposed Spvn is on file  
+  bool transposed_Spvn = false;
+
+  ValueType one(1.),zero(0.),half(0.5);
+  ComplexType cone(1.),czero(0.);
+  ComplexType im(0.0,1.);
+  ComplexType halfim(0.0,0.5);
 
   char *g_opt_arg;
   int opt;
-  while ((opt = getopt(argc, argv, "hdvs:g:i:b:c:a:r:")) != -1)
+  while ((opt = getopt(argc, argv, "hdvs:g:i:b:c:a:r:w:")) != -1)
   {
     switch (opt)
     {
@@ -85,6 +95,9 @@ int main(int argc, char **argv)
       break;
     case 's': // the number of sub steps for drift/diffusion
       nsubsteps = atoi(optarg);
+      break;
+    case 'w': // the number of sub steps for drift/diffusion
+      nwalk = atoi(optarg);
       break;
     case 'v': verbose  = true; break;
     }
@@ -101,11 +114,11 @@ int main(int argc, char **argv)
   setup_timers(Timers, MiniQMCTimerNames, timer_level_coarse);
 
   // Important Data Structures
-  AFQMCInfo SysInfo; // Basic information about the simulation, e.g. #orbitals, #electrons, etc.
+  afqmc_sys AFQMCSys; // Basic information about the simulation, e.g. #orbitals, #electrons, etc.
   ValueSpMat Spvn; // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
+  ValueSpMat SpvnT; // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
   ValueMatrix haj;    // 1-Body Hamiltonian Matrix
   ValueSpMat Vakbl;   // 2-Body Hamiltonian Matrix: (Half-Rotated) 2-electron integrals 
-  ValueMatrix trialwfn; // Slater Matrix representing the trial wave-function 
   ValueMatrix Propg1; // propagator for 1-body hamiltonian 
 
   index_gen indices;
@@ -116,83 +129,55 @@ int main(int argc, char **argv)
 
   cout<<" Hello World. \n";
 
-  if(!afqmc::Initialize(dump,dt,SysInfo,Propg1,Spvn,haj,Vakbl,trialwfn)) {
+  if(!afqmc::Initialize(dump,dt,AFQMCSys,Propg1,Spvn,haj,Vakbl)) {
     app_error()<<" Error initalizing data structures from hdf5 file: " <<init_file <<std::endl;
     APP_ABORT(" Abort. \n\n\n");
   }
    
-  SysInfo.print(cout);
+  AFQMCSys.print(cout);
 
   RealType Eshift = 0;
-  int NMO = SysInfo.NMO;              // number of molecular orbitals
-  int NAEA = SysInfo.NAEA;            // number of up electrons
+  int NMO = AFQMCSys.NMO;              // number of molecular orbitals
+  int NAEA = AFQMCSys.NAEA;            // number of up electrons
   int nchol = Spvn.cols();            // number of cholesky vectors  
   int NIK = 2*NMO*NMO;                // dimensions of linearized green function
   int NAK = 2*NAEA*NMO;               // dimensions of linearized "compacted" green function
 
-  // check assumptions 
-  // nup==ndown
-  assert(SysInfo.NAEA == SysInfo.NAEB);
-  // UHF calculation 
-  assert(trialwfn.shape()[0]==2*NMO);           // enforce UHF 
-  assert(trialwfn.shape()[1]==NAEA);   
-
   ValueMatrix vbias(extents[nchol][nwalk]);     // bias potential
-  ValueMatrix vHS(extents[NIK][nwalk]);        // Hubbard-Stratonovich potential
+  ValueMatrix vHS(extents[NMO*NMO][nwalk]);        // Hubbard-Stratonovich potential
   ValueMatrix G(extents[NIK][nwalk]);           // density matrix
   ValueMatrix Gc(extents[NAK][nwalk]);           // compact density matrix for energy evaluation
-  ValueMatrix Gcloc(extents[NAK][nwalk]);           // density matrix
   ValueMatrix X(extents[nchol][nwalk]);         // X(n,nw) = rand(n,nw) ( + vbias(n,nw)) 
 
-  ValueMatrix DM(extents[NMO][NMO]);            // density matrix for a single walker
-  ValueMatrix DMc(extents[NAEA][NMO]);          // compact density matrix for a single walker
   ValueVector hybridW(extents[nwalk]);         // stores weight factors
   ValueVector eloc(extents[nwalk]);         // stores local energies
 
-  // work arrays 
-  ValueMatrix TWORK1(extents[NAEA][NAEA]);
-  ValueMatrix TWORK2(extents[NAEA][NMO]);
-  ValueMatrix TWORK3(extents[NAEA][NMO]);
-  IndexVector IWORK1(extents[2*NMO]); 
-  ValueMatrix S0(extents[NAEA][NMO]);
+  WalkerContainer W(extents[nwalk][2][NMO][NAEA]);
+  // 0: eloc, 1: weight, 2: ovlp_up, 3: ovlp_down, 4: old_eloc, 5: old_ovlp_alpha, 6: old_ovlp_beta
+  ValueMatrix W_data(extents[nwalk][7]);  
+  // initialize walkers to trial wave function
+  for(int n=0; n<nwalk; n++) 
+    for(int nm=0; nm<NMO; nm++) 
+      for(int na=0; na<NAEA; na++) {
+        using std::conj;
+        W[n][0][nm][na] = conj(AFQMCSys.trialwfn_alpha[nm][na]);
+        W[n][1][nm][na] = conj(AFQMCSys.trialwfn_beta[nm][na]);
+      }
 
-  boost::multi_array_ref<ValueType,1> haj_ref(haj.data(), extents[haj.num_elements()]);
+  // set weights to 1
+  for(int n=0; n<nwalk; n++) 
+    W_data[n][1] = ValueType(1.);
 
-  boost::multi_array_ref<ValueType,3> G_3D(G.data(), extents[2*NMO][NMO][nwalk]);
-  boost::multi_array_ref<ValueType,3> Gc_3D(Gc.data(), extents[2*NAEA][NMO][nwalk]);
-  boost::multi_array_ref<ValueType,3> vHS_3D(vHS.data(), extents[NMO][NMO][nwalk]);
+  // initialize overlaps and energy
+  AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc,true);
+  RealType Eav = AFQMCSys.calculate_energy(W_data,Gc,haj,Vakbl);
+  
+  std::cout<<" Starting steps. \n";
 
-  boost::multi_array_ref<ValueType,2> trialwfn_alpha(trialwfn.data(), extents[NMO][NAEA]);
-  boost::multi_array_ref<ValueType,2> trialwfn_beta(trialwfn.data()+NAEA*NMO, extents[NMO][NAEA]);
+//for(int i=0; i<NMO; i++)
+//for(int j=0; j<NMO; j++)
+//std::cout<<i <<" " <<j <<" " <<Propg1[i][j] <<std::endl;
 
-  assert(haj_ref.shape()[0] == Gc.shape()[0]);
-
-
-  {
-    ValueMatrix SM(extents[NMO][NAEA]);
-    for(int i=0; i<NMO; i++)
-     for(int j=0; j<NAEA; j++)
-      SM[i][j] = std::conj(trialwfn_alpha[i][j]);
-    ValueType ova = base::MixedDensityMatrix<ValueType>(trialwfn_alpha,SM,DMc,IWORK1,TWORK1,TWORK2,true);
-    Gc_3D[ indices[range_t(0,NAEA)][range_t(0,NMO)][0] ] = DMc;
-    for(int i=0; i<NMO; i++)
-     for(int j=0; j<NAEA; j++)
-      SM[i][j] = std::conj(trialwfn_beta[i][j]);
-    ValueType ovb = base::MixedDensityMatrix<ValueType>(trialwfn_beta,SM,DMc,IWORK1,TWORK1,TWORK2,true);
-    Gc_3D[ indices[range_t(NAEA,2*NAEA)][range_t(0,NMO)][0] ] = DMc;
-
-    ma::product(ma::T(Gc),haj_ref,eloc); 
-
-    ValueType el2=0.;
-    // Vakbl * Gc(bl,nw) = T1(ak,nw)
-    SparseMatrixOperators::product_SpMatM( NAK, nwalk, NAK, ValueType(1.), Vakbl.values(), Vakbl.column_data(), Vakbl.row_index(), Gc.data(), Gc.strides()[0], ValueType(0.), Gcloc.data(), Gcloc.strides()[0] );
-    for(int i=0; i<NAK; i++) el2 += Gc[i][0]*Gcloc[i][0]; 
-    el2*=0.5;
-
-    std::cout<<"eloc: " <<eloc[0] <<" " <<el2 <<std::endl;
-  }
-
-/*
   for(int step = 0; step < nsteps; step++) {
   
     for(int substep = 0; substep < nsubsteps; substep++) {
@@ -200,85 +185,58 @@ int main(int argc, char **argv)
       // propagate walker forward 
       
       // 1. calculate density matrix 
+      
       if(transposed_Spvn) {
 
-        for(int nw=0; nw<nwalk; nw++) {
+        APP_ABORT(" transposed Spvn not implemented: \n\n\n");
 
-          // alpha:  SM(nw, k) : k=0:alpha/alpha block, 1:beta/beta block, 2:full matrix (2N,M)
-          ValueType ova = MixedDensityMatrix<ValueType>(trialwfn,wset.SM(nw,0),DMc,IWORK1,TWORK1,TWORK2,true);
-          Gc_3D[ indices[range_t(0,NAEA)][range_t(0,NMO)][nw] ] = DMc;
-          ValueType ovb = MixedDensityMatrix<ValueType>(trialwfn,wset.SM(nw,1),DMc,IWORK1,TWORK1,TWORK2,true);
-          Gc_3D[ indices[range_t(NAEA,2*NAEA)][range_t(0,NMO)][nw] ] = DMc;
-
-        }
+        AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc,true);
 
         // 2. calculate bias potential
-        get_vbias<true>(1.,SpvnT,Gc[ indices[range_t(0,NAEA*NMO)][range_t(0,nwalk)] ]    ,0.,vbias);      
-        get_vbias<true>(1.,SpvnT,Gc[ indices[range_t(NAEA*NMO,2*NAEA*NMO)][range_t(0,nwalk)] ],1.,vbias);      
+        base::get_vbias(SpvnT,Gc,vbias,true);  
   
       } else {
 
-        for(int nw=0; nw<nwalk; nw++) {
-
-          // alpha:  SM(nw, k) : k=0:alpha/alpha block, 1:beta/beta block, 2:full matrix (2N,M)
-          ValueType ova = MixedDensityMatrix<ValueType>(trialwfn,wset.SM(nw,0),DM,IWORK1,TWORK1,TWORK2,false);
-          G_3D[ indices[range_t(0,NMO)][range_t(0,NMO)][nw] ] = DM;
-          ValueType ovb = MixedDensityMatrix<ValueType>(trialwfn,wset.SM(nw,1),DM,IWORK1,TWORK1,TWORK2,false);
-          G_3D[ indices[range_t(NMO,2*NMO)][range_t(0,NMO)][nw] ] = DM;
-
-        }
+        AFQMCSys.calculate_mixed_density_matrix(W,W_data,G,false); 
 
         // 2. calculate bias potential
-        get_vbias<false>(1.,Spvn,G[ indices[range_t(0,NMO*NMO)][range_t(0,nwalk)] ]    ,0.,vbias);      
-        get_vbias<false>(1.,Spvn,G[ indices[range_t(NMO*NMO,2*NMO*NMO)][range_t(0,nwalk)] ],1.,vbias);      
+        base::get_vbias(Spvn,G,vbias,false);
 
       } 
 
-      // 3. generate random numbers       
-      get_random(X);        
+      // 3. calculate X and weight
+      //  X(chol,nw) = rand + i*vbias(chol,nw)
+      random_th.generate_normal(X.data(),X.num_elements()); 
 
-      // 4. calculate X and weight
       for(int n=0; n<nchol; n++)
-       for(int nw=0; nw<nwalk; nw++) 
-         hybridW[nw] -= vbias[n][nw]*(X[n][nw]+0.5*vbias[n][nw]);
-      ma::axpy(1.,vbias,X);     
+        for(int nw=0; nw<nwalk; nw++) { 
+          hybridW[nw] -= im*vbias[n][nw]*(X[n][nw]+halfim*vbias[n][nw]);
+          X[n][nw] += im*vbias[n][nw];
+        }
 
-      // 5. calculate vHS
-      get_vHS(Spvn,X,vHS);      
+      // 4. calculate vHS
+      // vHS(i,k,nw) = sum_n Spvn(i,k,n) * X(n,nw) 
+      base::get_vHS(Spvn,X,vHS);      
 
-      // 6. propagate walker
-      for(int nw=0; nw<nwalk; nw++) { 
+      // 5. propagate walker
+      // W(new) = Propg1 * exp(vHS) * Propg1 * W(old)
+      AFQMCSys.propagate(W,Propg1,vHS);
 
-        // this will make a deep copy correct?
-        //DM = vHS_3D[ indices[range_t(0,NMO)][range_t(0,NMO)][nw] ];
+      // 6. update overlaps
+      AFQMCSys.calculate_overlaps(W,W_data);
 
-        // alpha
-        ma::product(Propg1,wset.SM(nw,0),S0);                   
-        apply_vHS( vHS_3D[ indices[range_t(0,NMO)][range_t(0,NMO)][nw] ] ,S0,TWORK1,TWORK3,6);       
-        ma::product(Propg1,S0,TWORK1);                  
-        wset.setSM(TWORK1,0);
-
-        ma::product(Propg1,wset.SM(nw,1),S0);                   
-        apply_vHS( vHS_3D[ indices[range_t(0,NMO)][range_t(0,NMO)][nw] ] ,S0,TWORK1,TWORK3,6);       
-        ma::product(Propg1,S0,TWORK1);                  
-        wset.setSM(TWORK1,1);
-      }
-
-      // 7. calculate new overlaps
-      get_overlaps();
-
-      // 8. adjust weights and walker data      
+      // 7. adjust weights and walker data      
     }
 
-    orthogonalize(wset);
+//    orthogonalize(wset);
 
-    RealType eloc_ave = get_energy(wset), e_=eloc_ave;
+    AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc,true);
+    Eav = AFQMCSys.calculate_energy(W_data,Gc,haj,Vakbl);
+    std::cout<<" step: " <<step <<" " <<Eav <<"\n";
 
     // Branching in real code would happen here!!!
   
   }    
-
-*/
 
   return 0;
 }

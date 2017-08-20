@@ -49,8 +49,8 @@
 
 #include<boost/multi_array.hpp>
 
-#include <OhmmsPETE/OhmmsVector.h>
-#include <OhmmsPETE/OhmmsMatrix.h>
+//#include <OhmmsPETE/OhmmsVector.h>
+//#include <OhmmsPETE/OhmmsMatrix.h>
 #include "Matrix/SparseMatrix.hpp"
 //#include "Matrix/SMSparseMatrix.hpp"
 //#include "Matrix/SMDenseVector.hpp"
@@ -100,6 +100,9 @@ namespace qmcplusplus
   typedef Matrix<ComplexType>   ComplexMatrix;
   typedef Matrix<SPComplexType>   SPComplexMatrix;
 */
+
+  // [nwalk][2][NMO][NAEA]
+  typedef boost::multi_array<ValueType,4> WalkerContainer;
 
   typedef boost::multi_array<IndexType,1> IndexVector;
   typedef boost::multi_array<RealType,1> RealVector;

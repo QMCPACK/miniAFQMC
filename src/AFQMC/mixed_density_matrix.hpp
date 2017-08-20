@@ -42,8 +42,7 @@ template< class Tp,
           class ValueMatB,
           class ValueMatC,
           class ValueMat,
-          class IntVec,
-	  typename = typename std::enable_if<(ValueMat::dimensionality == 2)>::type		
+          class IntVec
         >
 inline Tp MixedDensityMatrix(const ValueMatA& conjA, const ValueMatB& B, ValueMatC& C, IntVec& I1, ValueMat& T1, ValueMat& T2, bool compact=true)
 {
@@ -87,6 +86,28 @@ inline Tp MixedDensityMatrix(const ValueMatA& conjA, const ValueMatB& B, ValueMa
   }
 
   return ovlp;
+}
+
+template< class Tp,
+          class ValueMatA,
+          class ValueMatB,
+          class ValueMat,
+          class IntVec
+        >
+inline Tp Overlap(const ValueMatA& conjA, const ValueMatB& B, IntVec& I1, ValueMat& T1)
+{
+  // check dimensions are consistent
+  assert( conjA.shape()[0] == B.shape()[0] );
+  assert( conjA.shape()[1] == T1.shape()[1] );
+  assert( B.shape()[1] == T1.shape()[0] );
+  assert( T1.shape()[1] == B.shape()[1] );
+
+  using ma::T;
+
+  // T(B)*conj(A) 
+  ma::product(T(B),conjA,T1);  
+
+  return static_cast<Tp>(ma::determinant(T1,I1));
 }
 
 } // namespace base
