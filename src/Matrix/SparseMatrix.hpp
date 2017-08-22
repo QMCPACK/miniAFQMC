@@ -42,10 +42,6 @@ class SparseMatrix
   {
   }
 
-  SparseMatrix<T>(int n):vals(),colms(),myrows(),rowIndex(),nr(n),nc(n),compressed(false),zero_based(true)
-  {
-  }
-
   SparseMatrix<T>(int n,int m):vals(),colms(),myrows(),rowIndex(),nr(n),nc(m),compressed(false),zero_based(true)
   {
   }
@@ -149,6 +145,24 @@ class SparseMatrix
   inline intPtr row_index(long n=0) 
   {
     return rowIndex.data()+n;
+  }
+
+  inline const_intPtr index_begin(long n=0) const
+  {
+    return rowIndex.data()+n;
+  }
+  inline intPtr index_begin(long n=0)
+  {
+    return rowIndex.data()+n;
+  }
+
+  inline const_intPtr index_end(long n=0) const
+  {
+    return rowIndex.data()+n+1;
+  }
+  inline intPtr index_end(long n=0)
+  {
+    return rowIndex.data()+n+1;
   }
 
   inline This_t& operator=(const SparseMatrix<T> &rhs) = delete; 
@@ -332,14 +346,14 @@ class SparseMatrix
   inline SparseMatrix<T>& operator*=(const float rhs )  
   {
     for(iterator it=vals.begin(); it!=vals.end(); it++)
-      (*it) *= rhs;
+      (*it) *= T(rhs);
     return *this;
   }
 
   inline SparseMatrix<T>& operator*=(const std::complex<float> rhs )  
   {
     for(iterator it=vals.begin(); it!=vals.end(); it++)
-      (*it) *= rhs;
+      (*it) *= T(rhs);
     return *this;
   }
 

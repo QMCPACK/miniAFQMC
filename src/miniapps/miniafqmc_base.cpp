@@ -139,12 +139,12 @@ int main(int argc, char **argv)
   setup_timers(Timers, MiniQMCTimerNames, timer_level_coarse);
 
   // Important Data Structures
-  afqmc_sys AFQMCSys; // Basic information about the simulation, e.g. #orbitals, #electrons, etc.
-  ValueSpMat Spvn; // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
-  ComplexSpMat SpvnT; // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
+  base::afqmc_sys AFQMCSys;   // Main AFQMC object. Control access to several apgorithmic functions. 
+  ValueSpMat Spvn;      // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
+  ComplexSpMat SpvnT;   // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
   ComplexMatrix haj;    // 1-Body Hamiltonian Matrix
   ComplexSpMat Vakbl;   // 2-Body Hamiltonian Matrix: (Half-Rotated) 2-electron integrals 
-  ValueMatrix Propg1; // propagator for 1-body hamiltonian 
+  ValueMatrix Propg1;   // propagator for 1-body hamiltonian 
 
   index_gen indices;
 

@@ -19,9 +19,6 @@
 namespace qmcplusplus
 {
 
-namespace afqmc 
-{
-
 // sets up communicators and task groups
 // Various divisions are setup:
 //   1. head_of_nodes: used for all shared memory setups
@@ -39,16 +36,13 @@ class TaskGroup {
   {}
   ~TaskGroup() {};
 
-//  void setBuffer(SPComplexSMVector* buf) { commBuff = buf; }
+  void setBuffer(SMDenseVector<ComplexType>* buf) { commBuff = buf; }
 
-  // right now using std::vector and std::string to make the initial implementatino
-  //   easier, but this is not efficient and can lead to memory fragmentation for large 
-  //   processor counts (e.g. > 10k)
-  bool setup(int ncore, int nnode, bool print=false) { 
+  SMDenseVector<ComplexType>* getBuffer() { return commBuff; }
+
+  bool setup(int ncore=0, int nnode=0, bool print=false) { 
  
     verbose = print;
-    ncores_per_TG = ncore;
-    nnodes_per_TG = nnode;
 
     MPI_Comm_rank(MPI_COMM_WORLD,&global_rank);
     MPI_Comm_size(MPI_COMM_WORLD,&global_nproc);
@@ -71,6 +65,9 @@ class TaskGroup {
 
     MPI_Comm_rank(MPI_COMM_HEAD_OF_NODES,&node_number);
     MPI_Comm_size(MPI_COMM_HEAD_OF_NODES,&tot_nodes);
+
+    ncores_per_TG = (ncore==0)?tot_cores:ncore;
+    nnodes_per_TG = (nnode==0)?tot_nodes:nnode;
 
     // check for consistency
     int dum = tot_cores;
@@ -184,11 +181,10 @@ class TaskGroup {
 
   // over local node using boost sync 
   void local_barrier() {
-    //commBuff->barrier();
     MPI_Barrier(MPI_COMM_TG_LOCAL);
   }
 
-  MPI_Comm getTGCOMM() const { return MPI_COMM_TG; }
+  MPI_Comm getTGComm() const { return MPI_COMM_TG; }
 
   MPI_Comm getTGCommLocal() const { return MPI_COMM_TG_LOCAL; }
 
@@ -207,7 +203,7 @@ class TaskGroup {
     int sz=size;
     MPI_Allreduce(&sz,&size,1,MPI_INT,MPI_MAX,MPI_COMM_TG);
     // reset SM is necessary 
-    //commBuff->resize(size);
+    commBuff->resize(size);
   }
 
   // on entry, nblock has the number of blocks that should be sent 
@@ -292,7 +288,7 @@ class TaskGroup {
   }
  
   // must be setup externally to be able to reuse between different TG 
-//  SPComplexSMVector* commBuff;  
+  SMDenseVector<ComplexType>* commBuff;  
 
   std::string tgname;
 
@@ -326,8 +322,6 @@ class TaskGroup {
   int min_index, max_index;  
 
 };
-
-}
 
 }
 

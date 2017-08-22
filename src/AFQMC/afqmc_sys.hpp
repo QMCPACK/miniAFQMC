@@ -23,6 +23,9 @@
 namespace qmcplusplus
 {
 
+namespace base 
+{
+
 struct afqmc_sys: public AFQMCInfo
 {
 
@@ -174,6 +177,8 @@ struct afqmc_sys: public AFQMCInfo
     ComplexVector TWORKV2;  
     ComplexVector TAU;
 };
+
+}
    
 }
 

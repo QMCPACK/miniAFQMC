@@ -33,10 +33,6 @@
 namespace qmcplusplus
 {
 
-namespace afqmc
-{
-
-
 // look for a dataset call ..._descriptor, which will contain integer types 
 // describing the properties of the datasets, e.g.
 // - transposed?
@@ -489,8 +485,6 @@ inline std::tuple<int,int> write_hdf5_SpMat(SpMatrix& SpM, hdf_archive& dump, st
   return std::make_tuple(nblocks,ntot);
 
 } 
-
-}
 
 }
 

@@ -28,6 +28,9 @@
 #include <Utilities/OhmmsInfo.h>
 #include <Message/Communicate.h>
 
+#define byRows   999
+#define byCols   111
+
 // careful here that RealType is consistent with this!!!
 #define MKL_INT         int
 #define MKL_Complex8    std::complex<float> 
@@ -50,8 +53,9 @@
 #include<boost/multi_array.hpp>
 
 #include "Matrix/SparseMatrix.hpp"
-//#include "Matrix/SMSparseMatrix.hpp"
-//#include "Matrix/SMDenseVector.hpp"
+#include "Matrix/SparseMatrix_ref.hpp"
+#include "Matrix/SMSparseMatrix.hpp"
+#include "Matrix/SMDenseVector.hpp"
 
 namespace qmcplusplus
 {
@@ -77,26 +81,12 @@ namespace qmcplusplus
 
 
 /*
-  typedef Vector<IndexType>     IndexVector;
-  typedef Vector<RealType>      RealVector;
-  typedef Vector<ValueType>     ValueVector;
-  typedef Vector<SPValueType>   SPValueVector;
-  typedef Vector<ComplexType>   ComplexVector;
-  typedef Vector<SPComplexType>   SPComplexVector;
-
   typedef SMDenseVector<IndexType>     IndexSMVector;
   typedef SMDenseVector<RealType>      RealSMVector;
   typedef SMDenseVector<ValueType>     ValueSMVector;
   typedef SMDenseVector<SPValueType>   SPValueSMVector;
   typedef SMDenseVector<ComplexType>   ComplexSMVector;
   typedef SMDenseVector<SPComplexType>   SPComplexSMVector;
-
-  typedef Matrix<IndexType>     IndexMatrix;
-  typedef Matrix<RealType>      RealMatrix;
-  typedef Matrix<ValueType>     ValueMatrix;
-  typedef Matrix<SPValueType>     SPValueMatrix;
-  typedef Matrix<ComplexType>   ComplexMatrix;
-  typedef Matrix<SPComplexType>   SPComplexMatrix;
 */
 
   // [nwalk][2][NMO][NAEA]

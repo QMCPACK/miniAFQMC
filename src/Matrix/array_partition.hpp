@@ -19,21 +19,15 @@
 #include<utility>
 #include<vector>
 #include<numeric>
-#if defined(USE_MPI)
 #include<mpi.h>
-#endif
 
 #include "Configuration.h"
 #include "Utilities/UtilityFunctions.h"
-#include "io/hdf_archive.h"
-#include "Utilities/UtilityFunctions.h"
+#include "Utilities/balanced_partition.hpp"
 
 //#include "Utilities/Utils.h"
 
 namespace qmcplusplus
-{
-
-namespace afqmc
 {
 
 /*
@@ -285,8 +279,6 @@ struct simple_matrix_partition
 
 };
   
-
-}
 
 }
 

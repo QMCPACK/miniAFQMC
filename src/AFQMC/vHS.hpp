@@ -31,33 +31,33 @@ namespace base
  */
 // Serial Implementation
 template< class SpMat,
-	  class ValueMat	
+	  class Mat	
         >
-inline void get_vHS(const SpMat& Spvn, const ValueMat& X, ValueMat& v)
+inline void get_vHS(const SpMat& Spvn, const Mat& X, Mat& v)
 {
   // check dimensions are consistent
   assert( Spvn.cols() == X.shape()[0] );
   assert( Spvn.rows() == v.shape()[0] );
   assert( X.shape()[1] == v.shape()[1] );
 
-  typedef typename std::decay<ValueMat>::type::element ComplexType;
+  typedef typename std::decay<Mat>::type::element ComplexType;
 
   // Spvn*X 
   //ma::product(Spvn,X,v);  
   SparseMatrixOperators::product_SpMatM( Spvn.rows(), X.shape()[1], Spvn.cols(),
-          ComplexType(1.,0.), Spvn.values(), Spvn.column_data(), Spvn.row_index(),
-          X.data(), X.strides()[0],
-          ComplexType(0.,0.), v.data(), v.strides()[0] );
+         ComplexType(1.,0.), Spvn.values(), Spvn.column_data(), Spvn.index_begin(), Spvn.index_end(),
+         X.data(), X.strides()[0],
+         ComplexType(0.,0.), v.data(), v.strides()[0] );
 }
 
 /*
  * Calculate S = exp(V)*S using a Taylor expansion of exp(V)
  */ 
-template< class ValueMatA,
-          class ValueMatB,
-          class ValueMatC
+template< class MatA,
+          class MatB,
+          class MatC
         >
-inline void apply_expM( const ValueMatA& V, ValueMatB& S, ValueMatC& T1, ValueMatC& T2, int order=6)
+inline void apply_expM( const MatA& V, MatB& S, MatC& T1, MatC& T2, int order=6)
 { 
   assert( V.shape()[0] == V.shape()[1] );
   assert( V.shape()[1] == S.shape()[0] );
@@ -66,7 +66,7 @@ inline void apply_expM( const ValueMatA& V, ValueMatB& S, ValueMatC& T1, ValueMa
   assert( S.shape()[0] == T2.shape()[0] );
   assert( S.shape()[1] == T2.shape()[1] );
 
-  typedef typename std::decay<ValueMatB>::type::element ComplexType;
+  typedef typename std::decay<MatB>::type::element ComplexType;
   ComplexType zero(0.);
 
   T1 = S;
@@ -81,6 +81,38 @@ inline void apply_expM( const ValueMatA& V, ValueMatB& S, ValueMatC& T1, ValueMa
 
   }
 
+}
+
+}
+
+namespace shm 
+{
+
+/*
+ * Calculates the H-S potential: 
+ *  vHS = Spvn * X 
+ *     vHS(ik,w) = sum_n Spvn(ik,n) * X(n,w) 
+ */
+// Serial Implementation
+template< class SpMat,
+	  class MatA,
+          class MatB	
+        >
+inline void get_vHS(const SpMat& Spvn, const MatA& X, MatB& v)
+{
+  // check dimensions are consistent
+  assert( Spvn.cols() == X.shape()[0] );
+  assert( Spvn.global_row() == v.shape()[0] );
+  assert( X.shape()[1] == v.shape()[1] );
+
+  typedef typename std::decay<MatA>::type::element ComplexType;
+
+  // Spvn*X 
+  //ma::product(Spvn,X,v);  
+  SparseMatrixOperators::product_SpMatM( Spvn.rows(), X.shape()[1], Spvn.cols(),
+         ComplexType(1.,0.), Spvn.values(), Spvn.column_data(), Spvn.index_begin(), Spvn.index_end(),
+         X.data(), X.strides()[0],
+         ComplexType(0.,0.), v.data() + v.strides()[0]*Spvn.global_r0() , v.strides()[0] );
 }
 
 }

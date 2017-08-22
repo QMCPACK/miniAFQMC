@@ -28,7 +28,7 @@ namespace afqmc
 
 template< class SpMat,
           class Mat>
-inline bool Initialize(hdf_archive& dump, const double dt, afqmc_sys& sys, Mat& Propg1, SpMat& Spvn, Mat& haj, SpMat& Vakbl)
+inline bool Initialize(hdf_archive& dump, const double dt, base::afqmc_sys& sys, Mat& Propg1, SpMat& Spvn, Mat& haj, SpMat& Vakbl)
 {
   int NMO, NAEA;
 

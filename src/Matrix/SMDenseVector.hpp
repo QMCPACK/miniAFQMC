@@ -9,8 +9,7 @@
 #include<algorithm>
 #include<complex>
 #include<cmath>
-#include"config.0.h"
-#include"Utilities/Utils.h"
+#include<string>
 
 #include <boost/interprocess/managed_shared_memory.hpp>
 #include <boost/interprocess/containers/vector.hpp>
@@ -20,8 +19,6 @@
 #define ASSERT_VECTOR
 
 namespace qmcplusplus
-{
-namespace afqmc
 {
 
 // wrapper for boost::interprocess::vector 
@@ -45,10 +42,18 @@ class SMDenseVector
   typedef boost_SMVector<T>  This_t;
 
   SMDenseVector<T>():head(false),ID(""),SMallocated(false),vals(NULL),mutex(NULL),
-                      segment(NULL),alloc_T(NULL),alloc_mutex(NULL),alloc_uchar(NULL) 
+                      segment(NULL),alloc_T(NULL),alloc_mutex(NULL)
   {
     remover.ID="NULL";
     remover.head=false;
+  }
+
+  SMDenseVector<T>(std::string ii, MPI_Comm comm_, int n):head(false),ID(""),
+                      SMallocated(false),vals(NULL),mutex(NULL),
+                      segment(NULL),alloc_T(NULL),alloc_mutex(NULL)
+  {
+    setup(ii,comm_);
+    resize(n);
   }
 
   ~SMDenseVector<T>()
@@ -61,11 +66,13 @@ class SMDenseVector
 
   SMDenseVector<T>(const SMDenseVector<T> &rhs) = delete;
 
-  inline void setup(bool hd, std::string ii, MPI_Comm comm_) {
-    head=hd;
+  inline void setup(std::string ii, MPI_Comm comm_) {
+    int rk;
+    MPI_Comm_rank(comm_,&rk);
+    head=(rk==0);
     ID=ii;
     remover.ID=ii;
-    remover.head=hd;
+    remover.head=head;
     comm=comm_;
   }
 
@@ -83,8 +90,7 @@ class SMDenseVector
         segment=NULL;
       } catch(std::bad_alloc&) {
         std::cerr<<"Problems deleting segment in SMDenseVector::deallocate()." <<std::endl;
-        APP_ABORT("Problems deleting segment in SMDenseVector::deallocate().\n");
-        return false;
+        MPI_Abort(MPI_COMM_WORLD,20);
       }
     }
     barrier();
@@ -95,18 +101,22 @@ class SMDenseVector
         boost::interprocess::shared_memory_object::remove(ID.c_str());
       } catch(std::bad_alloc&) {
         std::cerr<<"Problems de-allocating shared memory in SMDenseVector." <<std::endl;
-        APP_ABORT("Problems de-allocating shared memory in SMDenseVector.\n");
-        return false;
+        MPI_Abort(MPI_COMM_WORLD,20);
       }
     }
     barrier();
+    return true;
   } 
 
   inline bool reserve(unsigned long n)
   {
-    assert(ID != string(""));
+    assert(ID != std::string(""));
     assert(!SMallocated);
     assert(segment==NULL);
+    if(segment!=NULL || SMallocated) {
+      std::cerr<<" Error: SMDenseVector: " <<ID <<" already allocated. " <<std::endl;
+      MPI_Abort(MPI_COMM_WORLD,20);
+    }
     barrier();
     if(head) {
       // some extra space just in case
@@ -125,7 +135,7 @@ class SMDenseVector
           segment = new boost::interprocess::managed_shared_memory(boost::interprocess::create_only, ID.c_str(), memory);
         } catch(boost::interprocess::interprocess_exception &ex) {
           std::cerr<<"Problems setting up managed_shared_memory in SMDenseVector." <<std::endl;
-          APP_ABORT("Problems setting up managed_shared_memory in SMDenseVector.\n");
+          MPI_Abort(MPI_COMM_WORLD,20);
           return false;
         }
       }
@@ -140,7 +150,7 @@ class SMDenseVector
         vals->reserve(n);
       } catch(std::bad_alloc&) {
         std::cerr<<"Problems allocating shared memory in SMDenseVector." <<std::endl;
-        APP_ABORT("Problems allocating shared memory in SMDenseVector.\n");
+        MPI_Abort(MPI_COMM_WORLD,20);
         return false;
       }
     }
@@ -154,7 +164,7 @@ class SMDenseVector
         assert(mutex != 0);
       } catch(std::bad_alloc&) {
         std::cerr<<"Problems allocating shared memory in SMDenseVector: initializeChildren() ." <<std::endl;
-        APP_ABORT("Problems allocating shared memory in SMDenseVector: initializeChildren() .\n");
+        MPI_Abort(MPI_COMM_WORLD,20);
         return false;
       }
     }
@@ -166,11 +176,19 @@ class SMDenseVector
   // resize is probably the best way to setup the vector 
   inline void resize(unsigned long nnz) 
   {
-    if(!SMallocated) 
-      allocate(nnz);
+    if(!SMallocated || vals==NULL) { 
+      if(!reserve(nnz)) {
+        std::cerr<<" Error with reserve in SMDenseVector: " <<ID <<std::endl; 
+        MPI_Abort(MPI_COMM_WORLD,20);
+      }
+    }
+    if(vals->capacity() < nnz) {  
+      std::cerr<<" Error in SMDenseVector: " <<ID <<" Resizing beyond capacity." <<std::endl; 
+      MPI_Abort(MPI_COMM_WORLD,20);
+    }
     if(head) {
       assert(SMallocated);
-      assert(vals->capacity() > nnz); 
+      assert(vals->capacity() >= nnz); 
       vals->resize(nnz);
     }
     barrier();
@@ -195,6 +213,12 @@ class SMDenseVector
   }
 
   inline pointer values() 
+  {
+    assert(SMallocated && vals!=NULL);
+    return &((*vals)[0]);
+  }
+
+  inline pointer data()
   {
     assert(SMallocated && vals!=NULL);
     return &((*vals)[0]);
@@ -338,7 +362,8 @@ class SMDenseVector
 
   }
 
-  inline SMDenseVector<T>& operator*=(const RealType rhs ) 
+  template<typename Tp>
+  inline SMDenseVector<T>& operator*=(const Tp rhs ) 
   {
     assert(SMallocated && vals!=NULL);
     if(!head) return *this; 
@@ -347,21 +372,14 @@ class SMDenseVector
     return *this; 
   }
 
-  inline SMDenseVector<T>& operator*=(const std::complex<RealType> rhs ) 
+  template<typename Tp>
+  inline SMDenseVector<T>& operator*=(const std::complex<Tp> rhs ) 
   {
     assert(SMallocated && vals!=NULL);
     if(!head) return *this; 
     for(iterator it=vals->begin(); it!=vals->end(); it++)
       (*it) *= rhs;
     return *this; 
-  }
-
-  friend std::ostream& operator<<(std::ostream& out, const SMDenseVector<T>& rhs)
-  {
-    assert(SMallocated && vals!=NULL);
-    for(unsigned long i=0; i<rhs.vals->size(); i++)
-      out<<"(" <<(*(rhs.myrows))[i] <<"," <<(*(rhs.colms))[i] <<":" <<(*(rhs.vals))[i] <<")\n"; 
-    return out;
   }
 
   // this is ugly, but I need to code quickly 
@@ -378,14 +396,6 @@ class SMDenseVector
   {
     return mutex;
   } 
-
-  void setDims(int nr, int nc) {
-    dims = {nr,nc};  
-  }
-  
-  inline std::pair<int,int> getDims() { return dims; }
-  inline int rows() { return dims.first; }
-  inline int cols() { return dims.second; }
 
   private:
 
@@ -418,8 +428,6 @@ class SMDenseVector
 
 };
 
-
-}
 
 }
 
