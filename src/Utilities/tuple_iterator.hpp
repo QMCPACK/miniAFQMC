@@ -1,6 +1,10 @@
 #ifndef AFQMC_TUPLE_ITERATORS
 #define AFQMC_TUPLE_ITERATORS
 
+// File created and developed by:
+// Alfredo Correa, correaa@llnl.gov
+//    Lawrence Livermore National Laboratory
+
 #include<tuple>
 #include<cstdlib>
 #include<functional>
