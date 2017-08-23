@@ -22,6 +22,7 @@
  */
 // clang-format on
 #include <random>
+#include <iomanip>
 
 #include <Configuration.h>
 #include <Utilities/PrimeNumberSet.h>
@@ -150,6 +151,7 @@ int main(int argc, char **argv)
     }
   }
 
+  // replicated RNG string for now to keep things deterministic and independent of # of cores 
   Random.init(0, 1, iseed);
   int ip = 0;
   PrimeNumberSet<uint32_t> myPrimes;
@@ -348,7 +350,6 @@ int main(int argc, char **argv)
       // propagate walker forward 
       
       // 1. calculate density matrix and bias potential 
-      
 
       Timers[Timer_DMc]->start();
       AFQMCSys.calculate_mixed_density_matrix(W,W_data,G_for_vbias,transposed_Spvn);
@@ -371,24 +372,19 @@ int main(int argc, char **argv)
       TG.local_barrier();  
       Timers[Timer_vbias]->stop();
 
-if(core_rank == 0) {
-ofstream out("vb.dat");
-for(int i=0; i<nchol; i++) out<<i <<" " <<vbias[i][0] <<std::endl;
-out.close();
-}
-
       // 2. calculate X and weight
       //  X(chol,nw) = rand + i*vbias(chol,nw)
       Timers[Timer_X]->start();
-if(core_rank == 0) {      
-      random_th.generate_normal(X.data(),X.num_elements()); 
-      std::fill(hybridW.begin(),hybridW.end(),ComplexType(0.)); 
-      for(int n=0; n<nchol; n++)
-        for(int nw=0; nw<nwalk; nw++) { 
-          hybridW[nw] -= im*vbias[n][nw]*(X[n][nw]+halfim*vbias[n][nw]);
-          X[n][nw] += im*vbias[n][nw];
-        }
-}
+      // MAM: head node does this right now to keep results independent of # cores in single node runs
+      if(core_rank == 0) {      
+        random_th.generate_normal(X.data(),X.num_elements()); 
+        std::fill(hybridW.begin(),hybridW.end(),ComplexType(0.)); 
+        for(int n=0; n<nchol; n++)
+          for(int nw=0; nw<nwalk; nw++) { 
+            hybridW[nw] -= im*vbias[n][nw]*(X[n][nw]+halfim*vbias[n][nw]);
+            X[n][nw] += im*vbias[n][nw];
+          }
+      }
       TG.local_barrier();
       Timers[Timer_X]->stop();
 
@@ -396,6 +392,7 @@ if(core_rank == 0) {
       // vHS(i,k,nw) = sum_n Spvn(i,k,n) * X(n,nw) 
       Timers[Timer_vHS]->start();
       shm::get_vHS(Spvn,X,vHS);      
+      TG.local_barrier();  
       Timers[Timer_vHS]->stop();
 
       // 4. propagate walker
@@ -451,7 +448,7 @@ if(core_rank == 0) {
     Timers[Timer_eloc]->start();
     AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc,true);
     Eav = AFQMCSys.calculate_energy(W_data,Gc,haj,Vakbl);
-    app_log()<<step <<"   " <<Eav <<std::endl;
+    app_log()<<step <<"   " <<setprecision(12) <<Eav <<std::endl;
     Timers[Timer_eloc]->stop();
 
     // Branching in real code would happen here!!!

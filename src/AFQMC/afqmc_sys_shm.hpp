@@ -66,9 +66,10 @@ struct afqmc_sys: public AFQMCInfo
     } 
 
     template< class WSet, 
-              class Mat 
+              class MatA, 
+              class MatB 
             >
-    void calculate_mixed_density_matrix(const WSet& W, Mat& W_data, Mat& G, bool compact=true)
+    void calculate_mixed_density_matrix(const WSet& W, MatA& W_data, MatB& G, bool compact=true)
     {
       int nwalk = W.shape()[0];
       assert(G.num_elements() >= 2*NAEA*NMO*nwalk);
@@ -136,6 +137,7 @@ struct afqmc_sys: public AFQMCInfo
         W_data[n][2] = base::Overlap<ComplexType>(trialwfn_alpha,W[n][0],IWORK1,TWORK1);
         W_data[n][3] = base::Overlap<ComplexType>(trialwfn_beta,W[n][1],IWORK1,TWORK1);
       }
+      TG.local_barrier();  
     }
 
     template<class WSet, 
