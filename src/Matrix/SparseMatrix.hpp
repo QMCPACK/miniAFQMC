@@ -221,7 +221,7 @@ class SparseMatrix
       colms.push_back(std::get<1>(a));
       vals.push_back(std::get<2>(a));
     }
-    assert(vals->size()<static_cast<unsigned long>(INT_MAX)); // right now limited to INT_MAX due to indexing problem.
+    assert(vals->size()<static_cast<unsigned long>(std::numeric_limits<intType>::max())); // right now limited to INT_MAX due to indexing problem.
   }
 
   inline void compress()

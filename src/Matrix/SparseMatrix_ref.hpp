@@ -128,7 +128,7 @@ class SparseMatrix_ref
 
   // use binary search PLEASE!!! Not really used anyway
   inline intType find_element(int i, int j) const {
-    for (intType k = indx_bn[n]; k<indx_e[n]; k++) {
+    for (intType k = indx_b[i]; k<indx_e[i]; k++) {
       if (colms[k] == j) return k;
     }
     return -1;
