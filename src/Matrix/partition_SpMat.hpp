@@ -35,6 +35,8 @@ inline bool balance_partition_SpMat(task_group& TG, int type, SpMat& M, SpMat_re
   typedef typename SpMat::intType intType;
   typedef typename SpMat::indxType indxType;
   typedef typename SpMat::indxPtr indxPtr;
+  typedef typename SpMat::intPtr intPtr;
+  typedef typename SpMat::const_int_iterator int_iterator;
 
   // no partitioning
   if(TG.getNCoresPerTG() == 1) {
@@ -96,8 +98,69 @@ inline bool balance_partition_SpMat(task_group& TG, int type, SpMat& M, SpMat_re
 
   } else if(type == byCols) {
 
-    std::cerr<<"  NOT YET IMPLEMENTED." <<std::endl;
-    return false;
+    // slightly more complicated. need to build counts by hand
+    std::vector<indxType> subsets(TG.getNCoresPerTG()+1);
+    std::vector<indxType> counts(M.cols()+1); 
+    if( TG.getCoreID() == 0 ) {
+      int nc = M.cols();
+      for(int_iterator it=M.cols_begin(), itend = M.cols_end(); it!=itend; ++it)
+        counts[ (*it)+1 ]++; 
+      indxType cnt=0;
+      for(int i=1; i<=nc; i++) {
+        cnt+=counts[i];
+        counts[i]=cnt;
+      }       
+      assert(cnt==M.size());
+      balance_partition_ordered_set(nc,counts.data(),subsets);
+
+      if(TG.getTGNumber()==0) {
+        app_log()<<"   SpMat split over cores in TG: \n";
+        app_log()<<"     Index: ";
+        for(int i=0, iend=TG.getNCoresPerTG(); i<iend+1; i++)
+          app_log()<<subsets[i] <<" ";
+        app_log()<<std::endl;
+        app_log()<<"     Number of terms per core: ";
+        for(int i=0, iend=TG.getNCoresPerTG(); i<iend; i++)
+          app_log()<<counts[subsets[i+1]] - counts[subsets[i]] <<" ";
+        app_log()<<std::endl;
+      }
+    }
+    // MPI WRAPPER PLEASE!!!
+    MPI_Bcast(reinterpret_cast<char*>(subsets.data()),sizeof(indxType)*subsets.size(),
+      MPI_CHAR,0,TG.getNodeCommLocal());
+    MPI_Bcast(reinterpret_cast<char*>(counts.data()),sizeof(indxType)*counts.size(),
+      MPI_CHAR,0,TG.getNodeCommLocal());
+
+    int nr = M.rows();
+    int rank=TG.getCoreRank();
+    int c0 = subsets[rank];
+    int cN = subsets[rank+1];
+    int nc = cN-c0; 
+    intPtr clm = M.column_data(*M.row_index(0));
+    intPtr n0 = std::lower_bound(clm+(*M.row_index(0)),clm+(*M.row_index(1)),c0); 
+    indxType dn0 = std::distance(clm+(*M.row_index(0)),n0);
+    std::vector<intType> indx_b(nr);
+    std::vector<intType> indx_e(nr);
+    indxType cnt=0;
+    for(int i=0; i<nr; i++) {
+      intPtr b = std::lower_bound(clm+(*M.row_index(i)),clm+(*M.row_index(i+1)),c0);
+      intPtr e = std::lower_bound(clm+(*M.row_index(i)),clm+(*M.row_index(i+1)),cN);
+      indxType db = std::distance(n0,b); 
+      indxType de = std::distance(n0,e); 
+      cnt+= std::distance(b,e); 
+      if( db > static_cast<indxType>(std::numeric_limits<intType>::max()) ) {
+        std::cerr<<" Error partitioning matrix: Index > maximum range. " <<std::endl;
+        return false;
+      }
+      if( de > static_cast<indxType>(std::numeric_limits<intType>::max()) ) {
+        std::cerr<<" Error partitioning matrix: Index > maximum range. " <<std::endl;
+        return false;
+      }
+      indx_b[i] = static_cast<intType>(db);
+      indx_e[i] = static_cast<intType>(de);
+    }
+    assert(cnt == (counts[cN]-counts[c0]));
+    M_ref.setup(nr, nc, M.rows(),M.cols(),0,c0,M.values()+dn0,M.column_data()+dn0,indx_b,indx_e);
 
   } else 
     return false;

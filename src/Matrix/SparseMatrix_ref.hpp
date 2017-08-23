@@ -60,7 +60,7 @@ class SparseMatrix_ref
     assert( indx_e_.size() == nr_ );
     nr=nr_;
     nc0=nc_;
-    nc=gnc_;  // nc must be set to gnc, since values in colms are global values
+    nc=c0_+nc_;  // nc must be set to cN since column indices are global
     gnr=gnr_;
     gnc=gnc_;
     r0=r0_;
@@ -75,6 +75,7 @@ class SparseMatrix_ref
   {
     return nr;
   }
+  // CAREFUL HERE!!! 
   inline int cols() const
   {
     return nc;
@@ -136,7 +137,7 @@ class SparseMatrix_ref
   inline Type_t operator()( int i, int j) const
   {
     assert(i>=0 && i<nr && j>=0 && j<nc0); 
-    intType idx = find_element(i,j);
+    intType idx = find_element(i,j+c0);
     if (idx == intType(-1)) return T(0);
     return vals[idx]; 
   }

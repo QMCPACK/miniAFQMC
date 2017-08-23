@@ -113,26 +113,21 @@ inline void get_vbias(const SpMat& Spvn, const MatA& G, MatB& v, bool transposed
 
   } else {
 
-/*
- * Need to partition Spvn over columns
     assert( Spvn.rows()*2 == G.shape()[0] );
-    assert( Spvn.Spvn.global_col() == v.shape()[0] );
+    assert( Spvn.cols() == v.shape()[0] );    // Spvn.cols() in this case is cN
     assert( G.shape()[1] == v.shape()[1] );
 
     using ma::T;
 
-    // only works if stride()[0] == shape()[1]
-    
-    // set to zero and then use beta=1.
-    std::fill(v.data()+v.strides()[0]*Spvn.global_c0(),v.data()+v.strides()[0]*Spvn.global_cN(),Type(0.));
 
     // Careful here!!!
+    // v can not be in shared memory since all the rows below Spvn.cols() are touched!!!!
     // T(Spvn)*G 
     //ma::product(T(Spvn),G[indices[range_t(0,G.shape()[0]/2)][range_t(0,G.shape()[1])]],v);  
     SparseMatrixOperators::product_SpMatTM( Spvn.rows(), G.shape()[1], Spvn.cols(),
           Type(1.), Spvn.values(), Spvn.column_data(), Spvn.index_begin(), Spvn.index_end(), 
           G.data(), G.strides()[0],
-          Type(1.), v.data(), v.strides()[0] );
+          Type(0.), v.data(), v.strides()[0] );
 
     //ma::product(Type(1.),T(Spvn),
     //      G[indices[range_t(0,G.shape()[0]/2)][range_t(0,G.shape()[1])]],Type(1.),v);  
@@ -140,7 +135,6 @@ inline void get_vbias(const SpMat& Spvn, const MatA& G, MatB& v, bool transposed
           Type(1.), Spvn.values(), Spvn.column_data(), Spvn.index_begin(), Spvn.index_end(),
           G.data()+G.shape()[0]*G.shape()[1]/2, G.strides()[0],
           Type(1.), v.data(), v.strides()[0] );
-*/
 
   }
 

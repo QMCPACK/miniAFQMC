@@ -221,21 +221,29 @@ int main(int argc, char **argv)
   int cvec0 = cholVec_partition[TG.getLocalNodeNumber()]; 
   int cvecN = cholVec_partition[TG.getLocalNodeNumber()+1]; 
   int nchol = cvecN-cvec0;
-  
+  if(transposed_Spvn)
+    NIK = NAK;  
+
   // partition local Spvn and Vakbl among cores in TG, generate lightweight SparseMatrix_ref
   SparseMatrix_ref<ComplexType> Spvn;    
-  SparseMatrix_ref<ComplexType> SpvnT;  
+  SparseMatrix_ref<ComplexType> Spvn_for_vbias;  
   SparseMatrix_ref<ComplexType> Vakbl; 
 
   if(!shm::balance_partition_SpMat(TG,byRows,SMSpvn,Spvn)) {
     std::cerr<<" Error partitioning Spvn matrix. " <<std::endl; 
     MPI_Abort(MPI_COMM_WORLD,30);
   }
-  if(transposed_Spvn)
-    if(!shm::balance_partition_SpMat(TG,byRows,SMSpvnT,SpvnT)) {
-      std::cerr<<" Error partitioning SpvnT matrix. " <<std::endl; 
+  if(transposed_Spvn) {
+    if(!shm::balance_partition_SpMat(TG,byRows,SMSpvnT,Spvn_for_vbias)) {
+      std::cerr<<" Error partitioning SpvnT matrix into Spvn_for_vbias. " <<std::endl; 
       MPI_Abort(MPI_COMM_WORLD,30);
     }
+  } else {
+    if(!shm::balance_partition_SpMat(TG,byCols,SMSpvn,Spvn_for_vbias)) {
+      std::cerr<<" Error partitioning Spvn matrix into Spvn_for_vbias. " <<std::endl;
+      MPI_Abort(MPI_COMM_WORLD,30);
+    }
+  }
   if(!shm::balance_partition_SpMat(TG,byRows,SMVakbl,Vakbl)) {
     std::cerr<<" Error partitioning Vakbl matrix." <<std::endl; 
     MPI_Abort(MPI_COMM_WORLD,30);
@@ -259,9 +267,9 @@ int main(int argc, char **argv)
            <<"    transposed Spvn: " <<transposed_Spvn <<"\n"
            <<"    Chol. Matrix Sparsity: " <<global_Spvn_size/double(nchol*NMO*NMO) <<"\n"
            <<"    Hamiltonian Sparsity: " <<global_Vakbl_size/double(NAEA*NAEA*NMO*NMO*4.0) <<"\n"
-           <<"    # nodes per TG: " <<nnodes_per_TG <<"\n" 
-           <<"    # cores per TG: " <<ncores_per_TG <<"\n" 
-           <<"    # reading cores: " <<nread  
+           <<"    # nodes per TG: " <<TG.getNNodesPerTG() <<"\n" 
+           <<"    # cores per TG: " <<TG.getNCoresPerTG() <<"\n" 
+           <<"    # reading cores: " <<((nread==0)?ncores:nread)
            <<std::endl;
 
   // setup SM memory containers
@@ -270,7 +278,7 @@ int main(int argc, char **argv)
   // Hubbard-Stratonovich potential
   SMDenseVector<ComplexType> SM_vHS(std::string("SM_vHS")+str0,TG.getTGCommLocal(),NMO*NMO*nwalk);
   // density matrix
-  SMDenseVector<ComplexType> SM_G(std::string("SM_G")+str0,TG.getTGCommLocal(),NIK*nwalk);     
+  SMDenseVector<ComplexType> SM_G_for_vbias(std::string("SM_G_for_vbias")+str0,TG.getTGCommLocal(),NIK*nwalk);
   // compact density matrix for energy evaluation
   SMDenseVector<ComplexType> SM_Gc(std::string("SM_Gc")+str0,TG.getTGCommLocal(),NAK*nwalk);    
   // X(n,nw) = rand(n,nw) ( + vbias(n,nw))
@@ -283,11 +291,16 @@ int main(int argc, char **argv)
   // setup light references to SM
   boost::multi_array_ref<ComplexType,2> vbias(SM_vbias.data(),extents[nchol][nwalk]);     
   boost::multi_array_ref<ComplexType,2> vHS(SM_vHS.data(), extents[NMO*NMO][nwalk]);     
-  boost::multi_array_ref<ComplexType,2> G(SM_G.data(), extents[NIK][nwalk]);           
+  boost::multi_array_ref<ComplexType,2> G_for_vbias(SM_G_for_vbias.data(), extents[NIK][nwalk]);           
   boost::multi_array_ref<ComplexType,2> Gc(SM_Gc.data(), extents[NAK][nwalk]);        
   boost::multi_array_ref<ComplexType,2> X(SM_X.data(), extents[nchol][nwalk]);       
   boost::multi_array_ref<ComplexType,1> eloc(SM_eloc.data(), extents[nwalk]);       
   boost::multi_array_ref<ComplexType,1> hybridW(SM_hybridW.data(), extents[nwalk]);
+
+  // temporary local container needed if transposed_Spvn=false 
+  boost::multi_array<ComplexType,2> loc_vbias;
+  if(!transposed_Spvn) 
+    loc_vbias.resize(extents[Spvn_for_vbias.cols()][nwalk]);
 
   // Walker container: Shared among local cores in a TG
   SMDenseVector<ComplexType> SM_W(std::string("SM_W")+str0,TG.getTGCommLocal(),nwalk*2*NMO*NAEA);
@@ -323,6 +336,10 @@ int main(int argc, char **argv)
   app_log()<<"***********************************************************\n\n";
   app_log()<<"# Step   Energy   " <<std::endl;
 
+  if(transposed_Spvn) {
+    APP_ABORT(" transposed Spvn not implemented: \n\n\n");
+  }
+
   Timers[Timer_Total]->start();
   for(int step = 0, step_tot=0; step < nsteps; step++) {
   
@@ -332,35 +349,38 @@ int main(int argc, char **argv)
       
       // 1. calculate density matrix and bias potential 
       
+
+      Timers[Timer_DMc]->start();
+      AFQMCSys.calculate_mixed_density_matrix(W,W_data,G_for_vbias,transposed_Spvn);
+      Timers[Timer_DMc]->stop();
+
+      Timers[Timer_vbias]->start();
       if(transposed_Spvn) {
 
-        APP_ABORT(" transposed Spvn not implemented: \n\n\n");
+        shm::get_vbias(Spvn_for_vbias,G_for_vbias,vbias,transposed_Spvn);  
 
-        Timers[Timer_DMc]->start();
-        AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc,true);
-        Timers[Timer_DMc]->stop();
-
-        Timers[Timer_vbias]->start();
-        shm::get_vbias(SpvnT,Gc,vbias,true);  
-        Timers[Timer_vbias]->stop();
-  
       } else {
 
-        Timers[Timer_DM]->start();
-        AFQMCSys.calculate_mixed_density_matrix(W,W_data,G,false); 
-        Timers[Timer_DM]->stop();
-
-        Timers[Timer_vbias]->start();
-        shm::get_vbias(Spvn,G,vbias,false);
-        Timers[Timer_vbias]->stop();
+        // careful here, needs temporary matrix local to the core (NOT in SM!!!)
+        shm::get_vbias(Spvn_for_vbias,G_for_vbias,loc_vbias,transposed_Spvn);
+        // no need for lock, partitionings are non-overlapping 
+        vbias[ indices[range_t(Spvn_for_vbias.global_c0(),Spvn_for_vbias.global_cN())][range_t(0,nwalk)] ] = 
+            loc_vbias[ indices[range_t(Spvn_for_vbias.global_c0(),Spvn_for_vbias.global_cN())][range_t(0,nwalk)] ];
 
       } 
       TG.local_barrier();  
+      Timers[Timer_vbias]->stop();
+
+if(core_rank == 0) {
+ofstream out("vb.dat");
+for(int i=0; i<nchol; i++) out<<i <<" " <<vbias[i][0] <<std::endl;
+out.close();
+}
 
       // 2. calculate X and weight
       //  X(chol,nw) = rand + i*vbias(chol,nw)
-if(core_rank == 0) {      
       Timers[Timer_X]->start();
+if(core_rank == 0) {      
       random_th.generate_normal(X.data(),X.num_elements()); 
       std::fill(hybridW.begin(),hybridW.end(),ComplexType(0.)); 
       for(int n=0; n<nchol; n++)
@@ -368,9 +388,9 @@ if(core_rank == 0) {
           hybridW[nw] -= im*vbias[n][nw]*(X[n][nw]+halfim*vbias[n][nw]);
           X[n][nw] += im*vbias[n][nw];
         }
-      Timers[Timer_X]->stop();
 }
-TG.local_barrier();
+      TG.local_barrier();
+      Timers[Timer_X]->stop();
 
       // 3. calculate vHS
       // vHS(i,k,nw) = sum_n Spvn(i,k,n) * X(n,nw) 
@@ -385,36 +405,37 @@ TG.local_barrier();
       Timers[Timer_Propg]->stop();
 
       // 5. update overlaps
+      Timers[Timer_extra]->start();
       if(core_rank == 0) {      
-        Timers[Timer_extra]->start();
         for(int nw=0; nw<nwalk; nw++) {
           W_data[nw][5] = W_data[nw][4];
           W_data[nw][6] = W_data[nw][2];
           W_data[nw][7] = W_data[nw][3];
         }
-        Timers[Timer_extra]->stop();
       }
       TG.local_barrier();  
+      Timers[Timer_extra]->stop();
       Timers[Timer_ovlp]->start();
       AFQMCSys.calculate_overlaps(W,W_data);
       Timers[Timer_ovlp]->stop();
 
       // 6. adjust weights and walker data      
+      Timers[Timer_extra]->start();
       if(core_rank == 0) {      
-        Timers[Timer_extra]->start();
         RealType et = 0.;
         for(int nw=0; nw<nwalk; nw++) {
           ComplexType ratioOverlaps = W_data[nw][2]*W_data[nw][3]/(W_data[nw][6]*W_data[nw][7] );   
           RealType scale = std::max(0.0,std::cos( std::arg( ratioOverlaps )) );
           W_data[nw][4] = -( hybridW[nw] + std::log(ratioOverlaps) )/dt; 
-          W_data[nw][1] *= ComplexType(scale*std::exp( -dt*(0.5*( W_data[nw][4].real() + W_data[nw][5].real() ) - Eshift) ),0.0);
+          W_data[nw][1] *= ComplexType(scale*std::exp( -dt*(0.5*( W_data[nw][4].real() 
+                                            + W_data[nw][5].real() ) - Eshift) ),0.0);
           et += W_data[nw][4].real();
         }
         Eshift = et/nwalk;
         // decide what to do with Eshift later
-        Timers[Timer_extra]->stop();
       }
       TG.local_barrier();
+      Timers[Timer_extra]->stop();
 
       if(step_tot > 0 && step_tot%northo == 0) {
         Timers[Timer_ortho]->start();

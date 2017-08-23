@@ -136,6 +136,21 @@ inline void product_SpMatTM(const int M, const int N, const int K,
              const T alpha,
              const T* val,
              const int* col,
+             const int* rowb,
+             const int* rowe,
+             const T* B, const int ldb,
+             const T beta,
+             T* C, int ldc )
+{
+  char trans = 'T';
+  SPBLAS::csrmm( trans, M, N, K, alpha, "GxxCxx", val, col,  rowb,  rowe, B, ldb, beta, C, ldc);
+}
+
+template<typename T>
+inline void product_SpMatTM(const int M, const int N, const int K,
+             const T alpha,
+             const T* val,
+             const int* col,
              const int* row,
              const T* B, const int ldb,
              const T beta,
