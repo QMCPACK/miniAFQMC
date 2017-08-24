@@ -59,7 +59,7 @@ inline void calculate_energy(Mat& W_data, const Mat& Gc, Mat& Gcloc, const Mat& 
   assert(Gc.shape()[0] == Vakbl.cols());
 
   typedef typename std::decay<Mat>::type::element Type;
-  index_gen indices;
+//  index_gen indices;
   Type zero = Type(0.);
   Type one = Type(1.); 
   Type half = Type(0.5); 
@@ -126,7 +126,7 @@ inline void calculate_energy(const MatA& Gc, MatB& Gcloc, const MatC& haj, const
   assert(Gc.shape()[0] == Vakbl.cols());
 
   typedef typename std::decay<MatB>::type::element Type;
-  index_gen indices;
+//  index_gen indices;
   Type zero = Type(0.);
   Type one = Type(1.); 
   Type half = Type(0.5); 

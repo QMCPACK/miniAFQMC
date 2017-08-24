@@ -46,7 +46,6 @@ using namespace qmcplusplus;
 enum MiniQMCTimers
 {
   Timer_Total,
-  Timer_DMc,
   Timer_DM,
   Timer_vbias,
   Timer_vHS,
@@ -60,16 +59,15 @@ enum MiniQMCTimers
 
 TimerNameList_t<MiniQMCTimers> MiniQMCTimerNames = {
     {Timer_Total, "Total"},
-    {Timer_DMc, "compact Mixed Density Matrix"},
-    {Timer_DM, "Mixed Density Matrix"},
-    {Timer_vbias, "Bias Potential"},
-    {Timer_vHS, "H-S Potential"},
+    {Timer_DM, "Mixed-Density-Matrix"},
+    {Timer_vbias, "Bias-Potential"},
+    {Timer_vHS, "H-S_Potential"},
     {Timer_X, "Sigma"},
     {Timer_Propg, "Propagation"},
     {Timer_extra, "Other"},
     {Timer_ovlp, "Overlap"},
     {Timer_ortho, "Orthgonalization"},
-    {Timer_eloc, "Local Energy"}
+    {Timer_eloc, "Local-Energy"}
 };
 
 void print_help()
@@ -89,6 +87,11 @@ void print_help()
 
 int main(int argc, char **argv)
 {
+
+#ifndef QMC_COMPLEX
+  std::cerr<<" Error: Please compile complex executable, QMC_COMPLEX=1. " <<std::endl;
+  exit(1);
+#endif
 
   // need new mpi wrapper
   MPI_Init(&argc,&argv);
@@ -166,7 +169,7 @@ int main(int argc, char **argv)
   ComplexMatrix haj;    // 1-Body Hamiltonian Matrix
   ComplexMatrix Propg1;   // propagator for 1-body hamiltonian 
   std::vector<int> cholVec_partition; 
-  index_gen indices;
+//  index_gen indices;
 
   // shared memory structures
   SMSparseMatrix<ComplexType> SMSpvn;    // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
@@ -351,9 +354,9 @@ int main(int argc, char **argv)
       
       // 1. calculate density matrix and bias potential 
 
-      Timers[Timer_DMc]->start();
+      Timers[Timer_DM]->start();
       AFQMCSys.calculate_mixed_density_matrix(W,W_data,G_for_vbias,transposed_Spvn);
-      Timers[Timer_DMc]->stop();
+      Timers[Timer_DM]->stop();
 
       Timers[Timer_vbias]->start();
       if(transposed_Spvn) {

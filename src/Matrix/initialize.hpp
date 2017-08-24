@@ -17,6 +17,7 @@
 
 #include "Configuration.h"
 #include "io/hdf_archive.h"
+#include <Utilities/NewTimer.h>
 
 #include "AFQMC/afqmc_sys_shm.hpp"
 #include "array_partition.hpp"
@@ -31,6 +32,22 @@ template< class SpMat,
         >
 inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::afqmc_sys& sys, Mat& Propg1, SpMat& Spvn, Mat& haj, SpMat& Vakbl, std::vector<int>& sets, int nread)
 {
+
+  enum InitTimers
+  {
+    Total,
+    read_Spvn,
+    read_Vakbl,
+    rotate_Spvn,
+  };
+  TimerNameList_t<InitTimers> TimerNames = {
+    {Total,"Initialization_Total"},
+    {read_Spvn,"read_Spvn"},
+    {read_Vakbl,"read_Vakbl"},
+    {rotate_Spvn,"rotate_Spvn"},
+  };  
+  TimerList_t Timers;
+
   int NMO, NAEA;
   int nnodes = TG.getTotalNodes();
   int nodeid = TG.getNodeID();
@@ -51,6 +68,9 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
 
   if(head) {
 
+    setup_timers(Timers, TimerNames, timer_level_coarse); 
+
+    Timers[Total]->start();
     if(!dump.is_group( std::string("/Wavefunctions/PureSingleDeterminant") )) {
       app_error()<<" ERROR: H5Group /Wavefunctions/PureSingleDeterminant does not exist."<<std::endl;
       return false;
@@ -155,6 +175,7 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
 
     // read half-rotated hamiltonian
     // careful here!!!
+    Timers[read_Vakbl]->start();
     Vakbl.setup("miniAFQMC_Vakbl",TG.getNodeCommLocal());
     Vakbl.setDims(Idata[2],Idata[3]);
     Vakbl.resize(Idata[1]);
@@ -194,6 +215,7 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
 
     MPI_Barrier(MPI_COMM_WORLD);
     Vakbl.compress(TG.getNodeCommLocal());  // Should already be compressed, but just in case
+    Timers[read_Vakbl]->stop();
 
     dump.pop();
     dump.pop();
@@ -237,7 +259,9 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
     simple_matrix_partition<task_group,IndexType,RealType> split(nrows,nvecs,1e-8);
     std::vector<IndexType> counts;
     // count dimensions of sparse matrix
+    Timers[read_Spvn]->start();
     count_entries_hdf5_SpMat(dump,split,std::string("Spvn"),nblk,false,counts,TG,true,nread);    
+    Timers[read_Spvn]->stop();
 
     split.partition(TG,false,counts,sets);
 
@@ -261,8 +285,14 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
     Spvn.reserve(sz);
 
     // read Spvn
+    Timers[read_Spvn]->start();
     read_hdf5_SpMat(Spvn,split,dump,std::string("Spvn"),nblk,TG,true,nread);
+    Timers[read_Spvn]->stop();
+
     Spvn *= std::sqrt(dt);
+
+    Timers[rotate_Spvn]->start();
+    Timers[rotate_Spvn]->stop();
 
     dump.pop();
     dump.pop();
@@ -381,6 +411,11 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
   } 
 
   MPI_Barrier(MPI_COMM_WORLD);
+  if(head)  {
+    Timers[Total]->stop();
+    TimerManager.print();
+//  TimerManager.pop_timer();
+  }
 
   return true;
 } 

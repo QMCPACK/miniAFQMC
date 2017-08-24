@@ -35,8 +35,10 @@ class SparseMatrix_ref
   typedef int*             intPtr;
   typedef SparseMatrix_ref<T>  This_t;
 
-  SparseMatrix_ref<T>():nr(0),nc(0),gnr(0),gnc(0),vals(NULL),colms(NULL)
+  SparseMatrix_ref<T>():gnr(0),gnc(0),vals(NULL),colms(NULL)
   {
+    shape_[0]=0;
+    shape_[1]=0;
   }
 
   ~SparseMatrix_ref<T>()
@@ -58,9 +60,9 @@ class SparseMatrix_ref
     assert(c_ != NULL);
     assert( indx_b_.size() == nr_ );
     assert( indx_e_.size() == nr_ );
-    nr=nr_;
+    shape_[0]=nr_;
     nc0=nc_;
-    nc=c0_+nc_;  // nc must be set to cN since column indices are global
+    shape_[1]=c0_+nc_;  // nc must be set to cN since column indices are global
     gnr=gnr_;
     gnc=gnc_;
     r0=r0_;
@@ -73,13 +75,19 @@ class SparseMatrix_ref
 
   inline int rows() const
   {
-    return nr;
+    return shape_[0];
   }
   // CAREFUL HERE!!! 
   inline int cols() const
   {
-    return nc;
+    return shape_[1];
   }
+
+  intPtr shape() const
+  {
+    return shape_; 
+  } 
+
   inline int global_row() const
   {
     return gnr;
@@ -98,7 +106,7 @@ class SparseMatrix_ref
   }
   inline int global_rN() const
   {
-    return r0+nr;
+    return r0+shape_[0];
   }
   inline int global_cN() const
   {
@@ -136,7 +144,7 @@ class SparseMatrix_ref
 
   inline Type_t operator()( int i, int j) const
   {
-    assert(i>=0 && i<nr && j>=0 && j<nc0); 
+    assert(i>=0 && i<shape_[0] && j>=0 && j<nc0); 
     intType idx = find_element(i,j+c0);
     if (idx == intType(-1)) return T(0);
     return vals[idx]; 
@@ -145,7 +153,8 @@ class SparseMatrix_ref
   private:
 
   // dimensions of sub-matrix
-  intType nr,nc;
+  // shape_ = {nr, nc}
+  intType shape_[2];
 
   // dimensions of global matrix 
   intType gnr, gnc;

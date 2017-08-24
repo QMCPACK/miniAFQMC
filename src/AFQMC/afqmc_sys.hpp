@@ -163,7 +163,7 @@ struct afqmc_sys: public AFQMCInfo
 
   private:
 
-    index_gen indices;
+//    index_gen indices;
 
     // work arrays
     ComplexMatrix TWORK1;

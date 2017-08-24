@@ -87,6 +87,11 @@ void print_help()
 int main(int argc, char **argv)
 {
 
+#ifndef QMC_COMPLEX
+  std::cerr<<" Error: Please compile complex executable, QMC_COMPLEX=1. " <<std::endl;
+  exit(1);
+#endif
+
   int nsteps=10;
   int nsubsteps=10; 
   int nwalk=16;
@@ -100,7 +105,7 @@ int main(int argc, char **argv)
   // if half-tranformed transposed Spvn is on file  
   bool transposed_Spvn = false;
 
-  ValueType one(1.),zero(0.),half(0.5);
+  ComplexType one(1.),zero(0.),half(0.5);
   ComplexType cone(1.),czero(0.);
   ComplexType im(0.0,1.);
   ComplexType halfim(0.0,0.5);
@@ -140,13 +145,13 @@ int main(int argc, char **argv)
 
   // Important Data Structures
   base::afqmc_sys AFQMCSys;   // Main AFQMC object. Control access to several apgorithmic functions. 
-  ValueSpMat Spvn;      // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
+  ComplexSpMat Spvn;      // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
   ComplexSpMat SpvnT;   // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
   ComplexMatrix haj;    // 1-Body Hamiltonian Matrix
   ComplexSpMat Vakbl;   // 2-Body Hamiltonian Matrix: (Half-Rotated) 2-electron integrals 
-  ValueMatrix Propg1;   // propagator for 1-body hamiltonian 
+  ComplexMatrix Propg1;   // propagator for 1-body hamiltonian 
 
-  index_gen indices;
+//  index_gen indices;
 
   hdf_archive dump;
   if(!dump.open(init_file,H5F_ACC_RDONLY)) 
@@ -210,7 +215,7 @@ int main(int argc, char **argv)
 
   // set weights to 1
   for(int n=0; n<nwalk; n++) 
-    W_data[n][1] = ValueType(1.);
+    W_data[n][1] = ComplexType(1.);
 
   // initialize overlaps and energy
   AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc,true);
