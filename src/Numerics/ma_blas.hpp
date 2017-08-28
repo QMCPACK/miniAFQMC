@@ -67,8 +67,8 @@ MultiArray2DC gemm(T alpha, MultiArray2DA const& a, MultiArray2DB const& b, T be
 	assert( a.strides()[1] == 1 );
 	assert( b.strides()[1] == 1 );
 	assert( c.strides()[1] == 1 );
-        assert( (TA == 'N') || (TA == 'T') || (TA == 'H')  );
-        assert( (TB == 'N') || (TB == 'T') || (TB == 'H')  );
+	assert( (TA == 'N') || (TA == 'T') || (TA == 'H')  );
+	assert( (TB == 'N') || (TB == 'T') || (TB == 'H')  );
 	int M = -1;
 	int N = -1;
 	int K = -1;
@@ -145,8 +145,8 @@ MultiArray2D getri(MultiArray2D&& m, MultiArray1D const& pivot, MultiArray1DW& w
 }
 #endif
 
-template<class MultiArray2D, class Array1D>
-MultiArray2D geqrf(MultiArray2D&& A, Array1D& TAU, Array1D& WORK){
+template<class MultiArray2D, class Array1D, class Vector>
+MultiArray2D geqrf(MultiArray2D&& A, Array1D& TAU, Vector&& WORK){
         assert(A.strides()[1] == 1);
         int status = -1, lwork = -1; 
         TAU.resize(boost::extents[std::min(A.shape()[0],A.shape()[1])]);
@@ -160,8 +160,8 @@ MultiArray2D geqrf(MultiArray2D&& A, Array1D& TAU, Array1D& WORK){
         return std::forward<MultiArray2D>(A);
 }
 
-template<class MultiArray2D, class Array1D>
-MultiArray2D gelqf(MultiArray2D&& A, Array1D& TAU, Array1D& WORK){
+template<class MultiArray2D, class Array1D, class Vector>
+MultiArray2D gelqf(MultiArray2D&& A, Array1D& TAU, Vector&& WORK){
         assert(A.strides()[1] == 1);
         int status = -1, lwork = -1;
         TAU.resize(boost::extents[std::min(A.shape()[0],A.shape()[1])]);
@@ -175,8 +175,8 @@ MultiArray2D gelqf(MultiArray2D&& A, Array1D& TAU, Array1D& WORK){
         return std::forward<MultiArray2D>(A);
 }
 
-template<class MultiArray2D, class Array1D>
-MultiArray2D gqr(MultiArray2D&& A, Array1D& TAU, Array1D& WORK){
+template<class MultiArray2D, class Array1D, class Vector>
+MultiArray2D gqr(MultiArray2D&& A, Array1D& TAU, Vector&& WORK){
         assert(A.strides()[1] == 1);
         int status = -1, lwork = -1;
         if(WORK.size()==0) WORK.resize(boost::extents[1]);
@@ -189,8 +189,8 @@ MultiArray2D gqr(MultiArray2D&& A, Array1D& TAU, Array1D& WORK){
         return std::forward<MultiArray2D>(A);
 }
 
-template<class MultiArray2D, class Array1D>
-MultiArray2D glq(MultiArray2D&& A, Array1D& TAU, Array1D& WORK){
+template<class MultiArray2D, class Array1D, class Vector>
+MultiArray2D glq(MultiArray2D&& A, Array1D& TAU, Vector&& WORK){
         assert(A.strides()[1] == 1);
         int status = -1, lwork = -1;
         if(WORK.size()==0) WORK.resize(boost::extents[1]);
