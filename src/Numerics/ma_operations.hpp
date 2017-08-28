@@ -106,12 +106,13 @@ template<class MultiArray2D> struct normal_tag{
 	MultiArray2D arg1;
 	static auto const dimensionality = std::decay<MultiArray2D>::type::dimensionality;
 	normal_tag(normal_tag const&) = delete;
+	normal_tag(normal_tag&&) = default;
 	static const char tag = 'N';
 };
 
 template<class MultiArray2D> struct op_tag<normal_tag<MultiArray2D>> : std::integral_constant<char, 'N'>{};
 
-template<class MultiArray2D> normal_tag<MultiArray2D> N(MultiArray2D&& arg){
+template<class MultiArray2D> normal_tag<MultiArray2D> normal(MultiArray2D&& arg){
 	return {std::forward<MultiArray2D>(arg)};
 }
 
@@ -122,12 +123,13 @@ template<class MultiArray2D> struct transpose_tag{
 	MultiArray2D arg1; 
 	static auto const dimensionality = std::decay<MultiArray2D>::type::dimensionality;
 	transpose_tag(transpose_tag const&) = delete;
+	transpose_tag(transpose_tag&&) = default;
 	static const char tag = 'T';
 };
 
 template<class MultiArray2D> struct op_tag<transpose_tag<MultiArray2D>> : std::integral_constant<char, 'T'>{};
 
-template<class MultiArray2D> transpose_tag<MultiArray2D> T(MultiArray2D&& arg){
+template<class MultiArray2D> transpose_tag<MultiArray2D> transposed(MultiArray2D&& arg){
 	return {std::forward<MultiArray2D>(arg)};
 }
 
@@ -138,10 +140,11 @@ template<class MultiArray2D> struct hermitian_tag{
 	MultiArray2D arg1; 
 	static auto const dimensionality = std::decay<MultiArray2D>::type::dimensionality;
 	hermitian_tag(hermitian_tag const&) = delete;
+	hermitian_tag(hermitian_tag&&) = default;
 	static const char tag = 'H';
 };
 
-template<class MultiArray2D> hermitian_tag<MultiArray2D> H(MultiArray2D&& arg){
+template<class MultiArray2D> hermitian_tag<MultiArray2D> hermitian(MultiArray2D&& arg){
 	return {std::forward<MultiArray2D>(arg)};
 }
 
@@ -152,6 +155,21 @@ template<class MultiArray2D> struct op_tag<hermitian_tag<MultiArray2D>> : std::i
 
 template<class MultiArray2D>
 MultiArray2D arg(hermitian_tag<MultiArray2D>& ht){return ht.arg1;}
+
+
+template<class MA2D> auto T(MA2D&& arg)
+->decltype(transposed(std::forward<MA2D>(arg))){
+	return transposed(std::forward<MA2D>(arg));
+}
+template<class MA2D> auto H(MA2D&& arg)
+->decltype(hermitian(std::forward<MA2D>(arg))){
+	return hermitian(std::forward<MA2D>(arg));
+}
+template<class MA2D> auto N(MA2D&& arg)
+->decltype(normal(std::forward<MA2D>(arg))){
+	return normal(std::forward<MA2D>(arg));
+}
+
 
 /*
  * MAM: I need to somehow overload resize(n) for multi_array<T,1>
@@ -813,7 +831,7 @@ int main(){
 		boost::multi_array_ref<double, 2> A(a.data(), boost::extents[3][3]);
 		assert(A.num_elements() == a.size());
 		boost::multi_array<double, 2> B = A;
-		ma::invert_lu(A);
+//		ma::invert_lu(A);
 
 		boost::multi_array<double, 2> Id(boost::extents[3][3]);
 		ma::set_identity(Id);
