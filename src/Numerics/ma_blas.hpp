@@ -194,11 +194,16 @@ MultiArray2D glq(MultiArray2D&& A, Array1D& TAU, Vector&& WORK){
         assert(A.strides()[1] == 1);
         int status = -1, lwork = -1;
         if(WORK.size()==0) WORK.resize(boost::extents[1]);
+        // if(WORK.empty()) WORK.resize(1);
         BLAS::glq(A.shape()[1], A.shape()[0], TAU.size(), A.origin(), A.strides()[0], 
                TAU.data(),WORK.data(),lwork,status);
         WORK.resize(boost::extents[lwork]);
+        // WORK.resize(lwork);
         BLAS::glq(A.shape()[1], A.shape()[0], TAU.size(), A.origin(), A.strides()[0], 
                TAU.data(), WORK.data(),lwork,status);
+        // BLAS::glq(A.shape()[1], A.shape()[0], TAU.size(), A.origin(), A.strides()[0], 
+        //       TAU.data(), WORK.data(),WORK.size(),status);
+
         assert(status==0);
         return std::forward<MultiArray2D>(A);
 }

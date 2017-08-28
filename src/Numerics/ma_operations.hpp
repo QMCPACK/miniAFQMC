@@ -831,7 +831,7 @@ int main(){
 		boost::multi_array_ref<double, 2> A(a.data(), boost::extents[3][3]);
 		assert(A.num_elements() == a.size());
 		boost::multi_array<double, 2> B = A;
-//		ma::invert_lu(A);
+		ma::invert_lu(A);
 
 		boost::multi_array<double, 2> Id(boost::extents[3][3]);
 		ma::set_identity(Id);
