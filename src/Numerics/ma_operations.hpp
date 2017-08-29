@@ -195,7 +195,7 @@ T invert(MultiArray2D&& m, MultiArray1D&& pivot, Vector&& WORK){
 	T detvalue(1.0);
 	for(int i=0, ip=1, m_ = m.shape()[0]; i != m_; i++, ip++){
 		if(pivot[i]==ip){
-			detvalue *= static_cast<T>(m[i][i]);
+			detvalue *= +static_cast<T>(m[i][i]);
 		}else{
 			detvalue *= -static_cast<T>(m[i][i]);
 		}
@@ -220,19 +220,20 @@ void lq(MultiArray2D& A, MultiArray1D& tau, MultiArray1DW& work){
 */
 
 template<class MultiArray2D, class MultiArray1D, class T = typename std::decay<MultiArray2D>::type::element>
-T determinant(MultiArray2D& m, MultiArray1D& pivot){
-        assert(m.shape()[0] == m.shape()[1]);
-        assert(pivot.size() >= m.shape()[0]);
-        getrf(std::forward<MultiArray2D>(m), pivot);
-        T detvalue(1.0);
-        for(int i=0,ip=1,m_=m.shape()[0]; i<m_; i++, ip++)
-        {
-          if(pivot[i]==ip)
-                detvalue *= static_cast<T>(m[i][i]);
-          else
-                detvalue *= -static_cast<T>(m[i][i]);
-        }
-        return detvalue;
+T determinant(MultiArray2D&& m, MultiArray1D&& pivot){
+	assert(m.shape()[0] == m.shape()[1]);
+	assert(pivot.size() >= m.shape()[0]);
+        
+	getrf(std::forward<MultiArray2D>(m), std::forward<MultiArray1D>(pivot));
+	T detvalue(1.0);
+	for(int i=0,ip=1,m_=m.shape()[0]; i<m_; i++, ip++){
+		if(pivot[i]==ip){
+			detvalue *= static_cast<T>(m[i][i]);
+		}else{
+			detvalue *= -static_cast<T>(m[i][i]);
+		}
+	}
+	return detvalue;
 }
 
 template<class MultiArray2D>
