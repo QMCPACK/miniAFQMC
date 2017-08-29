@@ -171,18 +171,19 @@ template<class MA2D> auto N(MA2D&& arg)
 }
 
 
-/*
- * MAM: I need to somehow overload resize(n) for multi_array<T,1>
+#if 0
+// * MAM: I need to somehow overload resize(n) for multi_array<T,1>
 template<class MultiArray2D>
 MultiArray2D invert_lu(MultiArray2D&& m){
 	assert(m.shape()[0] == m.shape()[1]);
-	std::vector<int> pivot(m.shape()[0]);
+	boost::multi_array<typename std::decay<MultiArray2D>::type::element, 1> pivot(boost::extents[m.shape()[0]]);
+//	std::vector<int> pivot(m.shape()[0]);
 	getrf(std::forward<MultiArray2D>(m), pivot);
 	std::vector<typename std::decay<MultiArray2D>::type::element> work(m.shape()[0]);
 	getri(std::forward<MultiArray2D>(m), pivot, work);
 	return std::forward<MultiArray2D>(m);
 }
-*/
+#endif
 
 template<class MultiArray2D, class MultiArray1D, class MultiArray1DW, class T = typename std::decay<MultiArray2D>::type::element>
 T invert(MultiArray2D& m, MultiArray1D& pivot, MultiArray1DW& work){
@@ -826,6 +827,7 @@ int main(){
 
 	
 	}
+	#if 0
 	{
 		std::vector<double> a = {37., 45., 59., 53., 81., 97., 87., 105., 129.};
 		boost::multi_array_ref<double, 2> A(a.data(), boost::extents[3][3]);
@@ -841,6 +843,7 @@ int main(){
 						
 		assert( ma::equal(Id, Id2, 1e-14) );
 	}
+	#endif
 	cout << "test ended" << std::endl;
 }
 #endif
