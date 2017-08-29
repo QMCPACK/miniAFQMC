@@ -185,21 +185,22 @@ MultiArray2D invert_lu(MultiArray2D&& m){
 }
 #endif
 
-template<class MultiArray2D, class MultiArray1D, class MultiArray1DW, class T = typename std::decay<MultiArray2D>::type::element>
-T invert(MultiArray2D& m, MultiArray1D& pivot, MultiArray1DW& work){
+template<class MultiArray2D, class MultiArray1D, class Vector, class T = typename std::decay<MultiArray2D>::type::element>
+T invert(MultiArray2D&& m, MultiArray1D&& pivot, Vector&& WORK){
 	assert(m.shape()[0] == m.shape()[1]);
 	assert(pivot.size() >= m.shape()[0]);
-	assert(work.size() >= m.shape()[0]);
+	assert(WORK.size() >= m.shape()[0]);
+	
 	getrf(std::forward<MultiArray2D>(m), pivot);
 	T detvalue(1.0);
-	for(int i=0,ip=1,m_=m.shape()[0]; i<m_; i++, ip++)
-	{
-	  if(pivot[i]==ip)
-		detvalue *= static_cast<T>(m[i][i]);
-	  else
-		detvalue *= -static_cast<T>(m[i][i]);
+	for(int i=0, ip=1, m_ = m.shape()[0]; i != m_; i++, ip++){
+		if(pivot[i]==ip){
+			detvalue *= static_cast<T>(m[i][i]);
+		}else{
+			detvalue *= -static_cast<T>(m[i][i]);
+		}
 	}
-	getri(std::forward<MultiArray2D>(m), pivot, work);
+	getri(std::forward<MultiArray2D>(m), pivot, WORK);
 	return detvalue;
 }
 
