@@ -14,6 +14,9 @@
 
 namespace ma{
 
+double const& real(double const& d){return d;}
+float const& real(float const& f){return f;}
+
 template<class MultiArray2D, class Array1D>
 MultiArray2D getrf(MultiArray2D&& m, Array1D& pivot){
 	assert(m.strides()[0] >= std::max(std::size_t(1), m.shape()[1]));
@@ -41,7 +44,7 @@ int getri_optimal_workspace_size(MultiArray2D const& A){
 		status
 	);
 	assert(status == 0);
-	return WORK;
+	return real(WORK);
 }
 
 template<class MultiArray2D, class MultiArray1D, class Buffer>
