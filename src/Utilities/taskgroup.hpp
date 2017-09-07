@@ -117,12 +117,14 @@ class TaskGroup {
     MPI_Comm_rank(MPI_COMM_TG,&TG_rank);
     MPI_Comm_size(MPI_COMM_TG,&TG_nproc);
 
-    if(node_in_TG > 1) 
+    if(nnodes_per_TG > 1) { 
       MPI_Comm_split(MPI_COMM_TG,node_in_TG,global_rank,&MPI_COMM_TG_LOCAL);
-    else
+    } else {
       MPI_COMM_TG_LOCAL = MPI_COMM_TG;
+    }
 
     MPI_Comm_rank(MPI_COMM_TG_LOCAL,&core_rank);    
+    MPI_Comm_split(MPI_COMM_TG,core_rank,global_rank,&MPI_COMM_TG_HEADS);
 
     TG_root = false;
     if(TG_rank==0) TG_root = true;
@@ -159,7 +161,7 @@ class TaskGroup {
         prev_core_root = ranks_of_core_roots[position_in_ranks_of_core_roots-1];
       }
     }
-    app_log()<<"**************************************************************\n";
+    app_log()<<"**************************************************************" <<std::endl;
     initialized=true;
     return true;
   }
@@ -185,6 +187,8 @@ class TaskGroup {
   }
 
   MPI_Comm getTGComm() const { return MPI_COMM_TG; }
+
+  MPI_Comm getTGCommHeads() const { return MPI_COMM_TG_HEADS; }
 
   MPI_Comm getTGCommLocal() const { return MPI_COMM_TG_LOCAL; }
 
@@ -312,6 +316,7 @@ class TaskGroup {
   int position_in_ranks_of_core_roots; 
   int next_core_root, prev_core_root; // only meaningful at core_root processes  
   MPI_Comm MPI_COMM_TG;   // Communicator over all cores in a given TG 
+  MPI_Comm MPI_COMM_TG_HEADS;   // Communicator over all cores in a given TG 
   MPI_Comm MPI_COMM_TG_LOCAL;   // Communicator over all cores in a given TG that reside in the given node 
   MPI_Comm MPI_COMM_NODE_LOCAL; // Communicator over all cores of a node. 
   MPI_Comm MPI_COMM_HEAD_OF_NODES;  // deceiving name for historical reasons, this is a split of COMM_WORLD over core_number. 

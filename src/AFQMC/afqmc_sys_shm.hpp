@@ -20,6 +20,7 @@
 #include "AFQMC/energy.hpp"
 #include "AFQMC/vHS.hpp"
 #include "AFQMC/mixed_density_matrix.hpp"
+#include "Matrix/ma_communications.hpp"
 
 namespace qmcplusplus
 {
@@ -32,8 +33,9 @@ struct afqmc_sys: public AFQMCInfo
 
   public:
 
-    afqmc_sys(TaskGroup& tg_):TG(tg_) 
+    afqmc_sys(TaskGroup& tg_, int nw_):TG(tg_) 
     {
+      nwalk = nw_;
       nnodes = TG.getTotalNodes();
       nodeid = TG.getNodeID();
       ncores = TG.getTotalCores();
@@ -45,6 +47,22 @@ struct afqmc_sys: public AFQMCInfo
       zero = ComplexType(0.,0.);
     }
 
+    afqmc_sys(TaskGroup& tg_, int nw_, int nmo_, int na):TG(tg_)
+    {
+      nwalk = nw_;
+      nnodes = TG.getTotalNodes();
+      nodeid = TG.getNodeID();
+      ncores = TG.getTotalCores();
+      coreid = TG.getCoreID();
+      core_rank = TG.getCoreRank();
+      ncores_per_TG = TG.getNCoresPerTG();
+
+      one = ComplexType(1.,0.);
+      zero = ComplexType(0.,0.);
+
+      setup(nmo_,na);  
+    }
+
     ~afqmc_sys() {}
 
     ComplexMatrix trialwfn_alpha;
@@ -54,15 +72,39 @@ struct afqmc_sys: public AFQMCInfo
     void setup(int nmo_, int na) {
       NMO = nmo_;
       NAEA = NAEB = na;
-      TWORK1.resize(extents[NAEA][NAEA]);
-      TWORK2.resize(extents[NAEA][NMO]);
-      TWORK3.resize(extents[NAEA][NMO]);
-      IWORK1.resize(extents[2*NMO]);
-      S0.resize(extents[NMO][NAEA]);    
-      TWORKV1.resize(extents[NAEA*NAEA]); 
-      DM.resize(extents[NMO][NMO]);      
-      
+
+      TMat_NM.resize(extents[NAEA][NMO]);
+      TMat_MN.resize(extents[NMO][NAEA]);
+      TMat_NN.resize(extents[NAEA][NAEA]);
+      TMat_MM.resize(extents[NMO][NMO]);    
+      TMat_MM2.resize(extents[NMO][NMO]);    
+
+      // reserve enough space in lapack's work array
+      // Make sure it is large enough for:
+      // 1. getri( TMat_NN )
+      WORK.reserve(  ma::getri_optimal_workspace_size(TMat_NN) );
+      //  2. geqrf( TMat_NM )
+      WORK.reserve(  ma::geqrf_optimal_workspace_size(TMat_NM) );
+      //  3. gqr( TMat_NM )
+      WORK.reserve(  ma::gqr_optimal_workspace_size(TMat_NM) );
+      //  4. gelqf( TMat_MN )
+      WORK.reserve(  ma::gelqf_optimal_workspace_size(TMat_MN) );
+      //  5. glq( TMat_MN )
+      WORK.reserve(  ma::glq_optimal_workspace_size(TMat_MN) );
+
+      // IWORK: integer buffer for getri/getrf
+      IWORK.resize(NMO);
+
+      // TAU: ComplexVector used in QR routines 
+      TAU.resize(extents[NMO]);
+
+      // temporary storage for contraction of density matrix with 2-electron integrals
       Gcloc.resize(extents[1][1]); // force resize later 
+
+      locWlkVec.resize(extents[nwalk]);
+
+      SM_Gw.setup(std::string("SM_vbias")+std::to_string(TG.getTGNumber()),TG.getTGCommLocal());
+      SM_Gw.resize(2*NMO*NAEA*nnodes*nwalk);  
     } 
 
     template< class WSet, 
@@ -71,26 +113,26 @@ struct afqmc_sys: public AFQMCInfo
             >
     void calculate_mixed_density_matrix(const WSet& W, MatA& W_data, MatB& G, bool compact=true)
     {
-      int nwalk = W.shape()[0];
+      assert( nwalk == W.shape()[0]);
       assert(G.num_elements() >= 2*NAEA*NMO*nwalk);
       assert(W_data.shape()[0] >= nwalk);
       assert(W_data.shape()[1] >= 4);
       int N_ = compact?NAEA:NMO;
-      boost::multi_array_ref<ComplexType,2> DMr(DM.data(), extents[N_][NMO]); 
+      boost::multi_array_ref<ComplexType,2> DM(TMat_MM.data(), extents[N_][NMO]); 
       boost::multi_array_ref<ComplexType,4> G_4D(G.data(), extents[2][N_][NMO][nwalk]); 
       for(int n=0, cnt=0; n<nwalk; n++) {
 
         if(cnt%ncores_per_TG == core_rank) {
           W_data[n][2] = base::MixedDensityMatrix<ComplexType>(trialwfn_alpha,W[n][0],
-                       DMr,IWORK1,TWORK1,TWORK2,TWORKV1,compact);
-          G_4D[ indices[0][range_t(0,N_)][range_t(0,NMO)][n] ] = DMr;
+                       DM,TMat_NN,TMat_NM,IWORK,WORK,compact);
+          G_4D[ indices[0][range_t(0,N_)][range_t(0,NMO)][n] ] = DM;
         }
         cnt++;
 
         if(cnt%ncores_per_TG == core_rank) {
           W_data[n][3] = base::MixedDensityMatrix<ComplexType>(trialwfn_beta,W[n][1],
-                       DMr,IWORK1,TWORK1,TWORK2,TWORKV1,compact);
-          G_4D[ indices[1][range_t(0,N_)][range_t(0,NMO)][n] ] = DMr;
+                       DM,TMat_NN,TMat_NM,IWORK,WORK,compact);
+          G_4D[ indices[1][range_t(0,N_)][range_t(0,NMO)][n] ] = DM;
         }
         cnt++;
 
@@ -106,8 +148,11 @@ struct afqmc_sys: public AFQMCInfo
     RealType calculate_energy(MatA& W_data, const MatB& G, const MatC& haj, const SpMat& V) 
     {
       assert(G.shape()[0] == 2*NAEA*NMO);
+      assert(W_data.shape()[0] == G.shape()[1]);
       if(G.shape()[1] != Gcloc.shape()[1] || Gcloc.shape()[0] != V.rows())
         Gcloc.resize(extents[V.rows()][G.shape()[1]]);  
+      if(locWlkVec.size() != nwalk)
+        locWlkVec.resize(extents[nwalk]);
       if(core_rank==0) {
         // zero 
         for(int n=0, ne=W_data.shape()[0]; n<ne; n++) W_data[n][0] = 0.;
@@ -127,6 +172,58 @@ struct afqmc_sys: public AFQMCInfo
       return eav/wgt;
     }
 
+    /*
+     * Calculates the local energy of a set of walkers with distributed hamiltonians.
+     *   v1:
+     *   - allgather Gloc -> Gglob
+     *   - calculate local component
+     *   - Allreduce eloc_glob 
+     *   - copy eloc_glob -> eloc_local 
+    */
+    template< class SpMat,
+              class MatA,
+              class MatB
+        >
+    void calculate_distributed_energy_v1(MatA& W_data, const MatA& G, const MatB& haj, const SpMat& V)
+    {
+      assert( G.shape()[0] == 2*NAEA*NMO);
+      assert( nwalk == G.shape()[1] );
+      assert( nwalk == W_data.shape()[0] );
+      assert( SM_Gw.size() == G.shape()[1]*G.shape()[0]*nnodes );
+      if(nnodes == 1) {
+        calculate_energy(W_data,G,haj,V);
+        return;
+      }
+
+      // currently assumes the same number of walkers in all core groups
+      if(locWlkVec.size() != nwalk*nnodes)
+        locWlkVec.resize(extents[nwalk*nnodes]);
+
+      // add local contribution to eloc
+      boost::multi_array_ref<ComplexType,2> Gglob( SM_Gw.values(), extents[G.shape()[0]][nwalk*nnodes] ); 
+
+      // WRAPPER for mixed precision
+      if(TG.getCoreRank() == 0)
+        ma::gather_matrix(TG.getTGCommHeads(),G,Gglob,byCols);
+
+      if( (Gcloc.shape()[0] != V.rows()) || (Gcloc.shape()[1] != Gglob.shape()[1]) ) 
+        Gcloc.resize( extents[V.rows()][Gglob.shape()[1]] );    
+      TG.local_barrier();
+
+      shm::calculate_energy(Gglob,Gcloc,haj,V,locWlkVec,TG.getLocalNodeNumber()==0);
+
+      // sum over TG
+      MPI_Allreduce(MPI_IN_PLACE,locWlkVec.data(),2*nwalk*nnodes,
+                        MPI_DOUBLE,MPI_SUM,TG.getTGComm());
+      if(TG.getCoreRank() == 0) {
+        int node_number = TG.getLocalNodeNumber();
+        for(int i=0; i<nwalk; i++)
+          W_data[i][0] = locWlkVec[node_number*nwalk+i];
+      }
+      TG.local_barrier();
+
+    }
+
     template<class WSet, class Mat>
     void calculate_overlaps(const WSet& W, Mat& W_data)
     {
@@ -134,8 +231,8 @@ struct afqmc_sys: public AFQMCInfo
       assert(W_data.shape()[1] >= 4);
       for(int n=0, nw=W.shape()[0]; n<nw; n++) {
         if(n%ncores_per_TG != core_rank) continue;
-        W_data[n][2] = base::Overlap<ComplexType>(trialwfn_alpha,W[n][0],IWORK1,TWORK1);
-        W_data[n][3] = base::Overlap<ComplexType>(trialwfn_beta,W[n][1],IWORK1,TWORK1);
+        W_data[n][2] = base::Overlap<ComplexType>(trialwfn_alpha,W[n][0],TMat_NN,IWORK);
+        W_data[n][3] = base::Overlap<ComplexType>(trialwfn_beta,W[n][1],TMat_NN,IWORK);
       }
       TG.local_barrier();  
     }
@@ -147,25 +244,26 @@ struct afqmc_sys: public AFQMCInfo
     void propagate(WSet& W, MatA& Propg, MatB& vHS)
     {
 
+      assert( nwalk == W.shape()[0]);  
       typedef typename std::decay<MatB>::type::element Type;
       boost::multi_array_ref<Type,3> V(vHS.data(), extents[NMO][NMO][vHS.shape()[1]]);
-      boost::multi_array_ref<Type,2> TWORK2r(TWORK2.data(), extents[NMO][NAEA]);
-      boost::multi_array_ref<Type,2> TWORK3r(TWORK3.data(), extents[NMO][NAEA]);
-      for(int nw=0, cnt=0, nwalk=W.shape()[0]; nw<nwalk; nw++) {
+      boost::multi_array_ref<Type,2> T1(TMat_NM.data(), extents[NMO][NAEA]);
+      boost::multi_array_ref<Type,2> T2(TMat_MM2.data(), extents[NMO][NAEA]);
+      for(int nw=0, cnt=0; nw<nwalk; nw++) {
 
         if(cnt%ncores_per_TG == core_rank) {
-          ma::product(Propg,W[nw][0],S0);
+          ma::product(Propg,W[nw][0],TMat_MN);
           // need deep-copy, since stride()[1] == nw otherwise
-          DM = V[ indices[range_t(0,NMO)][range_t(0,NMO)][nw] ];
-          base::apply_expM(DM,S0,TWORK2r,TWORK3r,6);
-          ma::product(Propg,S0,W[nw][0]);
+          TMat_MM = V[ indices[range_t(0,NMO)][range_t(0,NMO)][nw] ];
+          base::apply_expM(TMat_MM,TMat_MN,T1,T2,6);
+          ma::product(Propg,TMat_MN,W[nw][0]);
         }
         cnt++;
         if(cnt%ncores_per_TG == core_rank) {
-          ma::product(Propg,W[nw][1],S0);
-          DM = V[ indices[range_t(0,NMO)][range_t(0,NMO)][nw] ];
-          base::apply_expM(DM,S0,TWORK2r,TWORK3r,6);
-          ma::product(Propg,S0,W[nw][1]);
+          ma::product(Propg,W[nw][1],TMat_MN);
+          TMat_MM = V[ indices[range_t(0,NMO)][range_t(0,NMO)][nw] ];
+          base::apply_expM(TMat_MM,TMat_MN,T1,T2,6);
+          ma::product(Propg,TMat_MN,W[nw][1]);
         }
         cnt++;
 
@@ -179,6 +277,7 @@ struct afqmc_sys: public AFQMCInfo
     {
       for(int i=0, cnt=0; i<W.shape()[0]; i++) {
 
+/*
           // QR on the transpose
         if(cnt%ncores_per_TG == core_rank) {  
           for(int r=0; r<NMO; r++)
@@ -203,18 +302,19 @@ struct afqmc_sys: public AFQMCInfo
               W[i][1][r][c] = TWORK2[c][r];
         }
         cnt++;
+*/
 
         // LQ on the direct matrix
-        //if(cnt%ncores_per_TG == core_rank) {
-        //  ma::gelqf(W[i][0],TAU,TWORKV2);
-        //  ma::glq(W[i][0],TAU,TWORKV2);
-        //}
-        //cnt++;  
-        //if(cnt%ncores_per_TG == core_rank) {
-        //  ma::gelqf(W[i][1],TAU,TWORKV2);
-        //  ma::glq(W[i][1],TAU,TWORKV2);
-        //}
-        //cnt++;  
+        if(cnt%ncores_per_TG == core_rank) {
+          ma::gelqf(W[i][0],TAU,WORK);
+          ma::glq(W[i][0],TAU,WORK);
+        }
+        cnt++;  
+        if(cnt%ncores_per_TG == core_rank) {
+          ma::gelqf(W[i][1],TAU,WORK);
+          ma::glq(W[i][1],TAU,WORK);
+        }
+        cnt++;  
 
       }
       TG.local_barrier();  
@@ -222,21 +322,33 @@ struct afqmc_sys: public AFQMCInfo
 
   private:
 
-//    index_gen indices;
+    // Buffers using std::vector
+    // Used in QR and invert
+    std::vector<ComplexType> WORK;
+    std::vector<int> IWORK;
 
-    // work arrays
-    ComplexMatrix TWORK1;
-    ComplexMatrix TWORK2;
-    ComplexMatrix TWORK3;
-    IndexVector IWORK1;
-    ComplexVector TWORKV1;
-    ComplexMatrix S0; 
-    ComplexMatrix DM;
-    ComplexMatrix Gcloc;
-    ComplexVector TWORKV2;  
+    // Vector used in QR routines 
     ComplexVector TAU;
+
+    // TMat_AB: Temporary Matrix of dimension [AxB]
+    // N: NAEA
+    // M: NMO
+    ComplexMatrix TMat_NN;
+    ComplexMatrix TMat_NM;
+    ComplexMatrix TMat_MN;
+    ComplexMatrix TMat_MM;
+    ComplexMatrix TMat_MM2;
+
+    // storage for contraction of 2-electron integrals with density matrix
+    ComplexMatrix Gcloc;
+
+    // local array for temporary accumulation of local energies
     ComplexVector locWlkVec;
+
+    // space for distributed local energy evaluation  
+    SMDenseVector<ComplexType> SM_Gw;
     
+    int nwalk;
     int nnodes;
     int nodeid;
     int ncores;

@@ -286,106 +286,6 @@ struct BLAS
     cgemm(Atrans, Btrans, M, N, K, alpha, A, lda, B, ldb, beta, C, ldc);
   }
   
-void static getrf(
-	const int &n, const int &m, double *a, const int &n0, int *piv, int &st
-){
-	dgetrf(n, m, a, n0, piv, st);
-}
-
-void static getrf(
-	const int &n, const int &m, float *a, const int &n0, int *piv, int &st
-){
-	sgetrf(n, m, a, n0, piv, st);
-}
-
-void static getrf(
-	const int &n, const int &m, std::complex<double> *a, const int &n0, int *piv, int &st
-){
-	zgetrf(n, m, a, n0, piv, st);
-}
-
-void static getrf(
-	const int &n, const int &m, std::complex<float> *a, const int &n0, int *piv, int &st
-){
-	cgetrf(n, m, a, n0, piv, st);
-}
-
-void static getri(int n, float* restrict a, int n0, int const* restrict piv, float* restrict work, int const& n1, int& status){
-	sgetri(n, a, n0, piv, work, n1, status);
-}
-void static getri(int n, double* restrict a, int n0, int const* restrict piv, double* restrict work, int const& n1, int& status){
-	dgetri(n, a, n0, piv, work, n1, status);
-}
-void static getri(int n, std::complex<float>* restrict a, int n0, int const* restrict piv, std::complex<float>* restrict work, int const& n1, int& status){
-	cgetri(n, a, n0, piv, work, n1, status);
-}
-void static getri(int n, std::complex<double>* restrict a, int n0, int const* restrict piv, std::complex<double>* restrict work, int const& n1, int& status){
-	zgetri(n, a, n0, piv, work, n1, status);
-}
-
-void static geqrf(int M, int N, std::complex<double> *A, const int LDA, std::complex<double> *TAU, std::complex<double> *WORK, int const& LWORK, int& INFO){
-	zgeqrf(M, N, A, LDA, TAU, WORK, LWORK, INFO);
-}
-
-void static geqrf(int M, int N, double *A, const int LDA, double *TAU, double *WORK, int const& LWORK, int& INFO){
-	dgeqrf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
-}
-
-void static geqrf(int M, int N, std::complex<float> *A, const int LDA, std::complex<float> *TAU, std::complex<float> *WORK, int const& LWORK, int& INFO){
-	cgeqrf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
-}
-
-void static geqrf(int M, int N, float *A, const int LDA, float *TAU, float *WORK, int const& LWORK, int& INFO){
-	sgeqrf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
-}
-
-void static gelqf(int M, int N, std::complex<double> *A, const int LDA, std::complex<double> *TAU, std::complex<double> *WORK, int const& LWORK, int& INFO){
-	zgelqf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
-}
-
-void static gelqf(int M, int N, double *A, const int LDA, double *TAU, double *WORK, int const& LWORK, int& INFO){
-	dgelqf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
-}
-
-void static gelqf(int M, int N, std::complex<float> *A, const int LDA, std::complex<float> *TAU, std::complex<float> *WORK, int const& LWORK, int& INFO){
-	cgelqf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
-}
-
-void static gelqf(int M, int N, float *A, const int LDA,  float *TAU, float *WORK, int const& LWORK, int& INFO){
-	sgelqf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
-}
-
-void static gqr(int M, int N, int K, std::complex<double> *A, const int LDA, std::complex<double> *TAU, std::complex<double> *WORK, int const& LWORK, int& INFO){
-	zungqr(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
-}
-
-void static gqr(int M, int N, int K, double *A, const int LDA, double *TAU, double *WORK, int const& LWORK, int& INFO){
-	dorgqr(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
-}
-
-void static gqr(int M, int N, int K, std::complex<float> *A, const int LDA, std::complex<float> *TAU, std::complex<float> *WORK, int const& LWORK, int& INFO){
-	cungqr(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
-}
-
-void static gqr(int M, int N, int K, float *A, const int LDA, float *TAU, float *WORK, int const& LWORK, int& INFO){
-	sorgqr(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
-}
-
-void static glq(int M, int N, int K, std::complex<double> *A, const int LDA, std::complex<double> *TAU, std::complex<double> *WORK, int const& LWORK, int& INFO){
-	zunglq(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
-}
-
-void static glq(int M, int N, int K, double *A, const int LDA, double *TAU, double *WORK, int& LWORK, int& INFO){
-	dorglq(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
-}
-
-void static glq(int M, int N, int K, std::complex<float> *A, const int LDA, std::complex<float> *TAU, std::complex<float> *WORK, int& LWORK, int& INFO){
-	cunglq(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
-}
-    
-void static glq(int M, int N, int K, float *A, const int LDA, float *TAU, float *WORK, int const& LWORK, int& INFO){ 
-	sorglq(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
-}
 
   template <typename T>
   inline static T dot(int n, const T *restrict a, const T *restrict b)
@@ -549,6 +449,130 @@ struct LAPACK
     sggev(jobvl, jobvr, n, a, lda, b, ldb, alphar, alphai, beta, vl, ldvl, vr,
           ldvr, work, lwork, info);
   }
+
+  void static getrf(
+	const int &n, const int &m, double *a, const int &n0, int *piv, int &st)
+  {
+	dgetrf(n, m, a, n0, piv, st);
+  }
+
+  void static getrf(
+	const int &n, const int &m, float *a, const int &n0, int *piv, int &st)
+  {
+	sgetrf(n, m, a, n0, piv, st);
+  }
+
+  void static getrf(
+	const int &n, const int &m, std::complex<double> *a, const int &n0, int *piv, int &st)
+  {
+	zgetrf(n, m, a, n0, piv, st);
+  }
+
+  void static getrf(
+	const int &n, const int &m, std::complex<float> *a, const int &n0, int *piv, int &st)
+  {
+	cgetrf(n, m, a, n0, piv, st);
+  }
+
+  void static getri(int n, float* restrict a, int n0, int const* restrict piv, float* restrict work, int const& n1, int& status)
+  {
+	sgetri(n, a, n0, piv, work, n1, status);
+  }
+
+  void static getri(int n, double* restrict a, int n0, int const* restrict piv, double* restrict work, int const& n1, int& status)
+  {
+	dgetri(n, a, n0, piv, work, n1, status);
+  }
+
+  void static getri(int n, std::complex<float>* restrict a, int n0, int const* restrict piv, std::complex<float>* restrict work, int const& n1, int& status)
+        {
+	cgetri(n, a, n0, piv, work, n1, status);
+  }
+
+  void static getri(int n, std::complex<double>* restrict a, int n0, int const* restrict piv, std::complex<double>* restrict work, int const& n1, int& status)
+  {
+	zgetri(n, a, n0, piv, work, n1, status);
+  }
+
+  void static geqrf(int M, int N, std::complex<double> *A, const int LDA, std::complex<double> *TAU, std::complex<double> *WORK, int LWORK, int& INFO)
+  {
+	zgeqrf(M, N, A, LDA, TAU, WORK, LWORK, INFO);
+  }
+
+  void static geqrf(int M, int N, double *A, const int LDA, double *TAU, double *WORK, int LWORK, int& INFO)
+  {
+	dgeqrf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
+  }
+
+  void static geqrf(int M, int N, std::complex<float> *A, const int LDA, std::complex<float> *TAU, std::complex<float> *WORK, int LWORK, int& INFO)
+  {
+	cgeqrf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
+  }
+
+  void static geqrf(int M, int N, float *A, const int LDA, float *TAU, float *WORK, int LWORK, int& INFO)
+  {
+	sgeqrf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
+  }
+
+  void static gelqf(int M, int N, std::complex<double> *A, const int LDA, std::complex<double> *TAU, std::complex<double> *WORK, int LWORK, int& INFO)
+  {
+	zgelqf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
+  }
+
+  void static gelqf(int M, int N, double *A, const int LDA, double *TAU, double *WORK, int LWORK, int& INFO)
+  {
+	dgelqf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
+  }
+
+  void static gelqf(int M, int N, std::complex<float> *A, const int LDA, std::complex<float> *TAU, std::complex<float> *WORK, int LWORK, int& INFO)
+  {
+	cgelqf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
+  }
+
+  void static gelqf(int M, int N, float *A, const int LDA,  float *TAU, float *WORK, int LWORK, int& INFO)
+  {
+	sgelqf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
+  }
+
+  void static gqr(int M, int N, int K, std::complex<double> *A, const int LDA, std::complex<double> *TAU, std::complex<double> *WORK, int LWORK, int& INFO)
+  {
+	zungqr(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
+  }
+
+  void static gqr(int M, int N, int K, double *A, const int LDA, double *TAU, double *WORK, int LWORK, int& INFO)
+  {
+	dorgqr(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
+  }
+
+  void static gqr(int M, int N, int K, std::complex<float> *A, const int LDA, std::complex<float> *TAU, std::complex<float> *WORK, int LWORK, int& INFO)
+  {
+	cungqr(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
+  }
+
+  void static gqr(int M, int N, int K, float *A, const int LDA, float *TAU, float *WORK, int LWORK, int& INFO)
+  {
+	sorgqr(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
+  }
+
+  void static glq(int M, int N, int K, std::complex<double> *A, const int LDA, std::complex<double> *TAU, std::complex<double> *WORK, int LWORK, int& INFO)
+  {
+	zunglq(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
+  }
+
+  void static glq(int M, int N, int K, double *A, const int LDA, double *TAU, double *WORK, int LWORK, int& INFO)
+  {
+	dorglq(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
+  }
+
+  void static glq(int M, int N, int K, std::complex<float> *A, const int LDA, std::complex<float> *TAU, std::complex<float> *WORK, int LWORK, int& INFO)
+  {
+	cunglq(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
+  }
+    
+  void static glq(int M, int N, int K, float *A, const int LDA, float *TAU, float *WORK, int const LWORK, int& INFO){ 
+	sorglq(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
+  }
+
 };
 
 #endif // OHMMS_BLAS_H

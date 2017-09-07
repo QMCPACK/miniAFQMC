@@ -186,12 +186,12 @@ template<class MA2D> auto herm(MA2D&& arg)
 
 
 template<class MultiArray2D>
-int invert_lu_optimal_workspace_size(MultiArray2D const& m){
+int invert_optimal_workspace_size(MultiArray2D const& m){
 	return getri_optimal_workspace_size(m);
 }
 
 template<class MultiArray2D, class MultiArray1D, class Buffer, class T = typename std::decay<MultiArray2D>::type::element>
-T invert_lu(MultiArray2D&& m, MultiArray1D&& pivot, Buffer&& WORK){
+T invert(MultiArray2D&& m, MultiArray1D&& pivot, Buffer&& WORK){
 	assert(m.shape()[0] == m.shape()[1]);
 	assert(pivot.size() >= m.shape()[0]);
 
@@ -209,21 +209,21 @@ T invert_lu(MultiArray2D&& m, MultiArray1D&& pivot, Buffer&& WORK){
 }
 
 template<class MultiArray2D, class MultiArray1D, class T = typename std::decay<MultiArray2D>::type::element>
-T invert_lu(MultiArray2D&& m, MultiArray1D&& pivot){
+T invert(MultiArray2D&& m, MultiArray1D&& pivot){
 	std::vector<typename std::decay<MultiArray2D>::type::element> WORK;
-	WORK.reserve(invert_lu_optimal_workspace_size(m));
-	return invert_lu(m, pivot, WORK);
+	WORK.reserve(invert_optimal_workspace_size(m));
+	return invert(m, pivot, WORK);
 }
 
 template<class MultiArray2D, class T = typename std::decay<MultiArray2D>::type::element>
-MultiArray2D invert_lu(MultiArray2D&& m){
+MultiArray2D invert(MultiArray2D&& m){
 	std::vector<int> pivot(m.shape()[0]);
-	auto det = invert_lu(m, pivot);
+	auto det = invert(m, pivot);
 	return std::forward<MultiArray2D>(m);
 }
 
 template<class MultiArray2D, class MultiArray1D, class T = typename std::decay<MultiArray2D>::type::element>
-T determinant_lu(MultiArray2D&& m, MultiArray1D&& pivot){
+T determinant(MultiArray2D&& m, MultiArray1D&& pivot){
 	assert(m.shape()[0] == m.shape()[1]);
 	assert(pivot.size() >= m.shape()[0]);
         
@@ -442,7 +442,7 @@ int main(){
 		boost::multi_array_ref<double, 2> A(a.data(), boost::extents[3][3]);
 		assert(A.num_elements() == a.size());
 		boost::multi_array<double, 2> B = A;
-		ma::invert_lu(A);
+		ma::invert(A);
 
 		boost::multi_array<double, 2> Id(boost::extents[3][3]);
 		ma::set_identity(Id);

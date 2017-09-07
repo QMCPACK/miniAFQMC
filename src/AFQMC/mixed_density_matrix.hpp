@@ -28,24 +28,25 @@ namespace base
  * Parameters:
  *  - conjA = conj(A)
  *  - B
- *  - DM = < A | c+i cj | B > / <A|B>
- *  - IWORK1: [ 2*M ] integer work matrix   
- *  - TWORK1: [ NEL x NEL ] work matrix   
- *  - TWORK2: (only used if compact = False) [ NEL x M ] work matrix   
+ *  - C = < A | c+i cj | B > / <A|B>
+ *  - T1: [ NEL x NEL ] work matrix   
+ *  - T2: (only used if compact = False) [ NEL x M ] work matrix   
+ *  - IWORK: [ N ] integer biffer for invert. Dimensions must be at least NEL. 
+ *  - WORK: [ >=NEL ] Work space for invert. Dimensions must be at least NEL.   
  *  - compact (default = True)
  *  returns:
  *  - <A|B> = det[ T(B) * conj(A) ]  
  */
 // Serial Implementation
 template< class Tp,
-          class ValueMatA,
-          class ValueMatB,
-          class ValueMatC,
-          class ValueMat,
-          class IntVec,
-          class ValueVec
+          class MatA,
+          class MatB,
+          class MatC,
+          class Mat,
+          class IBuffer,
+          class TBuffer 
         >
-inline Tp MixedDensityMatrix(const ValueMatA& conjA, const ValueMatB& B, ValueMatC& C, IntVec& I1, ValueMat& T1, ValueMat& T2, ValueVec& TV1, bool compact=true)
+inline Tp MixedDensityMatrix(const MatA& conjA, const MatB& B, MatC& C, Mat& T1, Mat& T2, IBuffer& IWORK, TBuffer& WORK, bool compact=true)
 {
   // check dimensions are consistent
   assert( conjA.shape()[0] == B.shape()[0] );
@@ -69,7 +70,7 @@ inline Tp MixedDensityMatrix(const ValueMatA& conjA, const ValueMatB& B, ValueMa
 
   // NOTE: Using C as temporary 
   // T1 = T1^(-1)
-  Tp ovlp = static_cast<Tp>(ma::invert(T1,I1,TV1));
+  Tp ovlp = static_cast<Tp>(ma::invert(T1,IWORK,WORK));
 
   if(compact) {
 
@@ -89,13 +90,25 @@ inline Tp MixedDensityMatrix(const ValueMatA& conjA, const ValueMatB& B, ValueMa
   return ovlp;
 }
 
+
+/*
+ * Returns the overlap of 2 Slater determinants:  <A|B> = det[ T(B) * conj(A) ]  
+ * Parameters:
+ *  - conjA = conj(A)
+ *  - B
+ *  - IWORK: [ M ] integer work matrix   
+ *  - T1: [ NEL x NEL ] work matrix   
+ *  returns:
+ *  - <A|B> = det[ T(B) * conj(A) ]  
+ */
+// Serial Implementation
 template< class Tp,
-          class ValueMatA,
-          class ValueMatB,
-          class ValueMat,
-          class IntVec
+          class MatA,
+          class MatB,
+          class Mat,
+          class IBuffer
         >
-inline Tp Overlap(const ValueMatA& conjA, const ValueMatB& B, IntVec& I1, ValueMat& T1)
+inline Tp Overlap(const MatA& conjA, const MatB& B, Mat& T1, IBuffer& IWORK)
 {
   // check dimensions are consistent
   assert( conjA.shape()[0] == B.shape()[0] );
@@ -108,7 +121,7 @@ inline Tp Overlap(const ValueMatA& conjA, const ValueMatB& B, IntVec& I1, ValueM
   // T(B)*conj(A) 
   ma::product(T(B),conjA,T1);  
 
-  return static_cast<Tp>(ma::determinant(T1,I1));
+  return static_cast<Tp>(ma::determinant(T1,IWORK));
 }
 
 } // namespace base

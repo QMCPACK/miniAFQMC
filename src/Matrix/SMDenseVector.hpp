@@ -66,7 +66,7 @@ class SMDenseVector
 
   SMDenseVector<T>(const SMDenseVector<T> &rhs) = delete;
 
-  inline void setup(std::string ii, MPI_Comm comm_) {
+  void setup(std::string ii, MPI_Comm comm_) {
     int rk;
     MPI_Comm_rank(comm_,&rk);
     head=(rk==0);
@@ -76,11 +76,11 @@ class SMDenseVector
     comm=comm_;
   }
 
-  inline void barrier() {
+  void barrier() {
     MPI_Barrier(comm);   
   }
 
-  inline bool deallocate()
+  bool deallocate()
   {
     SMallocated = false;
     barrier();
@@ -108,7 +108,7 @@ class SMDenseVector
     return true;
   } 
 
-  inline bool reserve(unsigned long n)
+  bool reserve(unsigned long n)
   {
     assert(ID != std::string(""));
     assert(!SMallocated);
@@ -174,7 +174,7 @@ class SMDenseVector
   }
 
   // resize is probably the best way to setup the vector 
-  inline void resize(unsigned long nnz) 
+  void resize(unsigned long nnz) 
   {
     if(!SMallocated || vals==NULL) { 
       if(!reserve(nnz)) {
@@ -194,43 +194,43 @@ class SMDenseVector
     barrier();
   }
 
-  inline void clear() { 
+  void clear() { 
     assert(SMallocated);
     if(!head) return;
     vals->clear();
   }
 
-  inline unsigned long size() const
+  unsigned long size() const
   {
     assert(SMallocated && vals!=NULL);
     return vals->size();
   }
 
-  inline const_pointer values() const 
+  const_pointer values() const 
   {
     assert(SMallocated && vals!=NULL);
     return &((*vals)[0]);
   }
 
-  inline pointer values() 
+  pointer values() 
   {
     assert(SMallocated && vals!=NULL);
     return &((*vals)[0]);
   }
 
-  inline pointer data()
+  pointer data()
   {
     assert(SMallocated && vals!=NULL);
     return &((*vals)[0]);
   }
 
-  inline bool isAllocated() {
+  bool isAllocated() {
     return (SMallocated)&&(vals!=NULL); 
   }
 
-  inline This_t& operator=(const SMDenseVector<T> &rhs) = delete; 
+  This_t& operator=(const SMDenseVector<T> &rhs) = delete; 
 
-  inline Type_t& operator()(unsigned long i)
+  Type_t& operator()(unsigned long i)
   {
 #ifdef ASSERT_SPARSEMATRIX
     assert(SMallocated && vals!=NULL);
@@ -239,7 +239,7 @@ class SMDenseVector
     return (*vals)[i]; 
   }
 
-  inline Type_t& operator[](unsigned long i)
+  Type_t& operator[](unsigned long i)
   {
 #ifdef ASSERT_SPARSEMATRIX
     assert(SMallocated && vals!=NULL);
@@ -249,7 +249,7 @@ class SMDenseVector
   }
 
   template<typename IType>
-  inline void add(const IType i, const T& v, bool needs_locks=false) 
+  void add(const IType i, const T& v, bool needs_locks=false) 
   {
 #ifdef ASSERT_SPARSEMATRIX
     assert(SMallocated && vals!=NULL);
@@ -264,11 +264,11 @@ class SMDenseVector
     }
   }
 
-  inline unsigned long memoryUsage() { return memory; }
+  unsigned long memoryUsage() { return memory; }
 
-  inline unsigned long capacity() { return (vals==NULL)?0:vals->capacity(); }
+  unsigned long capacity() { return (vals==NULL)?0:vals->capacity(); }
 
-  inline void push_back(const T& v, bool needs_locks=false)             
+  void push_back(const T& v, bool needs_locks=false)             
   {
     assert(SMallocated && vals!=NULL);
     if(needs_locks) {
@@ -281,7 +281,7 @@ class SMDenseVector
     }
   }
 
-  inline void push_back(const std::vector<T>& v, bool needs_locks=false)
+  void push_back(const std::vector<T>& v, bool needs_locks=false)
   {
     assert(SMallocated && vals!=NULL);
     if(needs_locks) {
@@ -296,14 +296,14 @@ class SMDenseVector
     }
   }
 
-  inline void sort() {
+  void sort() {
     assert(SMallocated && vals!=NULL);
     if(!head) return;
     std::sort(vals->begin(),vals->end());
   }
 
   template<class Compare>
-  inline void sort(Compare comp, MPI_Comm local_comm=MPI_COMM_SELF, bool inplace=true) {
+  void sort(Compare comp, MPI_Comm local_comm=MPI_COMM_SELF, bool inplace=true) {
 
     assert(SMallocated && vals!=NULL);
     if(vals->size() == 0) return;
@@ -363,7 +363,7 @@ class SMDenseVector
   }
 
   template<typename Tp>
-  inline SMDenseVector<T>& operator*=(const Tp rhs ) 
+  SMDenseVector<T>& operator*=(const Tp rhs ) 
   {
     assert(SMallocated && vals!=NULL);
     if(!head) return *this; 
@@ -373,7 +373,7 @@ class SMDenseVector
   }
 
   template<typename Tp>
-  inline SMDenseVector<T>& operator*=(const std::complex<Tp> rhs ) 
+  SMDenseVector<T>& operator*=(const std::complex<Tp> rhs ) 
   {
     assert(SMallocated && vals!=NULL);
     if(!head) return *this; 
@@ -384,13 +384,13 @@ class SMDenseVector
 
   // this is ugly, but I need to code quickly 
   // so I'm doing this to avoid adding hdf5 support here 
-  inline boost_SMVector<T>* getVector() const { return vals; } 
+  boost_SMVector<T>* getVector() const { return vals; } 
 
-  inline iterator begin() { assert(SMallocated && vals!=NULL); return vals->begin(); } 
-  inline const_iterator begin() const { assert(SMallocated && vals!=NULL); return vals->begin(); } 
-  inline const_iterator end() const { assert(SMallocated && vals!=NULL); return vals->end(); } 
-  inline iterator end() { assert(SMallocated && vals!=NULL); return vals->end(); } 
-  inline T& back() { assert(SMallocated && vals!=NULL); return vals->back(); } 
+  iterator begin() { assert(SMallocated && vals!=NULL); return vals->begin(); } 
+  const_iterator begin() const { assert(SMallocated && vals!=NULL); return vals->begin(); } 
+  const_iterator end() const { assert(SMallocated && vals!=NULL); return vals->end(); } 
+  iterator end() { assert(SMallocated && vals!=NULL); return vals->end(); } 
+  T& back() { assert(SMallocated && vals!=NULL); return vals->back(); } 
 
   boost::interprocess::interprocess_mutex* getMutex()
   {

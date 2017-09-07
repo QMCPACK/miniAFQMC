@@ -47,10 +47,10 @@ class SparseMatrix_ref
 
   // disable copy constructor and operator=  
   SparseMatrix_ref<T>(const SparseMatrix_ref<T> &rhs) = delete;
-  inline This_t& operator=(const SparseMatrix_ref<T> &rhs) = delete; 
+  This_t& operator=(const SparseMatrix_ref<T> &rhs) = delete; 
 
   // for now single setup function
-  inline void setup(intType nr_, intType nc_, intType gnr_, intType gnc_, intType r0_, intType c0_, 
+  void setup(intType nr_, intType nc_, intType gnr_, intType gnc_, intType r0_, intType c0_, 
         pointer v_, intPtr c_, std::vector<intType>& indx_b_, std::vector<intType>& indx_e_)
   {
     assert(gnr_ > 0 && gnc_ > 0);
@@ -73,12 +73,12 @@ class SparseMatrix_ref
     indx_e=indx_e_;
   }
 
-  inline int rows() const
+  int rows() const
   {
     return shape_[0];
   }
   // CAREFUL HERE!!! 
-  inline int cols() const
+  int cols() const
   {
     return shape_[1];
   }
@@ -88,61 +88,61 @@ class SparseMatrix_ref
     return shape_; 
   } 
 
-  inline int global_row() const
+  int global_row() const
   {
     return gnr;
   }
-  inline int global_col() const
+  int global_col() const
   {
     return gnc;
   }
-  inline int global_r0() const
+  int global_r0() const
   {
     return r0;
   }
-  inline int global_c0() const
+  int global_c0() const
   {
     return c0;
   }
-  inline int global_rN() const
+  int global_rN() const
   {
     return r0+shape_[0];
   }
-  inline int global_cN() const
+  int global_cN() const
   {
     return c0+nc0;
   }
 
-  inline const_pointer values() const 
+  const_pointer values() const 
   {
     return vals;
   }
 
-  inline const_intPtr column_data() const 
+  const_intPtr column_data() const 
   {
     return colms; 
   }
 
-  inline const_intPtr index_begin() const
+  const_intPtr index_begin() const
   {
     return indx_b.data(); 
   }
 
-  inline const_intPtr index_end() const
+  const_intPtr index_end() const
   {
     return indx_e.data(); 
   }
 
 
   // use binary search PLEASE!!! Not really used anyway
-  inline intType find_element(int i, int j) const {
+  intType find_element(int i, int j) const {
     for (intType k = indx_b[i]; k<indx_e[i]; k++) {
       if (colms[k] == j) return k;
     }
     return -1;
   }
 
-  inline Type_t operator()( int i, int j) const
+  Type_t operator()( int i, int j) const
   {
     assert(i>=0 && i<shape_[0] && j>=0 && j<nc0); 
     intType idx = find_element(i,j+c0);

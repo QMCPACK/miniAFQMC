@@ -49,7 +49,6 @@
 #define DEBUG_PSIBUFFER(who, msg)
 #endif
 
-
 #include<boost/multi_array.hpp>
 
 #include "Matrix/SparseMatrix.hpp"

@@ -1,4 +1,4 @@
-////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////
 // This file is distributed under the University of Illinois/NCSA Open Source
 // License.  See LICENSE file in top directory for details.
 //
@@ -78,7 +78,6 @@ inline void apply_expM( const MatA& V, MatB& S, MatC& T1, MatC& T2, int order=6)
     for(int i=0, ie=S.shape()[0]; i<ie; i++)
      for(int j=0, je=S.shape()[1]; j<je; j++)
       S[i][j] += T1[i][j];
-
   }
 
 }
@@ -93,7 +92,6 @@ namespace shm
  *  vHS = Spvn * X 
  *     vHS(ik,w) = sum_n Spvn(ik,n) * X(n,w) 
  */
-// Serial Implementation
 template< class SpMat,
 	  class MatA,
           class MatB	

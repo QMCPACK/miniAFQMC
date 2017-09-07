@@ -116,7 +116,7 @@ template< class TVec,
           class MatC,
           class SpMat
         >
-inline void calculate_energy(const MatA& Gc, MatB& Gcloc, const MatC& haj, const SpMat& Vakbl, TVec& locV)
+inline void calculate_energy(const MatA& Gc, MatB& Gcloc, const MatC& haj, const SpMat& Vakbl, TVec& locV, bool addH1 = true)
 {
   // W[nwalk][2][NMO][NAEA]
  
@@ -151,7 +151,7 @@ inline void calculate_energy(const MatA& Gc, MatB& Gcloc, const MatC& haj, const
   for(int n=0; n<nwalk; n++) locV[n] *= half;
    
   // not splitting the 1-body part yet 
-  if(r0 == 0 && Vakbl.global_c0() == 0) {
+  if(r0 == 0 && Vakbl.global_c0() == 0 && addH1) {
     // one-body contribution
     boost::multi_array_ref<const Type,1> haj_ref(haj.origin(), extents[haj.num_elements()]);
     ma::product(one,ma::T(Gc),haj_ref,one,locV);

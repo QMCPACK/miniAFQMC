@@ -169,7 +169,6 @@ int main(int argc, char **argv)
   ComplexMatrix haj;    // 1-Body Hamiltonian Matrix
   ComplexMatrix Propg1;   // propagator for 1-body hamiltonian 
   std::vector<int> cholVec_partition; 
-//  index_gen indices;
 
   // shared memory structures
   SMSparseMatrix<ComplexType> SMSpvn;    // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
@@ -185,12 +184,13 @@ int main(int argc, char **argv)
   SMDenseVector<ComplexType> TGcommBuff(std::string("SM_TGcommBuff")+str0,TG.getTGCommLocal(),10);
   TG.setBuffer(&TGcommBuff);
 
-  shm::afqmc_sys AFQMCSys(TG); // Main AFQMC object. Control access to several apgorithmic functions. 
-  int nnodes = TG.getTotalNodes();
-  int nodeid = TG.getNodeID();
-  int ncores = TG.getTotalCores();
-  int coreid = TG.getCoreID();
-  int core_rank = TG.getCoreRank();
+  shm::afqmc_sys AFQMCSys(TG,nwalk); // Main AFQMC object. Controls access to several algorithmic functions. 
+
+  int nnodes = TG.getTotalNodes();      // Total number of nodes
+  int nodeid = TG.getNodeID();          // glocal id of local node 
+  int ncores = TG.getTotalCores();      // Number of cores in local node
+  int coreid = TG.getCoreID();          // global core id (core # within full node)
+  int core_rank = TG.getCoreRank();     // core id within local TG (core # within cores in TG local to the node)
 
   hdf_archive dump;
   if(nread == 0 || TG.getCoreID() < nread) {
@@ -200,7 +200,7 @@ int main(int argc, char **argv)
 
   app_log()<<"***********************************************************\n";
   app_log()<<"                 Initializing from HDF5                    \n"; 
-  app_log()<<"***********************************************************\n";
+  app_log()<<"***********************************************************" <<std::endl;
 
   if(!Initialize(dump,dt,TG,AFQMCSys,Propg1,SMSpvn,haj,SMVakbl,cholVec_partition,nread)) {
     std::cerr<<" Error initalizing data structures from hdf5 file: " <<init_file <<std::endl;
@@ -220,12 +220,12 @@ int main(int argc, char **argv)
   RealType Eshift = 0;
   int NMO = AFQMCSys.NMO;              // number of molecular orbitals
   int NAEA = AFQMCSys.NAEA;            // number of up electrons
-  int global_nchol = SMSpvn.cols();    // number of cholesky vectors  
   int NIK = 2*NMO*NMO;                 // dimensions of linearized green function
   int NAK = 2*NAEA*NMO;                // dimensions of linearized "compacted" green function
   int cvec0 = cholVec_partition[TG.getLocalNodeNumber()]; 
   int cvecN = cholVec_partition[TG.getLocalNodeNumber()+1]; 
-  int nchol = cvecN-cvec0;
+  int nchol = SMSpvn.cols();
+  assert(nchol == cvecN-cvec0);   
   if(transposed_Spvn)
     NIK = NAK;  
 
@@ -333,7 +333,13 @@ int main(int argc, char **argv)
 
   // initialize overlaps and energy
   AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc,true);
-  RealType Eav = AFQMCSys.calculate_energy(W_data,Gc,haj,Vakbl);
+//  RealType Eav = AFQMCSys.calculate_energy(W_data,Gc,haj,Vakbl);
+
+  RealType Eav;
+  AFQMCSys.calculate_distributed_energy_v1(W_data,Gc,haj,Vakbl);
+
+  app_log()<<" E0: " <<real(W_data[0][0]) <<std::endl;
+  APP_ABORT("\n\n\n");
 
   app_log()<<"\n";
   app_log()<<"***********************************************************\n";
@@ -451,8 +457,8 @@ int main(int argc, char **argv)
     Timers[Timer_eloc]->start();
     AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc,true);
     Eav = AFQMCSys.calculate_energy(W_data,Gc,haj,Vakbl);
-    app_log()<<step <<"   " <<setprecision(12) <<Eav <<std::endl;
     Timers[Timer_eloc]->stop();
+    app_log()<<step <<"   " <<setprecision(12) <<Eav <<std::endl;
 
     // Branching in real code would happen here!!!
   

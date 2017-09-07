@@ -57,6 +57,7 @@ inline bool balance_partition_SpMat(task_group& TG, int type, SpMat& M, SpMat_re
       indxPtr indx = M.row_index();
       balance_partition_ordered_set(nr,indx,subsets);
 
+/*
       if(TG.getTGNumber()==0) {
         app_log()<<"   SpMat split over cores in TG: \n";
         app_log()<<"     Index: ";
@@ -68,6 +69,7 @@ inline bool balance_partition_SpMat(task_group& TG, int type, SpMat& M, SpMat_re
           app_log()<<*(indx+subsets[i+1]) - *(indx+subsets[i]) <<" ";
         app_log()<<std::endl;
       }
+*/
     }
     // MPI WRAPPER!!! 
     MPI_Bcast(reinterpret_cast<char*>(subsets.data()),sizeof(indxType)*subsets.size(),
@@ -112,7 +114,7 @@ inline bool balance_partition_SpMat(task_group& TG, int type, SpMat& M, SpMat_re
       }       
       assert(cnt==M.size());
       balance_partition_ordered_set(nc,counts.data(),subsets);
-
+/*
       if(TG.getTGNumber()==0) {
         app_log()<<"   SpMat split over cores in TG: \n";
         app_log()<<"     Index: ";
@@ -124,6 +126,7 @@ inline bool balance_partition_SpMat(task_group& TG, int type, SpMat& M, SpMat_re
           app_log()<<counts[subsets[i+1]] - counts[subsets[i]] <<" ";
         app_log()<<std::endl;
       }
+*/
     }
     // MPI WRAPPER PLEASE!!!
     MPI_Bcast(reinterpret_cast<char*>(subsets.data()),sizeof(indxType)*subsets.size(),

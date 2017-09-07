@@ -3,6 +3,7 @@
 #define QMCPLUSPLUS_AFQMC_SMSPARSEMATRIX_H
 
 #include <tuple>
+#include <utility>
 #include <algorithm>
 #include <iostream>
 #include <vector>
@@ -55,13 +56,13 @@ class SMSparseMatrix
   typedef typename SMVector<indxType>::const_iterator const_indx_iterator;
   typedef SMSparseMatrix<T>  This_t;
 
-  SMSparseMatrix<T>():nr(0),nc(0),compressed(false),zero_based(true),head(false),ID(""),SMallocated(false),vals(NULL),rowIndexFull(NULL),rowIndex(NULL),myrows(NULL),colms(NULL),mutex(NULL),segment(NULL) 
+  SMSparseMatrix<T>():nr(0),nc(0),compressed(false),zero_based(true),head(false),ID(""),SMallocated(false),vals(NULL),rowIndexFull(NULL),rowIndex(NULL),myrows(NULL),colms(NULL),mutex(NULL),segment(NULL),row_offset(0),col_offset(0) 
   {
     remover.ID="NULL";
     remover.head=false;
   }
 
-  SMSparseMatrix<T>(int n, int m):nr(n),nc(m),compressed(false),zero_based(true),head(false),ID(""),SMallocated(false),vals(NULL),rowIndexFull(NULL),rowIndex(NULL),myrows(NULL),colms(NULL),mutex(NULL),segment(NULL) 
+  SMSparseMatrix<T>(int n, int m):nr(n),nc(m),compressed(false),zero_based(true),head(false),ID(""),SMallocated(false),vals(NULL),rowIndexFull(NULL),rowIndex(NULL),myrows(NULL),colms(NULL),mutex(NULL),segment(NULL),row_offset(0),col_offset(0) 
   {
     remover.ID="NULL";
     remover.head=false;
@@ -77,9 +78,9 @@ class SMSparseMatrix
 
   // disable copy constructor and operator=  
   SMSparseMatrix<T>(const SMSparseMatrix<T> &rhs) = delete;
-  inline This_t& operator=(const SMSparseMatrix<T> &rhs) = delete; 
+  This_t& operator=(const SMSparseMatrix<T> &rhs) = delete; 
 
-  inline void setup(std::string ii, MPI_Comm comm_=MPI_COMM_SELF) {
+  void setup(std::string ii, MPI_Comm comm_=MPI_COMM_SELF) {
     int rk;
     MPI_Comm_rank(comm_,&rk);
     head=(rk==0);
@@ -89,11 +90,11 @@ class SMSparseMatrix
     comm=comm_;
   }
 
-  inline void barrier() {
+  void barrier() {
     MPI_Barrier(comm);
   }
 
-  inline void reserve(unsigned long n)
+  void reserve(unsigned long n)
   {
     if(vals==NULL) { 
       allocate(n);
@@ -114,7 +115,7 @@ class SMSparseMatrix
     barrier();
   }
 
-  inline void resize(unsigned long n)
+  void resize(unsigned long n)
   {
     reserve(n);
     if(head) {
@@ -130,7 +131,7 @@ class SMSparseMatrix
   }
 
   // all processes must call this routine
-  inline bool allocate(unsigned long n)
+  bool allocate(unsigned long n)
   {
     if(SMallocated || segment!=NULL) {
       std::cerr<<" Error: Reallocation of SMSparseMatrix is not allowed. \n"; 
@@ -265,7 +266,7 @@ class SMSparseMatrix
     return true;
   }
 
-  inline void clear() { 
+  void clear() { 
     compressed=false;
     zero_based=true;
     if(!SMallocated) return; 
@@ -277,107 +278,118 @@ class SMSparseMatrix
     rowIndexFull->clear();
   }
 
-  inline void setDims(int n, int m)
+  void setDims(int n, int m)
   {
     nr=n;
     nc=m;
     compressed=false;
     zero_based=true;
   }
+
+  void setOffset(intType roff, intType coff)
+  {
+    row_offset = roff;
+    col_offset = coff;
+  }
+
+  std::pair<intType,intType> getOffset()
+  {
+    return {roff,coff};
+  }
  
-  inline void setCompressed() 
+  void setCompressed() 
   {
     compressed=true;
   }
 
-  inline bool isCompressed() const
+  bool isCompressed() const
   {
     return compressed;
   }
 
-  inline unsigned long memoryUsage() { return memory; }
+  unsigned long memoryUsage() { return memory; }
 
-  inline unsigned long capacity() const
+  unsigned long capacity() const
   {
     return (vals!=NULL)?(vals->capacity()):0;
   }
-  inline unsigned long size() const
+  unsigned long size() const
   {
     return (vals!=NULL)?(vals->size()):0;
   }
-  inline int rows() const
+  int rows() const
   {
     return nr;
   }
-  inline int cols() const
+  int cols() const
   {
     return nc;
   }
 
-  inline const_pointer values(indxType n=indxType(0)) const 
+  const_pointer values(indxType n=indxType(0)) const 
   {
     return (vals!=NULL)?(&((*vals)[n])):NULL;
   }
 
-  inline pointer values(indxType n=indxType(0)) 
+  pointer values(indxType n=indxType(0)) 
   {
     return (vals!=NULL)?(&((*vals)[n])):NULL;
   }
 
-  inline const_intPtr column_data(indxType n=indxType(0)) const 
+  const_intPtr column_data(indxType n=indxType(0)) const 
   {
     return (colms!=NULL)?(&((*colms)[n])):NULL;
   }
-  inline intPtr column_data(indxType n=indxType(0)) 
+  intPtr column_data(indxType n=indxType(0)) 
   {
     return (colms!=NULL)?(&((*colms)[n])):NULL;
   }
 
-  inline const_intPtr row_data(indxType n=indxType(0)) const 
+  const_intPtr row_data(indxType n=indxType(0)) const 
   {
     return (myrows!=NULL)?(&((*myrows)[n])):NULL;
   }
-  inline intPtr row_data(indxType n=indxType(0)) 
+  intPtr row_data(indxType n=indxType(0)) 
   {
     return (myrows!=NULL)?(&((*myrows)[n])):NULL;
   }
 
-  inline const_intPtr index_begin(indxType n=indxType(0)) const
+  const_intPtr index_begin(indxType n=indxType(0)) const
   {
     return (rowIndex!=NULL)?(&((*rowIndex)[n])):NULL;
   }
-  inline intPtr index_begin(indxType n=indxType(0))
+  intPtr index_begin(indxType n=indxType(0))
   {
     return  (rowIndex!=NULL)?(&((*rowIndex)[n])):NULL;
   }
 
-  inline const_intPtr index_end(indxType n=indxType(0)) const
+  const_intPtr index_end(indxType n=indxType(0)) const
   {
     return (rowIndex!=NULL)?(&((*rowIndex)[n+1])):NULL;
   }
-  inline intPtr index_end(indxType n=indxType(0))
+  intPtr index_end(indxType n=indxType(0))
   {
     return  (rowIndex!=NULL)?(&((*rowIndex)[n+1])):NULL;
   }
 
-  inline const_indxPtr row_index(indxType n=indxType(0)) const 
+  const_indxPtr row_index(indxType n=indxType(0)) const 
   {
     return (rowIndexFull!=NULL)?(&((*rowIndexFull)[n])):NULL;
   }
-  inline indxPtr row_index(indxType n=indxType(0)) 
+  indxPtr row_index(indxType n=indxType(0)) 
   {
     return  (rowIndexFull!=NULL)?(&((*rowIndexFull)[n])):NULL;
   }
 
   // use binary search PLEASE!!! Not really used anyway
-  inline indxType find_element(int i, int j) const {
+  indxType find_element(int i, int j) const {
     for (indxType k = (*rowIndexFull)[i]; k<(*rowIndexFull)[i+1]; k++) {
       if ((*colms)[k] == j) return k;
     }
     return -1;
   }
 
-  inline Type_t operator()( int i, int j) const
+  Type_t operator()( int i, int j) const
   {
 #ifdef ASSERT_SPARSEMATRIX
     assert(i>=0 && i<nr && j>=0 && j<nc && compressed); 
@@ -387,52 +399,52 @@ class SMSparseMatrix
     return (*vals)[idx]; 
   }
 
-  inline void add(const int i, const int j, const T& v, bool needs_locks=false) 
+  void add(const int i, const int j, const T& v, bool needs_locks=false) 
   {
 #ifdef ASSERT_SPARSEMATRIX
-    assert(i>=0 && i<nr && j>=0 && j<nc);
+    assert(i-row_offset>=0 && i-row_offset<nr && j-col_offset>=0 && j-col_offset<nc);
 #endif
     compressed=false;
     if(needs_locks) {
       boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(*mutex);
-      myrows->push_back(i);
-      colms->push_back(j);
+      myrows->push_back(i-row_offset);
+      colms->push_back(j-col_offset);
       vals->push_back(v);
     } else {
       if(!head) return;
-      myrows->push_back(i);
-      colms->push_back(j);
+      myrows->push_back(i-row_offset);
+      colms->push_back(j-col_offset);
       vals->push_back(v);
     }
   }
 
-  inline void add(const std::vector<std::tuple<int,int,T>>& v, bool needs_locks=false)
+  void add(const std::vector<std::tuple<int,int,T>>& v, bool needs_locks=false)
   {
     compressed=false;
     if(needs_locks) {
       boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(*mutex);
       for(auto&& a: v) {
 #ifdef ASSERT_SPARSEMATRIX
-        assert(std::get<0>(a)>=0 && std::get<0>(a)<nr && std::get<1>(a)>=0 && std::get<1>(a)<nc);
+        assert(std::get<0>(a)-row_offset>=0 && std::get<0>(a)-row_offset<nr && std::get<1>(a)-col_offset>=0 && std::get<1>(a)-col_offset<nc);
 #endif
-        myrows->push_back(std::get<0>(a));
-        colms->push_back(std::get<1>(a));
+        myrows->push_back(std::get<0>(a)-row_offset);
+        colms->push_back(std::get<1>(a)-col_offset);
         vals->push_back(std::get<2>(a));
       }
     } else {
       if(!head) return;
       for(auto&& a: v) {
 #ifdef ASSERT_SPARSEMATRIX
-        assert(std::get<0>(a)>=0 && std::get<0>(a)<nr && std::get<1>(a)>=0 && std::get<1>(a)<nc);
+        assert(std::get<0>(a)-row_offset>=0 && std::get<0>(a)-row_offset<nr && std::get<1>(a)-col_offset>=0 && std::get<1>(a)-col_offset<nc);
 #endif
-        myrows->push_back(std::get<0>(a));
-        colms->push_back(std::get<1>(a));
+        myrows->push_back(std::get<0>(a)-row_offset);
+        colms->push_back(std::get<1>(a)-col_offset);
         vals->push_back(std::get<2>(a));
       }
     }
   }
 
-  inline void setup_index()
+  void setup_index()
   {
     if(head) {
       rowIndex->resize(nr+1);
@@ -466,7 +478,7 @@ class SMSparseMatrix
     }
   }
 
-  inline void compress(MPI_Comm local_comm=MPI_COMM_SELF)
+  void compress(MPI_Comm local_comm=MPI_COMM_SELF)
   {
 
     auto comp = [](std::tuple<intType, intType, value_type> const& a, std::tuple<intType, intType, value_type> const& b){return std::get<0>(a) < std::get<0>(b) || (!(std::get<0>(b) < std::get<0>(a)) && std::get<1>(a) < std::get<1>(b));};
@@ -530,7 +542,7 @@ class SMSparseMatrix
     compressed=true;   
   }
 
-  inline void transpose(MPI_Comm local_comm=MPI_COMM_SELF)   
+  void transpose(MPI_Comm local_comm=MPI_COMM_SELF)   
   {
     if(!SMallocated) return;
     assert(myrows->size() == colms->size() && myrows->size() == vals->size());
@@ -549,7 +561,7 @@ class SMSparseMatrix
     compress(local_comm);
   }
 
-  inline void check()
+  void check()
   {
     if(!head) return; 
     for(int i=0; i<rowIndexFull->size()-1; i++)
@@ -560,7 +572,7 @@ class SMSparseMatrix
   }
 
   template<typename Tp>
-  inline SMSparseMatrix<T>& operator*=(const Tp rhs ) 
+  SMSparseMatrix<T>& operator*=(const Tp rhs ) 
   {
     if(!head) return *this; 
     for(iterator it=vals->begin(); it!=vals->end(); it++)
@@ -569,7 +581,7 @@ class SMSparseMatrix
   }
 
   template<typename Tp>
-  inline SMSparseMatrix<T>& operator*=(const std::complex<Tp> rhs ) 
+  SMSparseMatrix<T>& operator*=(const std::complex<Tp> rhs ) 
   {
     if(!head) return *this; 
     for(iterator it=vals->begin(); it!=vals->end(); it++)
@@ -577,7 +589,7 @@ class SMSparseMatrix
     return *this; 
   }
 
-  inline void toZeroBase() {
+  void toZeroBase() {
     if(!head) return; 
     if(zero_based) return;
     zero_based=true;
@@ -587,7 +599,7 @@ class SMSparseMatrix
     for (indxType& i : *rowIndexFull ) i--; 
   }
 
-  inline void toOneBase() {
+  void toOneBase() {
     if(!head) return; 
     if(!zero_based) return;
     zero_based=false;
@@ -599,28 +611,28 @@ class SMSparseMatrix
 
   // this is ugly, but I need to code quickly 
   // so I'm doing this to avoid adding hdf5 support here 
-  inline SMVector<T>* getVals() const { return vals; } 
-  inline SMVector<intType>* getRows() const { return myrows; }
-  inline SMVector<intType>* getCols() const { return colms; }
-  inline SMVector<indxType>* getRowIndex() const { return rowIndexFull; }
+  SMVector<T>* getVals() const { return vals; } 
+  SMVector<intType>* getRows() const { return myrows; }
+  SMVector<intType>* getCols() const { return colms; }
+  SMVector<indxType>* getRowIndex() const { return rowIndexFull; }
 
-  inline iterator vals_begin() { assert(vals!=NULL); return vals->begin(); } 
-  inline int_iterator rows_begin() { assert(myrows!=NULL); return myrows->begin(); }
-  inline int_iterator cols_begin() { assert(colms!=NULL); return colms->begin(); }
-  inline indx_iterator rowIndex_begin() { assert(rowIndexFull!=NULL); return rowIndexFull->begin(); }
-  inline const_iterator vals_begin() const { return vals->begin(); } 
-  inline const_int_iterator cols_begin() const { assert(colms!=NULL); return colms->begin(); }
-  inline const_indx_iterator rowIndex_begin() const { assert(rowIndexFull!=NULL); return rowIndexFull->begin(); }
-  inline const_iterator vals_end() const { assert(vals!=NULL); return vals->end(); } 
-  inline const_int_iterator rows_end() const { assert(myrows!=NULL); return myrows->end(); }
-  inline const_int_iterator cols_end() const { assert(colms!=NULL); return colms->end(); }
-  inline const_indx_iterator rowIndex_end() const { assert(rowIndexFull!=NULL); return rowIndexFull->end(); }
-  inline iterator vals_end() { assert(vals!=NULL); return vals->end(); } 
-  inline int_iterator rows_end() { assert(myrows!=NULL); return myrows->end(); }
-  inline int_iterator cols_end() { assert(colms!=NULL); return colms->end(); }
-  inline indx_iterator rowIndex_end() { assert(rowIndexFull!=NULL); return rowIndexFull->end(); }
+  iterator vals_begin() { assert(vals!=NULL); return vals->begin(); } 
+  int_iterator rows_begin() { assert(myrows!=NULL); return myrows->begin(); }
+  int_iterator cols_begin() { assert(colms!=NULL); return colms->begin(); }
+  indx_iterator rowIndex_begin() { assert(rowIndexFull!=NULL); return rowIndexFull->begin(); }
+  const_iterator vals_begin() const { return vals->begin(); } 
+  const_int_iterator cols_begin() const { assert(colms!=NULL); return colms->begin(); }
+  const_indx_iterator rowIndex_begin() const { assert(rowIndexFull!=NULL); return rowIndexFull->begin(); }
+  const_iterator vals_end() const { assert(vals!=NULL); return vals->end(); } 
+  const_int_iterator rows_end() const { assert(myrows!=NULL); return myrows->end(); }
+  const_int_iterator cols_end() const { assert(colms!=NULL); return colms->end(); }
+  const_indx_iterator rowIndex_end() const { assert(rowIndexFull!=NULL); return rowIndexFull->end(); }
+  iterator vals_end() { assert(vals!=NULL); return vals->end(); } 
+  int_iterator rows_end() { assert(myrows!=NULL); return myrows->end(); }
+  int_iterator cols_end() { assert(colms!=NULL); return colms->end(); }
+  indx_iterator rowIndex_end() { assert(rowIndexFull!=NULL); return rowIndexFull->end(); }
 
-  inline bool isAllocated() {
+  bool isAllocated() {
     return (SMallocated)&&(vals!=NULL)&&(segment!=NULL);
   }
 
@@ -650,6 +662,7 @@ class SMSparseMatrix
   bool SMallocated;
   bool zero_based;
   unsigned long memory=0;
+  intType row_offset, col_offset;
 
   //_mySort_snD_ my_sort;
 

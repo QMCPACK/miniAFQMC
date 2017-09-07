@@ -252,10 +252,6 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
     MPI_Bcast(reinterpret_cast<char*>(Propg1.data()),sizeof(MatType)*Propg1.num_elements(),
         MPI_CHAR,0,MPI_COMM_WORLD);
 
-    // reserve space
-    Spvn.setup("miniAFQMC_Spvn",TG.getNodeCommLocal());
-    Spvn.setDims(nrows,nvecs);
-
     simple_matrix_partition<task_group,IndexType,RealType> split(nrows,nvecs,1e-8);
     std::vector<IndexType> counts;
     // count dimensions of sparse matrix
@@ -282,6 +278,9 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
     int sz = std::accumulate(counts.begin()+cvec0,counts.begin()+cvecN,0);
     MPI_Bcast(&sz, 1, MPI_INT, 0, TG.getNodeCommLocal());
 
+    Spvn.setup("miniAFQMC_Spvn",TG.getNodeCommLocal());
+    Spvn.setDims(nrows,cvecN-cvec0);
+    Spvn.setOffset(0,cvec0);
     Spvn.reserve(sz);
 
     // read Spvn
@@ -289,6 +288,7 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
     read_hdf5_SpMat(Spvn,split,dump,std::string("Spvn"),nblk,TG,true,nread);
     Timers[read_Spvn]->stop();
 
+    // scale by sqrt(dt)
     Spvn *= std::sqrt(dt);
 
     Timers[rotate_Spvn]->start();
@@ -372,10 +372,6 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
     MPI_Bcast(reinterpret_cast<char*>(Propg1.data()),sizeof(MatType)*Propg1.num_elements(),
         MPI_CHAR,0,MPI_COMM_WORLD);
 
-    // Read Spvn
-    Spvn.setup("miniAFQMC_Spvn",TG.getNodeCommLocal());
-    Spvn.setDims(nrows,nvecs);
-
     std::vector<IndexType> counts;
     simple_matrix_partition<task_group,IndexType,RealType> split(nrows,nvecs,1e-8);
     // count dimensions of sparse matrix
@@ -391,8 +387,12 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
       sz = std::accumulate(counts.begin()+cvec0,counts.begin()+cvecN,0);
     MPI_Bcast(&sz, 1, MPI_INT, 0, TG.getNodeCommLocal());
 
+    Spvn.setup("miniAFQMC_Spvn",TG.getNodeCommLocal());
+    Spvn.setDims(nrows,cvecN-cvec0);
+    Spvn.setOffset(0,cvec0);
     Spvn.reserve(sz);
 
+    // Read Spvn
     if(reader) {
       split.partition(TG,false,counts,sets);
 

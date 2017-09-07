@@ -2,6 +2,7 @@
 #ifndef QMCPLUSPLUS_AFQMC_SPARSEMATRIX_H
 #define QMCPLUSPLUS_AFQMC_SPARSEMATRIX_H
 
+#include<utility>
 #include<iostream>
 #include<vector>
 #include<tuple>
@@ -38,11 +39,11 @@ class SparseMatrix
 
   const static int dimensionality = 2;
 
-  SparseMatrix<T>():vals(),colms(),myrows(),rowIndex(),nr(0),nc(0),compressed(false),zero_based(true)
+  SparseMatrix<T>():vals(),colms(),myrows(),rowIndex(),nr(0),nc(0),compressed(false),zero_based(true),row_offset(0),col_offset(0)
   {
   }
 
-  SparseMatrix<T>(int n,int m):vals(),colms(),myrows(),rowIndex(),nr(n),nc(m),compressed(false),zero_based(true)
+  SparseMatrix<T>(int n,int m):vals(),colms(),myrows(),rowIndex(),nr(n),nc(m),compressed(false),zero_based(true),row_offset(0),col_offset(0)
   {
   }
 
@@ -52,7 +53,7 @@ class SparseMatrix
 
   SparseMatrix<T>(const SparseMatrix<T> &rhs) = delete;
 
-  inline void reserve(unsigned long n)
+  void reserve(unsigned long n)
   {
     vals.reserve(n);
     myrows.reserve(n);
@@ -60,7 +61,7 @@ class SparseMatrix
     rowIndex.resize(nr+1);
   }
 
-  inline void resize(unsigned long nnz)
+  void resize(unsigned long nnz)
   {
     vals.resize(nnz);
     myrows.resize(nnz);
@@ -68,7 +69,7 @@ class SparseMatrix
     rowIndex.resize(nr+1);
   }
 
-  inline void clear() { 
+  void clear() { 
     vals.clear();
     colms.clear();
     myrows.clear();
@@ -78,9 +79,20 @@ class SparseMatrix
   }
 
   // does nothing, needed for compatibility with shared memory version
-  inline void setup(bool hd=true, std::string ii=std::string(""), MPI_Comm comm_=MPI_COMM_SELF) {}
+  void setup(bool hd=true, std::string ii=std::string(""), MPI_Comm comm_=MPI_COMM_SELF) {}
 
-  inline void setDims(int n, int m)
+  void setOffset(intType roff, intType coff)
+  {
+    row_offset = roff;
+    col_offset = coff;
+  }
+
+  std::pair<intType,intType> getOffset()
+  {
+    return {roff,coff};
+  }
+
+  void setDims(int n, int m)
   {
     nr=n;
     nc=m;
@@ -88,88 +100,88 @@ class SparseMatrix
     zero_based=true;
   }
 
-  inline void setCompressed() 
+  void setCompressed() 
   {
     compressed=true;
   }
 
-  inline bool isCompressed() const
+  bool isCompressed() const
   {
     return compressed;
   }
-  inline unsigned long size() const
+  unsigned long size() const
   {
     return vals.size();
   }
-  inline int rows() const
+  int rows() const
   {
     return nr;
   }
-  inline int cols() const
+  int cols() const
   {
     return nc;
   }
 
-  inline const_pointer values(long n=0) const 
+  const_pointer values(long n=0) const 
   {
     return vals.data()+n;
   }
 
-  inline pointer values(long n=0) 
+  pointer values(long n=0) 
   {
     return vals.data()+n;
   }
 
-  inline const_intPtr column_data(long n=0) const 
+  const_intPtr column_data(long n=0) const 
   {
     return colms.data()+n;
   }
-  inline intPtr column_data(long n=0) 
+  intPtr column_data(long n=0) 
   {
     return colms.data()+n;
   }
 
-  inline const_intPtr row_data(long n=0) const 
+  const_intPtr row_data(long n=0) const 
   {
     return myrows.data()+n;
   }
-  inline intPtr row_data(long n=0) 
+  intPtr row_data(long n=0) 
   {
     return myrows.data()+n;
   }
 
-  inline const_intPtr row_index(long n=0) const 
+  const_intPtr row_index(long n=0) const 
   {
     return rowIndex.data()+n;
   }
-  inline intPtr row_index(long n=0) 
-  {
-    return rowIndex.data()+n;
-  }
-
-  inline const_intPtr index_begin(long n=0) const
-  {
-    return rowIndex.data()+n;
-  }
-  inline intPtr index_begin(long n=0)
+  intPtr row_index(long n=0) 
   {
     return rowIndex.data()+n;
   }
 
-  inline const_intPtr index_end(long n=0) const
+  const_intPtr index_begin(long n=0) const
+  {
+    return rowIndex.data()+n;
+  }
+  intPtr index_begin(long n=0)
+  {
+    return rowIndex.data()+n;
+  }
+
+  const_intPtr index_end(long n=0) const
   {
     return rowIndex.data()+n+1;
   }
-  inline intPtr index_end(long n=0)
+  intPtr index_end(long n=0)
   {
     return rowIndex.data()+n+1;
   }
 
-  inline This_t& operator=(const SparseMatrix<T> &rhs) = delete; 
+  This_t& operator=(const SparseMatrix<T> &rhs) = delete; 
 
   // should be using binary search, but this should not be used in performance critical 
   // areas in any case
-  inline intType find_element(int i, int j) {
+  intType find_element(int i, int j) {
     for (int k = rowIndex[i]; k < rowIndex[i+1]; k++) {
       if (colms[k] == j) return k;
     }
@@ -179,7 +191,7 @@ class SparseMatrix
   // DANGER: This returns a reference, which could allow changes to the stored value.
   // If a zero element is changed, it will change zero everywhere in the matrix.
   // For now this method is only used for testing so it should not be a problem.
-  inline Type_t& operator()(int i, int j)
+  Type_t& operator()(int i, int j)
   {
 #ifdef ASSERT_SPARSEMATRIX
     assert(i>=0 && i<nr && j>=0 && j<nc && compressed); 
@@ -189,7 +201,7 @@ class SparseMatrix
     return vals[idx];
   }
 
-  inline Type_t operator()( int i, int j) const
+  Type_t operator()( int i, int j) const
   {
 #ifdef ASSERT_SPARSEMATRIX
     assert(i>=0 && i<nr && j>=0 && j<nc && compressed); 
@@ -199,32 +211,32 @@ class SparseMatrix
     return vals[idx];
   }
 
-  inline void add(const int i, const int j, const T& v, bool dummy=false) 
+  void add(const int i, const int j, const T& v, bool dummy=false) 
   {
 #ifdef ASSERT_SPARSEMATRIX
-    assert(i>=0 && i<nr && j>=0 && j<nc);
+    assert(i-row_offset>=0 && i-row_offset<nr && j-col_offset>=0 && j-col_offset<nc);
 #endif
     compressed=false;
-    myrows.push_back(i);
-    colms.push_back(j);
+    myrows.push_back(i-row_offset);
+    colms.push_back(j-col_offset);
     vals.push_back(v);
   }
 
-  inline void add(const std::vector<std::tuple<intType,intType,T>>& v, bool dummy=false)
+  void add(const std::vector<std::tuple<intType,intType,T>>& v, bool dummy=false)
   {
     compressed=false;
     for(auto&& a: v) {
 #ifdef ASSERT_SPARSEMATRIX
-      assert(std::get<0>(a)>=0 && std::get<0>(a)<nr && std::get<1>(a)>=0 && std::get<1>(a)<nc);
+      assert(std::get<0>(a)-row_offset>=0 && std::get<0>(a)-row_offset<nr && std::get<1>(a)-col_offset>=0 && std::get<1>(a)-col_offset<nc);
 #endif
-      myrows.push_back(std::get<0>(a));
-      colms.push_back(std::get<1>(a));
+      myrows.push_back(std::get<0>(a)-row_offset);
+      colms.push_back(std::get<1>(a)-col_offset);
       vals.push_back(std::get<2>(a));
     }
     assert(vals->size()<static_cast<unsigned long>(std::numeric_limits<intType>::max())); // right now limited to INT_MAX due to indexing problem.
   }
 
-  inline void compress()
+  void compress()
   {
     // define comparison operator for tuple_iterator
     auto comp = [](std::tuple<intType, intType, value_type> const& a, std::tuple<intType, intType, value_type> const& b){return std::get<0>(a) < std::get<0>(b) || (!(std::get<0>(b) < std::get<0>(a)) && std::get<1>(a) < std::get<1>(b));};
@@ -250,7 +262,7 @@ class SparseMatrix
 
   }
 
-  inline bool remove_repeated_and_compress()
+  bool remove_repeated_and_compress()
   {
 #ifdef ASSERT_SPARSEMATRIX
     assert(myrows.size() == colms.size() && myrows.size() == vals.size());
@@ -321,7 +333,7 @@ class SparseMatrix
     return true;
   }
 
-  inline void transpose() {
+  void transpose() {
     assert(myrows.size() == colms.size() && myrows.size() == vals.size());
     for(std::vector<intType>::iterator itR=myrows.begin(),itC=colms.begin(); itR!=myrows.end(); ++itR,++itC)
       std::swap(*itR,*itC);
@@ -329,35 +341,35 @@ class SparseMatrix
     compress();
   }
 
-  inline SparseMatrix<T>& operator*=(const double rhs ) 
+  SparseMatrix<T>& operator*=(const double rhs ) 
   {
     for(iterator it=vals.begin(); it!=vals.end(); it++)
       (*it) *= rhs;
     return *this; 
   }
 
-  inline SparseMatrix<T>& operator*=(const std::complex<double> rhs ) 
+  SparseMatrix<T>& operator*=(const std::complex<double> rhs ) 
   {
     for(iterator it=vals.begin(); it!=vals.end(); it++)
       (*it) *= rhs;
     return *this; 
   }
 
-  inline SparseMatrix<T>& operator*=(const float rhs )  
+  SparseMatrix<T>& operator*=(const float rhs )  
   {
     for(iterator it=vals.begin(); it!=vals.end(); it++)
       (*it) *= T(rhs);
     return *this;
   }
 
-  inline SparseMatrix<T>& operator*=(const std::complex<float> rhs )  
+  SparseMatrix<T>& operator*=(const std::complex<float> rhs )  
   {
     for(iterator it=vals.begin(); it!=vals.end(); it++)
       (*it) *= T(rhs);
     return *this;
   }
 
-  inline void toZeroBase() {
+  void toZeroBase() {
     if(zero_based) return;
     zero_based=true;
     for (intType& i : colms ) i--; 
@@ -365,7 +377,7 @@ class SparseMatrix
     for (intType& i : rowIndex ) i--; 
   }
 
-  inline void toOneBase() {
+  void toOneBase() {
     if(!zero_based) return;
     zero_based=false;
     for (intType& i : colms ) i++; 
@@ -382,26 +394,26 @@ class SparseMatrix
 
   // this is ugly, but I need to code quickly 
   // so I'm doing this to avoid adding hdf5 support here 
-  inline std::vector<T>* getVals() { return &vals; } 
-  inline std::vector<intType>* getRows() { return &myrows; }
-  inline std::vector<intType>* getCols() { return &colms; }
-  inline std::vector<intType>* getRowIndex() { return &rowIndex; }
+  std::vector<T>* getVals() { return &vals; } 
+  std::vector<intType>* getRows() { return &myrows; }
+  std::vector<intType>* getCols() { return &colms; }
+  std::vector<intType>* getRowIndex() { return &rowIndex; }
 
-  inline iterator vals_begin() { return vals.begin(); }
-  inline int_iterator rows_begin() { return myrows.begin(); }
-  inline int_iterator cols_begin() { return colms.begin(); }
-  inline int_iterator rowIndex_begin() { return rowIndex.begin(); }
-  inline const_iterator vals_begin() const { return vals.begin(); }
-  inline const_int_iterator cols_begin() const { return colms.begin(); }
-  inline const_int_iterator rowIndex_begin() const { return rowIndex.begin(); }
-  inline const_iterator vals_end() const { return vals.end(); }
-  inline const_int_iterator rows_end() const { return myrows.end(); }
-  inline const_int_iterator cols_end() const { return colms.end(); }
-  inline const_int_iterator rowIndex_end() const { return rowIndex.end(); }
-  inline iterator vals_end() { return vals.end(); }
-  inline int_iterator rows_end() { return myrows.end(); }
-  inline int_iterator cols_end() { return colms.end(); }
-  inline int_iterator rowIndex_end() { return rowIndex.end(); }
+  iterator vals_begin() { return vals.begin(); }
+  int_iterator rows_begin() { return myrows.begin(); }
+  int_iterator cols_begin() { return colms.begin(); }
+  int_iterator rowIndex_begin() { return rowIndex.begin(); }
+  const_iterator vals_begin() const { return vals.begin(); }
+  const_int_iterator cols_begin() const { return colms.begin(); }
+  const_int_iterator rowIndex_begin() const { return rowIndex.begin(); }
+  const_iterator vals_end() const { return vals.end(); }
+  const_int_iterator rows_end() const { return myrows.end(); }
+  const_int_iterator cols_end() const { return colms.end(); }
+  const_int_iterator rowIndex_end() const { return rowIndex.end(); }
+  iterator vals_end() { return vals.end(); }
+  int_iterator rows_end() { return myrows.end(); }
+  int_iterator cols_end() { return colms.end(); }
+  int_iterator rowIndex_end() { return rowIndex.end(); }
 
   void setRowsFromRowIndex()
   {
@@ -417,6 +429,7 @@ class SparseMatrix
 
   bool compressed;
   int nr,nc;
+  intType row_offset, col_offset;
   std::vector<T> vals;
   std::vector<intType> colms,myrows,rowIndex;
   bool zero_based;

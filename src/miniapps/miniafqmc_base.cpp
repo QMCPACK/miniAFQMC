@@ -312,12 +312,14 @@ int main(int argc, char **argv)
       Timers[Timer_extra]->stop();
 
       if(step_tot > 0 && step_tot%northo == 0) {
+std::cout<<"overlap before: " <<W_data[0][2] <<" " <<W_data[0][3] <<" " <<W_data[1][2] <<std::endl;
         Timers[Timer_ortho]->start();
         AFQMCSys.orthogonalize(W);
         Timers[Timer_ortho]->stop();
         Timers[Timer_ovlp]->start();
         AFQMCSys.calculate_overlaps(W,W_data);
         Timers[Timer_ovlp]->stop();
+std::cout<<"overlap after: " <<W_data[0][2] <<" " <<W_data[0][3] <<" " <<W_data[1][2] <<std::endl;
       }
        
     }
