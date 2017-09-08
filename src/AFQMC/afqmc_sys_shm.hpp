@@ -36,12 +36,10 @@ struct afqmc_sys: public AFQMCInfo
     afqmc_sys(TaskGroup& tg_, int nw_):TG(tg_) 
     {
       nwalk = nw_;
-      nnodes = TG.getTotalNodes();
-      nodeid = TG.getNodeID();
-      ncores = TG.getTotalCores();
-      coreid = TG.getCoreID();
-      core_rank = TG.getCoreRank();
-      ncores_per_TG = TG.getNCoresPerTG();  
+      node_number = TG.getLocalNodeNumber();  
+      core_number = TG.getCoreRank();
+      ncores = TG.getNCoresPerTG();  
+      nnodes = TG.getNNodesPerTG();  
 
       one = ComplexType(1.,0.);
       zero = ComplexType(0.,0.);
@@ -50,12 +48,10 @@ struct afqmc_sys: public AFQMCInfo
     afqmc_sys(TaskGroup& tg_, int nw_, int nmo_, int na):TG(tg_)
     {
       nwalk = nw_;
-      nnodes = TG.getTotalNodes();
-      nodeid = TG.getNodeID();
-      ncores = TG.getTotalCores();
-      coreid = TG.getCoreID();
-      core_rank = TG.getCoreRank();
-      ncores_per_TG = TG.getNCoresPerTG();
+      node_number = TG.getLocalNodeNumber();  
+      core_number = TG.getCoreRank();
+      ncores = TG.getNCoresPerTG();  
+      nnodes = TG.getNNodesPerTG();  
 
       one = ComplexType(1.,0.);
       zero = ComplexType(0.,0.);
@@ -122,14 +118,14 @@ struct afqmc_sys: public AFQMCInfo
       boost::multi_array_ref<ComplexType,4> G_4D(G.data(), extents[2][N_][NMO][nwalk]); 
       for(int n=0, cnt=0; n<nwalk; n++) {
 
-        if(cnt%ncores_per_TG == core_rank) {
+        if(cnt%ncores == core_number) {
           W_data[n][2] = base::MixedDensityMatrix<ComplexType>(trialwfn_alpha,W[n][0],
                        DM,TMat_NN,TMat_NM,IWORK,WORK,compact);
           G_4D[ indices[0][range_t(0,N_)][range_t(0,NMO)][n] ] = DM;
         }
         cnt++;
 
-        if(cnt%ncores_per_TG == core_rank) {
+        if(cnt%ncores == core_number) {
           W_data[n][3] = base::MixedDensityMatrix<ComplexType>(trialwfn_beta,W[n][1],
                        DM,TMat_NN,TMat_NM,IWORK,WORK,compact);
           G_4D[ indices[1][range_t(0,N_)][range_t(0,NMO)][n] ] = DM;
@@ -153,7 +149,7 @@ struct afqmc_sys: public AFQMCInfo
         Gcloc.resize(extents[V.rows()][G.shape()[1]]);  
       if(locWlkVec.size() != nwalk)
         locWlkVec.resize(extents[nwalk]);
-      if(core_rank==0) {
+      if(core_number==0) {
         // zero 
         for(int n=0, ne=W_data.shape()[0]; n<ne; n++) W_data[n][0] = 0.;
       }
@@ -230,7 +226,7 @@ struct afqmc_sys: public AFQMCInfo
       assert(W_data.shape()[0] >= W.shape()[0]);
       assert(W_data.shape()[1] >= 4);
       for(int n=0, nw=W.shape()[0]; n<nw; n++) {
-        if(n%ncores_per_TG != core_rank) continue;
+        if(n%ncores != core_number) continue;
         W_data[n][2] = base::Overlap<ComplexType>(trialwfn_alpha,W[n][0],TMat_NN,IWORK);
         W_data[n][3] = base::Overlap<ComplexType>(trialwfn_beta,W[n][1],TMat_NN,IWORK);
       }
@@ -245,13 +241,14 @@ struct afqmc_sys: public AFQMCInfo
     {
 
       assert( nwalk == W.shape()[0]);  
+      assert( nwalk == vHS.shape()[1] ); 
       typedef typename std::decay<MatB>::type::element Type;
-      boost::multi_array_ref<Type,3> V(vHS.data(), extents[NMO][NMO][vHS.shape()[1]]);
       boost::multi_array_ref<Type,2> T1(TMat_NM.data(), extents[NMO][NAEA]);
       boost::multi_array_ref<Type,2> T2(TMat_MM2.data(), extents[NMO][NAEA]);
+      boost::multi_array_ref<Type,3> V(vHS.data(), extents[NMO][NMO][vHS.shape()[1]]);
       for(int nw=0, cnt=0; nw<nwalk; nw++) {
 
-        if(cnt%ncores_per_TG == core_rank) {
+        if(cnt%ncores == core_number) {
           ma::product(Propg,W[nw][0],TMat_MN);
           // need deep-copy, since stride()[1] == nw otherwise
           TMat_MM = V[ indices[range_t(0,NMO)][range_t(0,NMO)][nw] ];
@@ -259,9 +256,45 @@ struct afqmc_sys: public AFQMCInfo
           ma::product(Propg,TMat_MN,W[nw][0]);
         }
         cnt++;
-        if(cnt%ncores_per_TG == core_rank) {
+        if(cnt%ncores == core_number) {
           ma::product(Propg,W[nw][1],TMat_MN);
           TMat_MM = V[ indices[range_t(0,NMO)][range_t(0,NMO)][nw] ];
+          base::apply_expM(TMat_MM,TMat_MN,T1,T2,6);
+          ma::product(Propg,TMat_MN,W[nw][1]);
+        }
+        cnt++;
+
+      }
+      TG.local_barrier();  
+
+    }    
+
+    template<class WSet, 
+             class MatA,
+             class MatB
+            >
+    void propagate_from_global(WSet& W, MatA& Propg, MatB& vHS)
+    {
+
+      assert( nwalk == W.shape()[0]);  
+      assert( nnodes*nwalk == vHS.shape()[1] ); 
+      typedef typename std::decay<MatB>::type::element Type;
+      boost::multi_array_ref<Type,2> T1(TMat_NM.data(), extents[NMO][NAEA]);
+      boost::multi_array_ref<Type,2> T2(TMat_MM2.data(), extents[NMO][NAEA]);
+      boost::multi_array_ref<Type,3> V(vHS.data(), extents[NMO][NMO][vHS.shape()[1]]);
+      for(int nw=0, cnt=0; nw<nwalk; nw++) {
+
+        if(cnt%ncores == core_number) {
+          ma::product(Propg,W[nw][0],TMat_MN);
+          // need deep-copy, since stride()[1] == nw otherwise
+          TMat_MM = V[ indices[range_t(0,NMO)][range_t(0,NMO)][nw+node_number*nwalk] ];
+          base::apply_expM(TMat_MM,TMat_MN,T1,T2,6);
+          ma::product(Propg,TMat_MN,W[nw][0]);
+        }
+        cnt++;
+        if(cnt%ncores == core_number) {
+          ma::product(Propg,W[nw][1],TMat_MN);
+          TMat_MM = V[ indices[range_t(0,NMO)][range_t(0,NMO)][nw+node_number*nwalk] ];
           base::apply_expM(TMat_MM,TMat_MN,T1,T2,6);
           ma::product(Propg,TMat_MN,W[nw][1]);
         }
@@ -279,7 +312,7 @@ struct afqmc_sys: public AFQMCInfo
 
 /*
           // QR on the transpose
-        if(cnt%ncores_per_TG == core_rank) {  
+        if(cnt%ncores == core_number) {  
           for(int r=0; r<NMO; r++)
             for(int c=0; c<NAEA; c++)
               TWORK2[c][r] = W[i][0][r][c];   
@@ -291,7 +324,7 @@ struct afqmc_sys: public AFQMCInfo
         }
         cnt++;
 
-        if(cnt%ncores_per_TG == core_rank) {
+        if(cnt%ncores == core_number) {
           for(int r=0; r<NMO; r++)
             for(int c=0; c<NAEA; c++)
               TWORK2[c][r] = W[i][1][r][c];
@@ -305,12 +338,12 @@ struct afqmc_sys: public AFQMCInfo
 */
 
         // LQ on the direct matrix
-        if(cnt%ncores_per_TG == core_rank) {
+        if(cnt%ncores == core_number) {
           ma::gelqf(W[i][0],TAU,WORK);
           ma::glq(W[i][0],TAU,WORK);
         }
         cnt++;  
-        if(cnt%ncores_per_TG == core_rank) {
+        if(cnt%ncores == core_number) {
           ma::gelqf(W[i][1],TAU,WORK);
           ma::glq(W[i][1],TAU,WORK);
         }
@@ -350,11 +383,9 @@ struct afqmc_sys: public AFQMCInfo
     
     int nwalk;
     int nnodes;
-    int nodeid;
+    int node_number;
+    int core_number;
     int ncores;
-    int coreid;
-    int core_rank;
-    int ncores_per_TG;
 
     ComplexType one;
     ComplexType zero;
