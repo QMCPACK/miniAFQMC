@@ -1,13 +1,19 @@
+//////////////////////////////////////////////////////////////////////////
+// This file is distributed under the University of Illinois/NCSA Open Source
+// License.  See LICENSE file in top directory for details.
+//
+// Copyright (c) 2016 Jeongnim Kim and QMCPACK developers.
+//
+// File developed by:
+// Miguel A. Morales, moralessilva2@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+// Alfredo Correa, correaa@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+//
+// File created by:
+// Miguel A. Morales, moralessilva2@llnl.gov 
+//    Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
-//// This file is distributed under the University of Illinois/NCSA Open Source
-//// License.  See LICENSE file in top directory for details.
-////
-//// Copyright (c) 2016 Jeongnim Kim and QMCPACK developers.
-////
-//// File developed by:
-////
-//// File created by:
-//////////////////////////////////////////////////////////////////////////////////
 
 #ifndef  AFQMC_ENERGY_HPP 
 #define  AFQMC_ENERGY_HPP 
@@ -16,9 +22,6 @@
 #include "Numerics/ma_operations.hpp"
 
 #include <mpi.h>
-
-// temporary
-#include "Numerics/SparseMatrixOperations.hpp"
 
 namespace qmcplusplus
 {
@@ -71,10 +74,7 @@ inline void calculate_energy(Mat& W_data, const Mat& Gc, Mat& Gcloc, const Mat& 
   for(int n=0; n<nwalk; n++) W_data[n][0] = zero;
 
   // Vakbl * Gc(bl,nw) = Gcloc(ak,nw)
-  SparseMatrixOperators::product_SpMatM( Vakbl.rows(), Gc.shape()[1], Vakbl.cols(), 
-          one, Vakbl.values(), Vakbl.column_data(), Vakbl.index_begin(), Vakbl.index_end(), 
-          Gc.data(), Gc.strides()[0], 
-          zero, Gcloc.data(), Gcloc.strides()[0] );
+  ma::product(Vakbl, Gc, Gcloc);
 
   // E2(nw) = 0.5*Gc(:,nw)*Gcloc(:,nw) 
     // how do I do this through BLAS?
@@ -137,10 +137,7 @@ inline void calculate_energy(const MatA& Gc, MatB& Gcloc, const MatC& haj, const
   for(int n=0; n<nwalk; n++) locV[n] = zero;
 
   // Vakbl * Gc(bl,nw) = Gcloc(ak,nw)
-  SparseMatrixOperators::product_SpMatM( Vakbl.rows(), Gc.shape()[1], Vakbl.cols(), 
-          one, Vakbl.values(), Vakbl.column_data(), Vakbl.index_begin(), Vakbl.index_end(), 
-          Gc.data(), Gc.strides()[0], 
-          zero, Gcloc.data(), Gcloc.strides()[0] );
+  ma::prouct(Vakbl, Gc, Gcloc);
 
   // E2(nw) = 0.5*Gc(:,nw)*Gcloc(:,nw) 
     // how do I do this through BLAS?

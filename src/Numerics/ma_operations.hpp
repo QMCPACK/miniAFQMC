@@ -1,15 +1,29 @@
+//////////////////////////////////////////////////////////////////////
+// This file is distributed under the University of Illinois/NCSA Open Source
+// License.  See LICENSE file in top directory for details.
+//
+// Copyright (c) 2016 Jeongnim Kim and QMCPACK developers.
+//
+// File developed by:
+// Alfredo Correa, correaa@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+// Miguel A. Morales, moralessilva2@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+//
+// File created by:
+// Alfredo Correa, correaa@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+////////////////////////////////////////////////////////////////////////////////
+
 #if COMPILATION_INSTRUCTIONS
 (echo "#include<"$0">" > $0x.cpp) && clang++ -O3 -std=c++11 -Wfatal-errors -I.. -D_TEST_MA_OPERATIONS -DADD_ -Drestrict=__restrict__ $0x.cpp -lblas -llapack -o $0x.x && time $0x.x $@ && rm -f $0x.cpp; exit
 #endif
 #ifndef MA_OPERATIONS_HPP
 #define MA_OPERATIONS_HPP
 
-// File created and developed by:
-// Alfredo Correa, correaa@llnl.gov
-//    Lawrence Livermore National Laboratory
-
 #include "ma_blas.hpp"
 #include "ma_lapack.hpp"
+#include "sparse.hpp"
 
 #include<type_traits> // enable_if
 #include<vector>
@@ -92,9 +106,46 @@ MultiArray2DC product(T alpha, MultiArray2DA const& A, MultiArray2DB const& B, T
 	(alpha, arg(B), arg(A), beta, std::forward<MultiArray2DC>(C));
 }
 
+// sparse matrix-MultiArray interface 
+template<class T, class SparseMatrixA, class MultiArray2DB, class MultiArray2DC,
+        typename = typename std::enable_if<
+                SparseMatrixA::dimensionality == -2 and
+                MultiArray2DB::dimensionality == 2 and
+                std::decay<MultiArray2DC>::type::dimensionality == 2
+        >::type,  
+//        typename = typename std::enable_if<SparseMatrixA::sparse == true>::type,
+        typename = void, // TODO change to use dispatch 
+        typename = void // TODO change to use dispatch 
+>
+MultiArray2DC product(T alpha, SparseMatrixA const& A, MultiArray2DB const& B, T beta, MultiArray2DC&& C){
+        assert(op_tag<SparseMatrixA>::value == 'N' || op_tag<SparseMatrixA>::value == 'T'); 
+        assert(op_tag<MultiArray2DB>::value == 'N');
+        assert( arg(B).strides()[1] == 1 );
+        assert( std::forward<MultiArray2DC>(C).strides()[1] == 1 );
+        if(op_tag<SparseMatrixA>::value == 'N') {
+            assert(arg(A).rows() == std::forward<MultiArray2DC>(C).shape()[0]);
+            assert(arg(A).cols() == arg(B).shape()[0]);
+            assert(arg(B).shape()[1] == std::forward<MultiArray2DC>(C).shape()[1]);
+        } else {
+            assert(arg(A).rows() == arg(B).shape()[0]);
+            assert(arg(A).cols() == std::forward<MultiArray2DC>(C).shape()[0]);
+            assert(arg(B).shape()[1] == std::forward<MultiArray2DC>(C).shape()[1]);
+        }        
+
+        SPBLAS::csrmm( op_tag<SparseMatrixA>::value, 
+            arg(A).rows(), arg(B).shape()[1], arg(A).cols(), 
+            alpha, "GxxCxx", 
+            arg(A).val() , arg(A).indx(),  arg(A).pntrb(),  arg(A).pntre(), 
+            arg(B).origin(), arg(B).strides()[0], 
+            beta, 
+            std::forward<MultiArray2DC>(C).origin(), std::forward<MultiArray2DC>(C).strides()[0]);
+
+        return std::forward<MultiArray2DC>(C);
+}
+
 template<class MultiArray2DA, class MultiArray2DB, class MultiArray2DC,
         typename = typename std::enable_if<
-                MultiArray2DA::dimensionality == 2 and
+                (MultiArray2DA::dimensionality == 2 or MultiArray2DA::dimensionality == -2) and
                 MultiArray2DB::dimensionality == 2 and
                 std::decay<MultiArray2DC>::type::dimensionality == 2
         >::type

@@ -1,3 +1,17 @@
+//////////////////////////////////////////////////////////////////////
+// This file is distributed under the University of Illinois/NCSA Open Source
+// License.  See LICENSE file in top directory for details.
+//
+// Copyright (c) 2016 Jeongnim Kim and QMCPACK developers.
+//
+// File developed by:
+// Miguel A. Morales, moralessilva2@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+//
+// File created by:
+// Miguel A. Morales, moralessilva2@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+////////////////////////////////////////////////////////////////////////////////
 
 #ifndef QMCPLUSPLUS_AFQMC_SPARSEMATRIX_REF_HPP
 #define QMCPLUSPLUS_AFQMC_SPARSEMATRIX_REF_HPP
@@ -34,6 +48,9 @@ class SparseMatrix_ref
   typedef int              intType;
   typedef int*             intPtr;
   typedef SparseMatrix_ref<T>  This_t;
+
+  const static int dimensionality = -2;
+  const static bool sparse = true;
 
   SparseMatrix_ref<T>():gnr(0),gnc(0),vals(NULL),colms(NULL)
   {
@@ -132,6 +149,29 @@ class SparseMatrix_ref
   {
     return indx_e.data(); 
   }
+
+  // ******************************************
+  // access functions according to MKL notation
+  const_pointer val() const
+  {
+    return vals; 
+  }
+
+  const_intPtr indx() const
+  {
+    return colms;
+  }
+
+  const_intPtr pntrb() const
+  {
+    return indx_b.data(); 
+  }
+
+  const_intPtr pntre() const
+  {
+    return indx_e.data(); 
+  }
+  // ******************************************
 
 
   // use binary search PLEASE!!! Not really used anyway

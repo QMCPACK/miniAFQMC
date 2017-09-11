@@ -1,3 +1,17 @@
+//////////////////////////////////////////////////////////////////////
+// This file is distributed under the University of Illinois/NCSA Open Source
+// License.  See LICENSE file in top directory for details.
+//
+// Copyright (c) 2016 Jeongnim Kim and QMCPACK developers.
+//
+// File developed by:
+// Miguel A. Morales, moralessilva2@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+//
+// File created by:
+// Miguel A. Morales, moralessilva2@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+////////////////////////////////////////////////////////////////////////////////
 
 #ifndef QMCPLUSPLUS_AFQMC_SMSPARSEMATRIX_H
 #define QMCPLUSPLUS_AFQMC_SMSPARSEMATRIX_H
@@ -55,6 +69,10 @@ class SMSparseMatrix
   typedef typename SMVector<indxType>::iterator indx_iterator;
   typedef typename SMVector<indxType>::const_iterator const_indx_iterator;
   typedef SMSparseMatrix<T>  This_t;
+
+  const static int dimensionality = -2;
+  const static bool sparse = true;
+  const static bool SHM = true;
 
   SMSparseMatrix<T>():nr(0),nc(0),compressed(false),zero_based(true),head(false),ID(""),SMallocated(false),vals(NULL),rowIndexFull(NULL),rowIndex(NULL),myrows(NULL),colms(NULL),mutex(NULL),segment(NULL),row_offset(0),col_offset(0) 
   {

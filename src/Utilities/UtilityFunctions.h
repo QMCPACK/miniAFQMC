@@ -9,6 +9,8 @@
 //    University of Illinois at Urbana-Champaign
 // Jeremy McMinnis, jmcminis@gmail.com,
 //    University of Illinois at Urbana-Champaign
+// Miguel A. Morales, moralessilva2@llnl.gov 
+//    Lawrence Livermore National Laboratory 
 //
 // File created by:
 // Jeongnim Kim, jeongnim.kim@gmail.com,

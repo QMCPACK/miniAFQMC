@@ -1,22 +1,25 @@
-/////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
 // This file is distributed under the University of Illinois/NCSA Open Source
 // License.  See LICENSE file in top directory for details.
 //
 // Copyright (c) 2016 Jeongnim Kim and QMCPACK developers.
 //
 // File developed by:
+// Miguel A. Morales, moralessilva2@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+// Alfredo Correa, correaa@llnl.gov 
+//    Lawrence Livermore National Laboratory 
 //
 // File created by:
+// Miguel A. Morales, moralessilva2@llnl.gov 
+//    Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
+
 
 #ifndef  AFQMC_VHS_HPP 
 #define  AFQMC_VHS_HPP 
 
 #include "Numerics/ma_operations.hpp"
-//#include "Numerics/ma_sparse_operations.hpp"
-
-//temporary
-#include "Numerics/SparseMatrixOperations.hpp"
 
 namespace qmcplusplus
 {
@@ -43,11 +46,7 @@ inline void get_vHS(const SpMat& Spvn, const Mat& X, Mat& v)
   typedef typename std::decay<Mat>::type::element ComplexType;
 
   // Spvn*X 
-  //ma::product(Spvn,X,v);  
-  SparseMatrixOperators::product_SpMatM( Spvn.rows(), X.shape()[1], Spvn.cols(),
-         ComplexType(1.,0.), Spvn.values(), Spvn.column_data(), Spvn.index_begin(), Spvn.index_end(),
-         X.data(), X.strides()[0],
-         ComplexType(0.,0.), v.data(), v.strides()[0] );
+  ma::product(Spvn,X,v);  
 }
 
 /*
@@ -102,15 +101,13 @@ inline void get_vHS(const SpMat& Spvn, const MatA& X, MatB& v)
   assert( Spvn.cols() == X.shape()[0] );
   assert( Spvn.global_row() == v.shape()[0] );
   assert( X.shape()[1] == v.shape()[1] );
+  assert( v.shape()[1] == v.strides()[0] );
 
   typedef typename std::decay<MatA>::type::element ComplexType;
 
   // Spvn*X 
-  //ma::product(Spvn,X,v);  
-  SparseMatrixOperators::product_SpMatM( Spvn.rows(), X.shape()[1], Spvn.cols(),
-         ComplexType(1.,0.), Spvn.values(), Spvn.column_data(), Spvn.index_begin(), Spvn.index_end(),
-         X.data(), X.strides()[0],
-         ComplexType(0.,0.), v.data() + v.strides()[0]*Spvn.global_r0() , v.strides()[0] );
+  boost::multi_array_ref<ComplexType,2> v_(v.data()+Spvn.global_r0()*v.strides()[0], extents[Spvn.rows()][v.shape()()[1]]);
+  ma::product(Spvn,X,v_);  
 }
 
 }

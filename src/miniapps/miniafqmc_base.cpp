@@ -1,12 +1,18 @@
-////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////
 // This file is distributed under the University of Illinois/NCSA Open Source
 // License.  See LICENSE file in top directory for details.
 //
 // Copyright (c) 2016 Jeongnim Kim and QMCPACK developers.
 //
 // File developed by:
+// Miguel A. Morales, moralessilva2@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+// Alfredo Correa, correaa@llnl.gov 
+//    Lawrence Livermore National Laboratory 
 //
 // File created by:
+// Miguel A. Morales, moralessilva2@llnl.gov 
+//    Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
 // -*- C++ -*-
 // clang-format off
@@ -36,9 +42,6 @@
 #include "AFQMC/energy.hpp"
 #include "AFQMC/vHS.hpp"
 #include "AFQMC/vbias.hpp"
-
-// temporary
-#include "Numerics/SparseMatrixOperations.hpp"
 
 using namespace std;
 using namespace qmcplusplus;
@@ -312,14 +315,12 @@ int main(int argc, char **argv)
       Timers[Timer_extra]->stop();
 
       if(step_tot > 0 && step_tot%northo == 0) {
-std::cout<<"overlap before: " <<W_data[0][2] <<" " <<W_data[0][3] <<" " <<W_data[1][2] <<std::endl;
         Timers[Timer_ortho]->start();
         AFQMCSys.orthogonalize(W);
         Timers[Timer_ortho]->stop();
         Timers[Timer_ovlp]->start();
         AFQMCSys.calculate_overlaps(W,W_data);
         Timers[Timer_ovlp]->stop();
-std::cout<<"overlap after: " <<W_data[0][2] <<" " <<W_data[0][3] <<" " <<W_data[1][2] <<std::endl;
       }
        
     }

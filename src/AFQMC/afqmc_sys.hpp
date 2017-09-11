@@ -1,13 +1,19 @@
+////////////////////////////////////////////////////////////////////////////
+// This file is distributed under the University of Illinois/NCSA Open Source
+// License.  See LICENSE file in top directory for details.
+//
+// Copyright (c) 2016 Jeongnim Kim and QMCPACK developers.
+//
+// File developed by:
+// Miguel A. Morales, moralessilva2@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+// Alfredo Correa, correaa@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+//
+// File created by:
+// Miguel A. Morales, moralessilva2@llnl.gov 
+//    Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
-//// This file is distributed under the University of Illinois/NCSA Open Source
-//// License.  See LICENSE file in top directory for details.
-////
-//// Copyright (c) 2016 Jeongnim Kim and QMCPACK developers.
-////
-//// File developed by:
-////
-//// File created by:
-//////////////////////////////////////////////////////////////////////////////////
 
 #ifndef  AFQMC_OPS_HPP 
 #define  AFQMC_OPS_HPP 
@@ -78,9 +84,9 @@ struct afqmc_sys: public AFQMCInfo
     } 
 
     template< class WSet, 
-              class ValueMat 
+              class Mat 
             >
-    void calculate_mixed_density_matrix(const WSet& W, ValueMat& W_data, ValueMat& G, bool compact=true)
+    void calculate_mixed_density_matrix(const WSet& W, Mat& W_data, Mat& G, bool compact=true)
     {
       int nwalk = W.shape()[0];
       assert(G.num_elements() >= 2*NAEA*NMO*nwalk);
@@ -101,9 +107,9 @@ struct afqmc_sys: public AFQMCInfo
     }
 
     template<class SpMat,
-             class ValueMat
+             class Mat
             >
-    RealType calculate_energy(ValueMat& W_data, const ValueMat& G, const ValueMat& haj, const SpMat& V) 
+    RealType calculate_energy(Mat& W_data, const Mat& G, const Mat& haj, const SpMat& V) 
     {
       assert(G.shape()[0] == 2*NAEA*NMO);
       if(G.shape()[1] != Gcloc.shape()[1])
@@ -117,8 +123,8 @@ struct afqmc_sys: public AFQMCInfo
       return eav/wgt;
     }
 
-    template<class WSet, class ValueMat>
-    void calculate_overlaps(const WSet& W, ValueMat& W_data)
+    template<class WSet, class Mat>
+    void calculate_overlaps(const WSet& W, Mat& W_data)
     {
       assert(W_data.shape()[0] >= W.shape()[0]);
       assert(W_data.shape()[1] >= 4);
@@ -129,14 +135,14 @@ struct afqmc_sys: public AFQMCInfo
     }
 
     template<class WSet, 
-             class ValueMatA,
-             class ValueMatB
+             class MatA,
+             class MatB
             >
-    void propagate(WSet& W, ValueMatA& Propg, ValueMatB& vHS)
+    void propagate(WSet& W, MatA& Propg, MatB& vHS)
     {
 
       assert(vHS.shape()[0] == NMO*NMO);  
-      typedef typename std::decay<ValueMatB>::type::element Type;
+      typedef typename std::decay<MatB>::type::element Type;
       boost::multi_array_ref<Type,3> V(vHS.data(), extents[NMO][NMO][vHS.shape()[1]]);
       // re-interpretting matrices to avoid new temporary space  
       boost::multi_array_ref<Type,2> T1(TMat_NM.data(), extents[NMO][NAEA]);
