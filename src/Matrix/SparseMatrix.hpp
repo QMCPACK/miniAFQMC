@@ -105,7 +105,7 @@ class SparseMatrix
 
   std::pair<intType,intType> getOffset()
   {
-    return {roff,coff};
+    return std::make_pair(row_offset, col_offset);
   }
 
   void setDims(int n, int m)
