@@ -83,35 +83,6 @@ inline void apply_expM( const MatA& V, MatB& S, MatC& T1, MatC& T2, int order=6)
 
 }
 
-namespace shm 
-{
-
-/*
- * Calculates the H-S potential: 
- *  vHS = Spvn * X 
- *     vHS(ik,w) = sum_n Spvn(ik,n) * X(n,w) 
- */
-template< class SpMat,
-	  class MatA,
-          class MatB	
-        >
-inline void get_vHS(const SpMat& Spvn, const MatA& X, MatB& v)
-{
-  // check dimensions are consistent
-  assert( Spvn.cols() == X.shape()[0] );
-  assert( Spvn.global_row() == v.shape()[0] );
-  assert( X.shape()[1] == v.shape()[1] );
-  assert( v.shape()[1] == v.strides()[0] );
-
-  typedef typename std::decay<MatA>::type::element ComplexType;
-
-  // Spvn*X 
-  boost::multi_array_ref<ComplexType,2> v_(v.data()+Spvn.global_r0()*v.strides()[0], extents[Spvn.rows()][v.shape()()[1]]);
-  ma::product(Spvn,X,v_);  
-}
-
-}
-
 }
 
 #endif

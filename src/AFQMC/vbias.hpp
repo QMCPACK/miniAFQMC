@@ -76,58 +76,6 @@ inline void get_vbias(const SpMat& Spvn, const MatA& G, MatB& v, bool transposed
 
 }
 
-namespace shm 
-{
-
-/*
- * Calculates the bias potential: 
- *  vbias = T(Spvn) * G 
- *     vbias(n,w) = sum_ik Spvn(ik,n) * G(ik,w) 
- */
-
-template< class SpMat,
-          class MatA,
-	  class MatB
-        >
-inline void get_vbias(const SpMat& Spvn, const MatA& G, MatB& v, bool transposed)
-{
-  assert( G.strides()[0] == G.shape()[1] );   // temporary restriction
-  assert( G.strides()[1] == 1 );
-
-  typedef typename std::decay<MatA>::type::element Type;
-  if(transposed) {
-
-    assert( Spvn.cols() == G.shape()[0] );
-    assert( Spvn.global_row() == v.shape()[0] );
-    assert( G.shape()[1] == v.shape()[1] );
-    assert( v.shape()[1] == v.strides()[0]); // temporary restriction
-
-    // Spvn*G  
-    boost::multi_array_ref<TypeA,2> v_(v.data()+Spvn.global_r0()*v.strides()[0], extents[Spvn.rows()][v.shape()()[1]]);
-    ma::product(Spvn,G,v_);
-
-  } else {
-
-    assert( Spvn.rows()*2 == G.shape()[0] );
-    assert( Spvn.cols() == v.shape()[0] );    // Spvn.cols() in this case is cN
-    assert( G.shape()[1] == v.shape()[1] );
-
-    using ma::T;
-
-    // T(Spvn)*G 
-    boost::multi_array_ref<const TypeA,2> Gup(G.data(), extents[G.shape()[0]/2][G.shape()[1]]);
-    boost::multi_array_ref<const TypeA,2> Gdn(G.data()+G.shape()[0]*G.shape()[1]/2, 
-                                                        extents[G.shape()[0]/2][G.shape()[1]]);
-    // alpha
-    ma::product(T(Spvn),Gup,v);   
-    // beta
-    ma::product(TypeA(1.),T(Spvn),Gdn,TypeA(1.),v);
-  }
-
-}
-
-}
-
 }
 
 #endif
