@@ -1,3 +1,17 @@
+//////////////////////////////////////////////////////////////////////
+// This file is distributed under the University of Illinois/NCSA Open Source
+// License.  See LICENSE file in top directory for details.
+//
+// Copyright (c) 2016 Jeongnim Kim and QMCPACK developers.
+//
+// File developed by:
+// Miguel A. Morales, moralessilva2@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+//
+// File created by:
+// Miguel A. Morales, moralessilva2@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+////////////////////////////////////////////////////////////////////////////////
 
 #ifndef QMCPLUSPLUS_AFQMC_SPARSEMATRIX_H
 #define QMCPLUSPLUS_AFQMC_SPARSEMATRIX_H
@@ -37,7 +51,9 @@ class SparseMatrix
   typedef typename std::vector<intType>::const_iterator const_int_iterator;
   typedef SparseMatrix<T>  This_t;
 
-  const static int dimensionality = 2;
+  const static int dimensionality = -2;
+  const static bool sparse = true;
+  const static bool SHM = false;
 
   SparseMatrix<T>():vals(),colms(),myrows(),rowIndex(),nr(0),nc(0),compressed(false),zero_based(true),row_offset(0),col_offset(0)
   {
@@ -89,7 +105,7 @@ class SparseMatrix
 
   std::pair<intType,intType> getOffset()
   {
-    return {roff,coff};
+    return {row_offset, col_offset};
   }
 
   void setDims(int n, int m)
@@ -176,6 +192,46 @@ class SparseMatrix
   {
     return rowIndex.data()+n+1;
   }
+
+  // ******************************************
+  // access functions according to MKL notation
+  const_pointer val(long n=0) const
+  {
+    return vals.data()+n;
+  }
+
+  pointer val(long n=0)
+  {
+    return vals.data()+n;
+  }
+
+  const_intPtr indx(long n=0) const
+  {
+    return colms.data()+n;
+  }
+  intPtr indx(long n=0)
+  {
+    return colms.data()+n;
+  }
+
+  const_intPtr pntrb(long n=0) const
+  {
+    return rowIndex.data()+n;
+  }
+  intPtr pntrb(long n=0)
+  {
+    return rowIndex.data()+n;
+  }
+
+  const_intPtr pntre(long n=0) const
+  {
+    return rowIndex.data()+n+1;
+  }
+  intPtr pntre(long n=0)
+  {
+    return rowIndex.data()+n+1;
+  }
+  // ******************************************
 
   This_t& operator=(const SparseMatrix<T> &rhs) = delete; 
 

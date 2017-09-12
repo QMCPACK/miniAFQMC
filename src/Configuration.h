@@ -53,8 +53,6 @@
 
 #include "Matrix/SparseMatrix.hpp"
 #include "Matrix/SparseMatrix_ref.hpp"
-#include "Matrix/SMSparseMatrix.hpp"
-#include "Matrix/SMDenseVector.hpp"
 
 namespace qmcplusplus
 {
