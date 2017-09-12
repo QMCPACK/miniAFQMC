@@ -99,6 +99,20 @@ SET(QMC_BITS 64 CACHE INTEGER "Select OS bit")
 SET(QMC_COMPLEX 1 CACHE INTEGER "Build for complex binary")
 SET(PRINT_DEBUG 0 CACHE BOOL "Enable/disable debug printing")
 
+
+######################################################
+#KOKKOS Interaction
+######################################################
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+SET( KOKKOS_PATH "/ccs/home/eisenbac/Kokkos/kokkos" )
+add_subdirectory( ${KOKKOS_PATH} ${qmcpack_BINARY_DIR}/kokkos )
+include_directories(${Kokkos_INCLUDE_DIRS_RET})
+LINK_LIBRARIES(kokkos)
+
+
+
+
 ######################################################################
 # set debug printout
 # DEBUG_PSIBUFFER_ON keep track buffer's locator
