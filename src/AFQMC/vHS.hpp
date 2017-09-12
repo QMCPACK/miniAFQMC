@@ -106,7 +106,7 @@ inline void get_vHS(const SpMat& Spvn, const MatA& X, MatB& v)
   typedef typename std::decay<MatA>::type::element ComplexType;
 
   // Spvn*X 
-  boost::multi_array_ref<ComplexType,2> v_(v.data()+Spvn.global_r0()*v.strides()[0], extents[Spvn.rows()][v.shape()()[1]]);
+  boost::multi_array_ref<ComplexType,2> v_(v.data()+Spvn.global_r0()*v.strides()[0], extents[Spvn.rows()][v.shape()[1]]);
   ma::product(Spvn,X,v_);  
 }
 

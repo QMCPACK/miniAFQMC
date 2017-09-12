@@ -137,7 +137,7 @@ inline void calculate_energy(const MatA& Gc, MatB& Gcloc, const MatC& haj, const
   for(int n=0; n<nwalk; n++) locV[n] = zero;
 
   // Vakbl * Gc(bl,nw) = Gcloc(ak,nw)
-  ma::prouct(Vakbl, Gc, Gcloc);
+  ma::product(Vakbl, Gc, Gcloc);
 
   // E2(nw) = 0.5*Gc(:,nw)*Gcloc(:,nw) 
     // how do I do this through BLAS?

@@ -94,7 +94,7 @@ inline void get_vbias(const SpMat& Spvn, const MatA& G, MatB& v, bool transposed
   assert( G.strides()[0] == G.shape()[1] );   // temporary restriction
   assert( G.strides()[1] == 1 );
 
-  typedef typename std::decay<MatA>::type::element Type;
+  typedef typename std::decay<MatA>::type::element TypeA;
   if(transposed) {
 
     assert( Spvn.cols() == G.shape()[0] );
@@ -103,7 +103,7 @@ inline void get_vbias(const SpMat& Spvn, const MatA& G, MatB& v, bool transposed
     assert( v.shape()[1] == v.strides()[0]); // temporary restriction
 
     // Spvn*G  
-    boost::multi_array_ref<TypeA,2> v_(v.data()+Spvn.global_r0()*v.strides()[0], extents[Spvn.rows()][v.shape()()[1]]);
+    boost::multi_array_ref<TypeA,2> v_(v.data()+Spvn.global_r0()*v.strides()[0], extents[Spvn.rows()][v.shape()[1]]);
     ma::product(Spvn,G,v_);
 
   } else {
