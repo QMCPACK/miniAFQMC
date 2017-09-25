@@ -43,7 +43,9 @@ inline void get_vbias(const SpMat& Spvn, const MatA& G, MatB& v, bool transposed
   assert( G.strides()[0] == G.shape()[1] );
   assert( G.strides()[1] == 1 );
 
-  typedef typename std::decay<MatA>::type::element TypeA;
+//  typedef typename std::decay<MatA>::type::element TypeA;
+	using TypeA = MatA::element;
+
   if(transposed) {
 
     assert( Spvn.cols() == G.shape()[0] );
@@ -68,14 +70,22 @@ inline void get_vbias(const SpMat& Spvn, const MatA& G, MatB& v, bool transposed
 //    boost::multi_array_ref<const TypeA,2> Gdn(G.data()+G.shape()[0]*G.shape()[1]/2, 
 //                                                        extents[G.shape()[0]/2][G.shape()[1]]);
 
-    boost::const_multi_array_ref<TypeA,2> Gup(G.data(), extents[G.shape()[0]/2][G.shape()[1]]);
-    boost::const_multi_array_ref<TypeA,2> Gdn(G.data()+G.shape()[0]*G.shape()[1]/2, 
-                                                        extents[G.shape()[0]/2][G.shape()[1]]);
+//    boost::const_multi_array_ref<TypeA,2> Gup(G.data(), extents[G.shape()[0]/2][G.shape()[1]]);
+//    boost::const_multi_array_ref<TypeA,2> Gdn(G.data()+G.shape()[0]*G.shape()[1]/2, 
+//                                                        extents[G.shape()[0]/2][G.shape()[1]]);
+
+	using boost::multi_array_types::index_range;
+//	auto Gup = G[index_range() <  G.shape()[0]/2][index_range()];
+//	auto Gdn = G[index_range() >= G.shape()[0]/2][index_range()]; 
 
     // alpha
-    ma::product(T(Spvn),Gup,v);  
+    ma::product(
+    	T(Spvn), /*Gup*/ G[index_range() <  G.shape()[0]/2][index_range()], v
+    );  
     // beta
-    ma::product(TypeA(1.),T(Spvn),Gdn,TypeA(1.),v);
+    ma::product(
+    	TypeA(1.), T(Spvn), /*Gdn*/ G[index_range() >= G.shape()[0]/2][index_range()], TypeA(1.), v
+    );
   }
 }
 
