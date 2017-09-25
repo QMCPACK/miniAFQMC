@@ -97,6 +97,10 @@ int main(int argc, char **argv)
   exit(1);
 #endif
 
+// initialize Kokkos
+  Kokkos::initialize(argc, argv);
+
+
   int nsteps=10;
   int nsubsteps=10; 
   int nwalk=16;
@@ -345,5 +349,6 @@ int main(int argc, char **argv)
   
   TimerManager.print();
 
+  Kokkos::finalize();
   return 0;
 }
