@@ -80,11 +80,11 @@ inline void get_vbias(const SpMat& Spvn, const MatA& G, MatB& v, bool transposed
 
     // alpha
     ma::product(
-    	T(Spvn), /*Gup*/ G[index_range() <  G.shape()[0]/2][index_range()], v
+    	T(Spvn), /*Gup*/ G[index_range(0, G.shape()[0]/2)][index_range()], v
     );  
     // beta
     ma::product(
-    	TypeA(1.), T(Spvn), /*Gdn*/ G[index_range() >= G.shape()[0]/2][index_range()], TypeA(1.), v
+    	TypeA(1.), T(Spvn), /*Gdn*/ G[index_range(G.shape()[0]/2, G.shape()[0]) ][index_range()], TypeA(1.), v
     );
   }
 }
