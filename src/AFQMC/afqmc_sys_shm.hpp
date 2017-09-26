@@ -242,7 +242,7 @@ struct afqmc_sys: public AFQMCInfo
 
       assert( nwalk == W.shape()[0]);  
       assert( nwalk == vHS.shape()[1] ); 
-      typedef typename std::decay<MatB>::type::element Type;
+      using Type = typename std::decay<MatB>::type::element;
       boost::multi_array_ref<Type,2> T1(TMat_NM.data(), extents[NMO][NAEA]);
       boost::multi_array_ref<Type,2> T2(TMat_MM2.data(), extents[NMO][NAEA]);
       boost::multi_array_ref<Type,3> V(vHS.data(), extents[NMO][NMO][vHS.shape()[1]]);
@@ -278,7 +278,7 @@ struct afqmc_sys: public AFQMCInfo
 
       assert( nwalk == W.shape()[0]);  
       assert( nnodes*nwalk == vHS.shape()[1] ); 
-      typedef typename std::decay<MatB>::type::element Type;
+      using Type = typename std::decay<MatB>::type::element;
       boost::multi_array_ref<Type,2> T1(TMat_NM.data(), extents[NMO][NAEA]);
       boost::multi_array_ref<Type,2> T2(TMat_MM2.data(), extents[NMO][NAEA]);
       boost::multi_array_ref<Type,3> V(vHS.data(), extents[NMO][NMO][vHS.shape()[1]]);

@@ -61,14 +61,14 @@ inline void calculate_energy(Mat& W_data, const Mat& Gc, Mat& Gcloc, const Mat& 
   assert(Gc.shape()[0] == Vakbl.rows());
   assert(Gc.shape()[0] == Vakbl.cols());
 
-  typedef typename std::decay<Mat>::type::element Type;
+  using Type = typename std::decay<Mat>::type::element;
 //  index_gen indices;
   Type zero = Type(0.);
   Type one = Type(1.); 
   Type half = Type(0.5); 
 
   int nwalk = W_data.shape()[0];
-  boost::multi_array_ref<const Type,1> haj_ref(haj.origin(), extents[haj.num_elements()]);
+  boost::const_multi_array_ref<Type,1> haj_ref(haj.origin(), extents[haj.num_elements()]);
 
   // zero 
   for(int n=0; n<nwalk; n++) W_data[n][0] = zero;
@@ -125,7 +125,7 @@ inline void calculate_energy(const MatA& Gc, MatB& Gcloc, const MatC& haj, const
   assert(Gc.shape()[0] == haj.num_elements());
   assert(Gc.shape()[0] == Vakbl.cols());
 
-  typedef typename std::decay<MatB>::type::element Type;
+  using Type = typename std::decay<MatB>::type::element; 
 //  index_gen indices;
   Type zero = Type(0.);
   Type one = Type(1.); 

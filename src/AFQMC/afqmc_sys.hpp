@@ -142,7 +142,7 @@ struct afqmc_sys: public AFQMCInfo
     {
 
       assert(vHS.shape()[0] == NMO*NMO);  
-      typedef typename std::decay<MatB>::type::element Type;
+      using Type = typename std::decay<MatB>::type::element;
       boost::multi_array_ref<Type,3> V(vHS.data(), extents[NMO][NMO][vHS.shape()[1]]);
       // re-interpretting matrices to avoid new temporary space  
       boost::multi_array_ref<Type,2> T1(TMat_NM.data(), extents[NMO][NAEA]);

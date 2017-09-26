@@ -312,7 +312,7 @@ class SMSparseMatrix
 
   std::pair<intType,intType> getOffset()
   {
-    return {roff,coff};
+    return {row_offset,col_offset};
   }
  
   void setCompressed() 

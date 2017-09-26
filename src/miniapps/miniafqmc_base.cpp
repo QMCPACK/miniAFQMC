@@ -37,6 +37,7 @@
 #include "io/hdf_archive.h"
 
 #include "AFQMC/afqmc_sys.hpp"
+#include "AFQMC/rotate.hpp"
 #include "Matrix/initialize_serial.hpp"
 #include "AFQMC/mixed_density_matrix.hpp"
 #include "AFQMC/energy.hpp"
@@ -84,6 +85,8 @@ void print_help()
   printf("-s                Number of substeps (default: 10)\n");
   printf("-w                Number of walkers (default: 16)\n");
   printf("-o                Number of substeps between orthogonalization (default: 10)\n");
+  printf("-f                Input file name (default: ./afqmc.h5)\n"); 
+  printf("-t                If set to no, do not use half-rotated transposed Cholesky matrix to calculate bias potential (default yes).\n");
   printf("-v                Verbose output\n");
 }
 
@@ -105,8 +108,7 @@ int main(int argc, char **argv)
   int iseed   = 11;
   std::string init_file = "afqmc.h5";
 
-  // if half-tranformed transposed Spvn is on file  
-  bool transposed_Spvn = false;
+  bool transposed_Spvn = true;
 
   ComplexType one(1.),zero(0.),half(0.5);
   ComplexType cone(1.),czero(0.);
@@ -115,7 +117,7 @@ int main(int argc, char **argv)
 
   char *g_opt_arg;
   int opt;
-  while ((opt = getopt(argc, argv, "hdvs:g:i:b:c:a:r:w:o:")) != -1)
+  while ((opt = getopt(argc, argv, "hvt:i:s:w:o:f:")) != -1)
   {
     switch (opt)
     {
@@ -132,7 +134,14 @@ int main(int argc, char **argv)
     case 'o': // the number of sub steps for drift/diffusion
       northo = atoi(optarg);
       break;
-    case 'v': verbose  = true; break;
+    case 't':
+      transposed_Spvn = (std::string(optarg) != "no");
+      break;
+    case 'f':
+      init_file = std::string(optarg);
+      break;    
+    case 'v': verbose  = true; 
+      break;
     }
   }
 
@@ -149,7 +158,7 @@ int main(int argc, char **argv)
   // Important Data Structures
   base::afqmc_sys AFQMCSys;   // Main AFQMC object. Control access to several apgorithmic functions. 
   ComplexSpMat Spvn;      // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
-  ComplexSpMat SpvnT;   // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
+  ComplexSpMat SpvnT;   // Transposed half-transformed Factorized Hamiltonian, SpvnT(n,ak) = sum_i conj(Wfn(a,i)) * Spvn(ik,n) 
   ComplexMatrix haj;    // 1-Body Hamiltonian Matrix
   ComplexSpMat Vakbl;   // 2-Body Hamiltonian Matrix: (Half-Rotated) 2-electron integrals 
   ComplexMatrix Propg1;   // propagator for 1-body hamiltonian 
@@ -168,6 +177,12 @@ int main(int argc, char **argv)
     std::cerr<<" Error initalizing data structures from hdf5 file: " <<init_file <<std::endl;
     exit(1);
   }
+
+  if(transposed_Spvn) base::halfrotate_cholesky(AFQMCSys.trialwfn_alpha,
+                                                 AFQMCSys.trialwfn_beta,   
+                                                 Spvn,
+                                                 SpvnT   
+                                                );
 
   RealType Eshift = 0;
   int NMO = AFQMCSys.NMO;              // number of molecular orbitals
@@ -240,8 +255,6 @@ int main(int argc, char **argv)
       // 1. calculate density matrix and bias potential 
       
       if(transposed_Spvn) {
-
-        APP_ABORT(" transposed Spvn not implemented: \n\n\n");
 
         Timers[Timer_DMc]->start();
         AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc,true);
