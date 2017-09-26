@@ -16,12 +16,10 @@ source /usr/tce/packages/mkl/mkl-2017.1/mkl/bin/mklvars.csh intel64
 
 # Debug with 
 cmake -DBLA_VENDOR=Intel10_64lp_seq -DCMAKE_PREFIX_PATH=$MKLROOT/lib \
-      -DCMAKE_BUILD_TYPE=Debug \
-      -DBUILD_AFQMC=1 -DQMC_COMPLEX=1 ../../; 
+      -DCMAKE_BUILD_TYPE=Debug ../../; 
 # Release
 #cmake -DBLA_VENDOR=Intel10_64lp_seq -DCMAKE_PREFIX_PATH=$MKLROOT/lib \
 #      -DCMAKE_BUILD_TYPE=Release \
-#      -DVERBOSE=TRUE \
-#      -DBUILD_AFQMC=1 -DQMC_COMPLEX=1 ../../; 
+#      -DVERBOSE=TRUE ../../; 
 make
 

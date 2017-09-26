@@ -20,6 +20,8 @@
 #define  AFQMC_VHS_HPP 
 
 #include "Numerics/ma_operations.hpp"
+#include "Numerics/OhmmsBlas.h"
+#include<iostream>
 
 namespace qmcplusplus
 {
@@ -43,8 +45,6 @@ inline void get_vHS(const SpMat& Spvn, const Mat& X, Mat& v)
   assert( Spvn.rows() == v.shape()[0] );
   assert( X.shape()[1] == v.shape()[1] );
 
-  typedef typename std::decay<Mat>::type::element ComplexType;
-
   // Spvn*X 
   ma::product(Spvn,X,v);  
 }
@@ -65,18 +65,21 @@ inline void apply_expM( const MatA& V, MatB& S, MatC& T1, MatC& T2, int order=6)
   assert( S.shape()[0] == T2.shape()[0] );
   assert( S.shape()[1] == T2.shape()[1] );
 
-  typedef typename std::decay<MatB>::type::element ComplexType;
+  using ComplexType = typename std::decay<MatB>::type::element; 
   ComplexType zero(0.);
+  MatC* pT1 = &T1;
+  MatC* pT2 = &T2;
 
   T1 = S;
   for(int n=1; n<=order; n++) {
     ComplexType fact = ComplexType(0.0,1.0)*static_cast<ComplexType>(1.0/static_cast<double>(n));
-    ma::product(fact,V,T1,zero,T2);
-    T1  = T2;
+    ma::product(fact,V,*pT1,zero,*pT2);
     // overload += ???
+    // S += (*pT2); 
     for(int i=0, ie=S.shape()[0]; i<ie; i++)
      for(int j=0, je=S.shape()[1]; j<je; j++)
-      S[i][j] += T1[i][j];
+      S[i][j] += (*pT2)[i][j];
+    std::swap(pT1,pT2);
   }
 
 }

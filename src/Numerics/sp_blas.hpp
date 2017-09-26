@@ -1,3 +1,20 @@
+//////////////////////////////////////////////////////////////////////
+// This file is distributed under the University of Illinois/NCSA Open Source
+// License.  See LICENSE file in top directory for details.
+//
+// Copyright (c) 2016 Jeongnim Kim and QMCPACK developers.
+//
+// File developed by:
+// Alfredo Correa, correaa@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+// Miguel A. Morales, moralessilva2@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+//
+// File created by:
+// Alfredo Correa, correaa@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+////////////////////////////////////////////////////////////////////////////////
+
 #if COMPILATION_INSTRUCTIONS
 (echo "#include<"$0">" > $0x.cpp) && clang++ -O3 -std=c++14 -Wfatal-errors -I.. -D_TEST_SP_BLAS -DADD_ -Drestrict=__restrict__ $0x.cpp -lblas -llapack -Wl,-rpath=/usr/local/Wolfram/Mathematica/11.1/SystemFiles/Libraries/Linux-x86-64 -L/usr/local/Wolfram/Mathematica/11.1/SystemFiles/Libraries/Linux-x86-64 -lmkl_core -lmkl_intel_ilp64 -lmkl_sequential -o $0x.x && time $0x.x $@ && rm -f $0x.cpp; exit
 #endif

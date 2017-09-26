@@ -18,6 +18,7 @@
 #ifndef AFQMC_SPBLAS_H
 #define AFQMC_SPBLAS_H
 
+#include<complex>
 #if defined(HAVE_MKL)
 
 extern "C" {

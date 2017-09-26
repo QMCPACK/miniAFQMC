@@ -112,7 +112,7 @@ template<class T, class SparseMatrixA, class MultiArray2DB, class MultiArray2DC,
                 SparseMatrixA::dimensionality == -2 and
                 MultiArray2DB::dimensionality == 2 and
                 std::decay<MultiArray2DC>::type::dimensionality == 2
-        >::type,  
+        >::type,
 //        typename = typename std::enable_if<SparseMatrixA::sparse == true>::type,
         typename = void, // TODO change to use dispatch 
         typename = void // TODO change to use dispatch 
