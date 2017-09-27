@@ -38,7 +38,7 @@ template< class SpMat,
 	  class MatA,
           class MatB  
         >
-inline void get_vbias(const SpMat& Spvn, const MatA& G, MatB& v, bool transposed)
+inline void get_vbias(const SpMat& Spvn, const MatA& G, MatB&& v, bool transposed)
 {
   assert( G.strides()[0] == G.shape()[1] );
   assert( G.strides()[1] == 1 );
@@ -65,11 +65,11 @@ inline void get_vbias(const SpMat& Spvn, const MatA& G, MatB& v, bool transposed
 
     // alpha
     ma::product(
-    	T(Spvn), G[indices[range_t() < range_t::index(G.shape()[0]/2)][range_t()]], v
+    	T(Spvn), G[indices[range_t() < range_t::index(G.shape()[0]/2)][range_t()]], std::forward<MatB>(v)
     );  
     // beta
     ma::product(
-    	TypeA(1.), T(Spvn), G[indices[range_t::index(G.shape()[0]/2) <= range_t()][range_t()]], TypeA(1.), v
+    	TypeA(1.), T(Spvn), G[indices[range_t::index(G.shape()[0]/2) <= range_t()][range_t()]], TypeA(1.), std::forward<MatB>(v)
     );
   }
 }
