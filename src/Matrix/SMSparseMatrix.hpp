@@ -399,6 +399,45 @@ class SMSparseMatrix
     return  (rowIndexFull!=NULL)?(&((*rowIndexFull)[n])):NULL;
   }
 
+  // ******************************************
+  // access functions according to MKL notation
+  const_pointer val(long n=0) const
+  {
+    return (vals!=NULL)?(&((*vals)[n])):NULL; 
+  }
+  pointer val(long n=0)
+  {
+    return (vals!=NULL)?(&((*vals)[n])):NULL; 
+  }
+
+  const_intPtr indx(long n=0) const
+  {
+    return (colms!=NULL)?(&((*colms)[n])):NULL;
+  }
+  intPtr indx(long n=0)
+  {
+    return (colms!=NULL)?(&((*colms)[n])):NULL;
+  }
+
+  const_intPtr pntrb(long n=0) const
+  {
+    return (rowIndex!=NULL)?(&((*rowIndex)[n])):NULL;
+  }
+  intPtr pntrb(long n=0)
+  {
+    return (rowIndex!=NULL)?(&((*rowIndex)[n])):NULL;
+  }
+
+  const_intPtr pntre(long n=0) const
+  {
+    return  (rowIndex!=NULL)?(&((*rowIndex)[n+1])):NULL;
+  }
+  intPtr pntre(long n=0)
+  {
+    return  (rowIndex!=NULL)?(&((*rowIndex)[n+1])):NULL;
+  }
+  // ******************************************
+
   // use binary search PLEASE!!! Not really used anyway
   indxType find_element(int i, int j) const {
     for (indxType k = (*rowIndexFull)[i]; k<(*rowIndexFull)[i+1]; k++) {
@@ -417,7 +456,7 @@ class SMSparseMatrix
     return (*vals)[idx]; 
   }
 
-  void add(const int i, const int j, const T& v, bool needs_locks=false) 
+  void add(const intType i, const intType j, const T& v, bool needs_locks=false) 
   {
 #ifdef ASSERT_SPARSEMATRIX
     assert(i-row_offset>=0 && i-row_offset<nr && j-col_offset>=0 && j-col_offset<nc);
@@ -436,7 +475,7 @@ class SMSparseMatrix
     }
   }
 
-  void add(const std::vector<std::tuple<int,int,T>>& v, bool needs_locks=false)
+  void add(const std::vector<std::tuple<intType,intType,T>>& v, bool needs_locks=false)
   {
     compressed=false;
     if(needs_locks) {
@@ -576,6 +615,7 @@ class SMSparseMatrix
       }
     }
     std::swap(nr,nc);
+    std::swap(row_offset,col_offset);
     compress(local_comm);
   }
 

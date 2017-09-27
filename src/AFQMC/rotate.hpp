@@ -18,11 +18,12 @@
 #define  AFQMC_ROTATE_HPP 
 
 #include "Numerics/ma_operations.hpp"
+#include "mpi.h"
 
 namespace qmcplusplus
 {
 
-namespace base
+namespace shm 
 {
 
 /*
@@ -47,11 +48,12 @@ namespace base
  *  The number of rows of Spvn should be equal to M*M.
  */ 
 // Serial Implementation
-template< class Mat,
+template< class task_group,
+          class Mat,
           class SpMatA,  
 	  class SpMatB	
         >
-inline void halfrotate_cholesky(const Mat& alpha, const Mat& beta, SpMatA& A, SpMatB& B, double cutoff=1e-6)
+inline void halfrotate_cholesky(task_group& TG, const Mat& alpha, const Mat& beta, SpMatA& A, SpMatB& B, double cutoff=1e-6)
 {
   assert(Mat::dimensionality == 2); 
   int M = alpha.shape()[0]; 
@@ -64,9 +66,14 @@ inline void halfrotate_cholesky(const Mat& alpha, const Mat& beta, SpMatA& A, Sp
   auto zero = typename SpMatB::value_type(0);
   int nchol = A.cols();
 
+  int ncores = TG.getTotalCores();
+  int coreid = TG.getCoreID();
+
+  B.setup("miniAFQMC_SpvnT",TG.getNodeCommLocal());
   B.setDims(A.cols(),2*N*M); 
 
   using Type = typename SpMatB::value_type;
+  using IType = typename SpMatB::intType;
 
   boost::multi_array<Type,2> An(extents[M][M]);
   boost::multi_array<Type,2> C(extents[N][M]);
@@ -74,7 +81,7 @@ inline void halfrotate_cholesky(const Mat& alpha, const Mat& beta, SpMatA& A, Sp
   // count number of non-zero terms
 
   // transpose A for easy access
-  A.transpose();
+  A.transpose(TG.getNodeCommLocal());
 
   auto col = A.indx();
   auto val = A.val();
@@ -84,6 +91,12 @@ inline void halfrotate_cholesky(const Mat& alpha, const Mat& beta, SpMatA& A, Sp
 
     int nterms = *pe - *pb;
     if(nterms==0) continue;
+
+    if(i%ncores != coreid) {
+      col+=nterms;
+      val+=nterms;
+      continue;
+    }
 
 //    std::fill(An.begin(), An.end(), zero);
     for(int a=0; a<M; a++)
@@ -111,9 +124,18 @@ inline void halfrotate_cholesky(const Mat& alpha, const Mat& beta, SpMatA& A, Sp
           nz++;
   }
 
-  B.resize(nz);
+  // C++ wrapper please!!!
+  long sz1=static_cast<long>(nz);
+  MPI_Allreduce(MPI_IN_PLACE,&sz1,1,MPI_LONG,MPI_SUM,TG.getNodeCommLocal());
+  nz = static_cast<std::size_t>(sz1);
+  B.reserve(nz);
+
+  int maxn = 100000;
+  std::vector<std::tuple<IType,IType,Type>> buff;
+  buff.reserve(maxn);
+
   // generate rotated matrix
-   col = A.indx();
+  col = A.indx();
   val = A.val();
   pb = A.pntrb();
   pe = A.pntre();
@@ -121,6 +143,12 @@ inline void halfrotate_cholesky(const Mat& alpha, const Mat& beta, SpMatA& A, Sp
 
     int nterms = *pe - *pb;
     if(nterms==0) continue;
+
+    if(i%ncores != coreid) {
+      col+=nterms;
+      val+=nterms;
+      continue;
+    }
 
 //    std::fill(An.begin(), An.end(), zero);
     for(int a=0; a<M; a++)
@@ -138,19 +166,35 @@ inline void halfrotate_cholesky(const Mat& alpha, const Mat& beta, SpMatA& A, Sp
     ma::product(T(alpha),An,C);
     for(int a=0; a<N; a++)
       for(int k=0; k<M; k++)
-        if(std::abs(C[a][k]) > cutoff)  
-          B.add(i,a*M+k,C[a][k]); 
+        if(std::abs(C[a][k]) > cutoff) { 
+          //B.add(i,a*M+k,C[a][k]); 
+          buff.push_back( std::make_tuple(i,a*M+k,C[a][k]) );
+          if(buff.size() == maxn) {
+            B.add(buff,ncores>1);
+            buff.clear();
+          }  
+        } 
 
     ma::product(T(beta),An,C);
     for(int a=0; a<N; a++)
       for(int k=0; k<M; k++)
-        if(std::abs(C[a][k]) > cutoff)
-          B.add(i,N*M+a*M+k,C[a][k]); 
+        if(std::abs(C[a][k]) > cutoff) {
+          //B.add(i,N*M+a*M+k,C[a][k]); 
+          buff.push_back( std::make_tuple(i,N*M+a*M+k,C[a][k]) );
+          if(buff.size() == maxn) {
+            B.add(buff,ncores>1);
+            buff.clear();
+          } 
+        } 
+  }
+  if(buff.size() > 0) {
+    B.add(buff,ncores>1);
+    buff.clear();
   }
 
   // transpose A back
-  A.transpose();
-  B.compress();
+  A.transpose(TG.getNodeCommLocal());
+  B.compress(TG.getNodeCommLocal());
 }
 
 }

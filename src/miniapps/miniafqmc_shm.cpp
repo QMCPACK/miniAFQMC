@@ -40,6 +40,7 @@
 
 #include "Matrix/ma_communications.hpp"
 #include "AFQMC/afqmc_sys_shm.hpp"
+#include "AFQMC/rotate.hpp"
 #include "Matrix/initialize.hpp"
 #include "Matrix/partition_SpMat.hpp"
 #include "AFQMC/mixed_density_matrix.hpp"
@@ -95,6 +96,8 @@ void print_help()
   printf("-r                Number of reader cores in a node (default all)"); 
   printf("-c                Number of cores in a task group (default: all cores)"); 
   printf("-n                Number of nodes in a task group (default: all nodes)\n");
+  printf("-f                Input file name (default: ./afqmc.h5)\n");
+  printf("-t                If set to no, do not use half-rotated transposed Cholesky matrix to calculate bias potential (default yes).\n");
   printf("-v                Verbose output\n");
 }
 
@@ -128,8 +131,7 @@ int main(int argc, char **argv)
   int iseed   = 11;
   std::string init_file = "afqmc.h5";
 
-  // if half-tranformed transposed Spvn is on file  
-  bool transposed_Spvn = false;
+  bool transposed_Spvn = true;
 
   ComplexType one(1.),zero(0.),half(0.5);
   ComplexType im(0.0,1.);
@@ -137,7 +139,7 @@ int main(int argc, char **argv)
 
   char *g_opt_arg;
   int opt;
-  while ((opt = getopt(argc, argv, "h:i:s:w:o:v:c:r:n:")) != -1)
+  while ((opt = getopt(argc, argv, "hvi:s:w:o:v:c:r:n:t:f:")) != -1)
   {
     switch (opt)
     {
@@ -163,7 +165,14 @@ int main(int argc, char **argv)
     case 'c': 
       ncores_per_TG = atoi(optarg);
       break;
-    case 'v': verbose  = true; break;
+    case 't':
+      transposed_Spvn = (std::string(optarg) != "no");
+      break;
+    case 'f':
+      init_file = std::string(optarg);
+      break;
+    case 'v': verbose  = true;
+      break;
     }
   }
 
@@ -221,6 +230,13 @@ int main(int argc, char **argv)
     std::cerr<<" Error initalizing data structures from hdf5 file: " <<init_file <<std::endl;
     MPI_Abort(MPI_COMM_WORLD,10);
   }
+
+  if(transposed_Spvn) shm::halfrotate_cholesky(TG,
+                                               AFQMCSys.trialwfn_alpha,
+                                               AFQMCSys.trialwfn_beta,
+                                               SMSpvn,
+                                               SMSpvnT
+                                              );
 
   // useful info, reduce over 1 task group only
   long global_Spvn_size=0, global_Vakbl_size=0;
@@ -361,10 +377,6 @@ int main(int argc, char **argv)
   app_log()<<"                     Beginning Steps                       \n";   
   app_log()<<"***********************************************************\n\n";
   app_log()<<"# Step   Energy   " <<std::endl;
-
-  if(transposed_Spvn) {
-    APP_ABORT(" transposed Spvn not implemented: \n\n\n");
-  }
 
   Timers[Timer_Total]->start();
   for(int step = 0, step_tot=0; step < nsteps; step++) {
