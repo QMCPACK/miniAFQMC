@@ -65,13 +65,13 @@ inline void get_vbias(const SpMat& Spvn, const MatA& G, MatB& v, bool transposed
     // only works if stride()[0] == shape()[1]
 
     // T(Spvn)*G 
-    boost::const_multi_array_ref<TypeA,2> Gup(G.data(), extents[G.shape()[0]/2][G.shape()[1]]);
-    boost::const_multi_array_ref<TypeA,2> Gdn(G.data()+G.shape()[0]*G.shape()[1]/2, 
+    const boost::const_multi_array_ref<TypeA,2> Gup(G.data(), extents[G.shape()[0]/2][G.shape()[1]]);
+    const boost::const_multi_array_ref<TypeA,2> Gdn(G.data()+G.shape()[0]*G.shape()[1]/2, 
 					extents[G.shape()[0]/2][G.shape()[1]]);
     // alpha
     ma::product(T(Spvn), gpu(Gup), gpu(v));  
     // beta
-    ma::product(TypeA(1.),T(Spvn),gpu(Gdn),TypeA(1.),gpu(v));
+    ma::product(TypeA(1.),T(Spvn),gpu(Gdn),TypeA(1.), gpu(v));
   }
 }
 
