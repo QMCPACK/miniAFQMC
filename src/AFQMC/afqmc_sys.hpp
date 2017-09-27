@@ -138,12 +138,11 @@ struct afqmc_sys: public AFQMCInfo
              class MatA,
              class MatB
             >
-    void propagate(WSet& W, MatA& Propg, MatB& vHS)
+    void propagate(WSet& W, const MatA& Propg, const MatB& vHS)
     {
-
       assert(vHS.shape()[0] == NMO*NMO);  
       using Type = typename std::decay<MatB>::type::element;
-      boost::multi_array_ref<Type,3> V(vHS.data(), extents[NMO][NMO][vHS.shape()[1]]);
+      boost::const_multi_array_ref<Type,3> V(vHS.data(), extents[NMO][NMO][vHS.shape()[1]]);
       // re-interpretting matrices to avoid new temporary space  
       boost::multi_array_ref<Type,2> T1(TMat_NM.data(), extents[NMO][NAEA]);
       boost::multi_array_ref<Type,2> T2(TMat_MM2.data(), extents[NMO][NAEA]);

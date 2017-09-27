@@ -36,9 +36,10 @@ namespace base
  */
 // Serial Implementation
 template< class SpMat,
-	  class Mat	
+	  class MatA,	
+	  class MatB	
         >
-inline void get_vHS(const SpMat& Spvn, const Mat& X, Mat& v)
+inline void get_vHS(const SpMat& Spvn, const MatA& X, MatB&& v)
 {
   // check dimensions are consistent
   assert( Spvn.cols() == X.shape()[0] );
@@ -46,7 +47,7 @@ inline void get_vHS(const SpMat& Spvn, const Mat& X, Mat& v)
   assert( X.shape()[1] == v.shape()[1] );
 
   // Spvn*X 
-  ma::product(Spvn,X,v);  
+  ma::product(Spvn,X,std::forward<MatB>(v));  
 }
 
 /*
@@ -56,7 +57,7 @@ template< class MatA,
           class MatB,
           class MatC
         >
-inline void apply_expM( const MatA& V, MatB& S, MatC& T1, MatC& T2, int order=6)
+inline void apply_expM( const MatA& V, MatB&& S, MatC&& T1, MatC&& T2, int order=6)
 { 
   assert( V.shape()[0] == V.shape()[1] );
   assert( V.shape()[1] == S.shape()[0] );
@@ -67,19 +68,19 @@ inline void apply_expM( const MatA& V, MatB& S, MatC& T1, MatC& T2, int order=6)
 
   using ComplexType = typename std::decay<MatB>::type::element; 
   ComplexType zero(0.);
-  MatC* pT1 = &T1;
-  MatC* pT2 = &T2;
+  MatC& rT1 = T1;
+  MatC& rT2 = T2;
 
   T1 = S;
   for(int n=1; n<=order; n++) {
     ComplexType fact = ComplexType(0.0,1.0)*static_cast<ComplexType>(1.0/static_cast<double>(n));
-    ma::product(fact,V,*pT1,zero,*pT2);
+    ma::product(fact,V,rT1,zero,rT2);
     // overload += ???
     // S += (*pT2); 
     for(int i=0, ie=S.shape()[0]; i<ie; i++)
      for(int j=0, je=S.shape()[1]; j<je; j++)
-      S[i][j] += (*pT2)[i][j];
-    std::swap(pT1,pT2);
+      S[i][j] += rT2[i][j];
+    std::swap(rT1,rT2);
   }
 
 }
