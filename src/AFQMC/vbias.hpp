@@ -60,7 +60,7 @@ inline void get_vbias(const SpMat& Spvn, const MatA& G, MatB&& v, bool transpose
     assert( G.shape()[1] == v.shape()[1] );
 
     // Spvn*G  
-    ma::product(Spvn,G,v);
+    ma::product(Spvn,G,std::forward<MatB>(v));
 
   } else {
 
