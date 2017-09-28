@@ -13,6 +13,9 @@
 //    Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
 
+/** @file rotate.hpp
+ *  @brief Half rotation
+ */
 
 #ifndef  AFQMC_ROTATE_HPP 
 #define  AFQMC_ROTATE_HPP 
@@ -25,28 +28,40 @@ namespace qmcplusplus
 namespace base
 {
 
-/*
+/**
  *  Performs a (left) half rotation and a transposition of a Cholesky matrix. 
  *  The rotated matrix is stored in sparse format. The output matrix is resized to accomodate
  *  the necesary number of non-zero terms. 
+ *
  *  Input:
  *    -alpha: Rotation matrix for spin up.
  *    -beta: Rotation matrix for spin down.
  *    -A: Input sparse cholesky matrix.
  *    -cutoff: Value below which elements of rotated matrix are ignored.
+ *
  *  Output:
  *    -B: Rotated cholesky matrix. 
  *
+ *
  *  If transposed==true:
- *     B(n,ak) = sum_i^M alpha(i,a) * Spvn(ik,n) 
- *     B(n,ak+N*M) = sum_i^M beta(i,a) * Spvn(ik,n) 
+ *
+ *     \f$B(n,ak) = \sum_i^M \alpha(i,a) * Spvn(ik,n)\f$ 
+ *
+ *     \f$B(n,ak+N*M) = \sum_i^M beta(i,a) * Spvn(ik,n)\f$ 
+ *
  *  else:
- *     B(ak,n) = sum_i A(i,a) * Spvn(ik,n) 
- *     B(ak+N*M,n) = sum_i^M beta(i,a) * Spvn(ik,n), 
+ *
+ *     \f$ B(ak,n) = \sum_i A(i,a) * Spvn(ik,n) \f$
+ *
+ *     \f$ B(ak+N*M,n) = \sum_i^M \beta(i,a) * Spvn(ik,n), \f$ 
+ *
  *  where M/N is the number of rows/columns of alpha and beta.
  *  The number of rows of Spvn should be equal to M*M.
+ *
+ *  Serial Implementation
+ * 
+ * \todo improve argument names
  */ 
-// Serial Implementation
 template< class Mat,
           class SpMatA,  
 	  class SpMatB	

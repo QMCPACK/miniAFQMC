@@ -15,6 +15,9 @@
 //    Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
 
+/** @file mixed_density_matrix.hpp
+ *  @brief Mixed Density Matrix
+ */
 
 #ifndef  AFQMC_DENSITY_MATRIX_HPP 
 #define  AFQMC_DENSITY_MATRIX_HPP 
@@ -27,11 +30,15 @@ namespace qmcplusplus
 namespace base 
 {
 
-/*
+/**
  * Calculates the 1-body mixed density matrix:
- *   < A | c+i cj | B > / <A|B> = conj(A) * ( T(B) * conj(A) )^-1 * T(B) 
+ *
+ *   \f$ \left< A | c+i cj | B \right> / \left<A|B\right> = A^\dagger ( B^T * A^\dagger )^{-1}  B^T \f$
+ *
  *   If compact == True, returns [NEL x M] matrix:
- *   < A | c+i cj | B > / <A|B> = ( T(B) * conj(A) )^-1 * T(B) 
+ *
+ *   \f$ \left< A | c+i cj | B \right> / \left<A|B\right> = ( B^T * A^\dagger )^{-1} B^T \f$
+ *
  * Parameters:
  *  - conjA = conj(A)
  *  - B

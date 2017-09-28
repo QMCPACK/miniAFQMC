@@ -15,6 +15,9 @@
 //    Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
 
+/** @file vbias.hpp
+ *  @brief Bias Potential
+ */
 
 #ifndef  AFQMC_VBIAS_HPP 
 #define  AFQMC_VBIAS_HPP 
@@ -27,15 +30,20 @@ namespace qmcplusplus
 namespace base 
 {
 
-/*
+/**
  * Calculates the bias potential: 
- *  vbias = T(Spvn) * G 
- *     vbias(n,w) = sum_ik Spvn(ik,n) * G(ik,w) 
+ *
+ *  \f$ vbias = Spvn^T   G \f$
+ *
+ *  \f$ vbias(n,w) = \sum_{ik} Spvn(ik,n)  G(ik,w) \f$
+ * 
+ * Serial Implementation
+ * \todo improve template and argument names
+ *
+ * \todo remove unnecessary asserts, use backtrace instead if necessary
  */
-// Serial Implementation
-
-template< class SpMat,
-	  class MatA,
+template<class SpMat,
+	class MatA,
           class MatB  
         >
 inline void get_vbias(const SpMat& Spvn, const MatA& G, MatB&& v, bool transposed)

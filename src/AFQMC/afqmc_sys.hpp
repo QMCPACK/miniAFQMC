@@ -15,6 +15,10 @@
 //    Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
 
+/** @file afqmc_sys.hpp
+ *  @brief AFQMC global state
+ */
+
 #ifndef  AFQMC_OPS_HPP 
 #define  AFQMC_OPS_HPP 
 
@@ -32,6 +36,11 @@ namespace qmcplusplus
 namespace base 
 {
 
+/**
+ * Quasi-global AFQMC object, contains workspaces 
+ * 
+ * \todo get rid of it and global state in general
+ */
 struct afqmc_sys: public AFQMCInfo
 {
 
@@ -200,24 +209,24 @@ struct afqmc_sys: public AFQMCInfo
 
   private:
 
-    // Buffers using std::vector
-    // Used in QR and invert
+    //! Buffers using std::vector
+    //! Used in QR and invert
     std::vector<ComplexType> WORK; 
     std::vector<int> IWORK; 
 
-    // Vector used in QR routines 
+    //! Vector used in QR routines 
     ComplexVector TAU;
 
-    // TMat_AB: Temporary Matrix of dimension [AxB]
-    // N: NAEA
-    // M: NMO
+    //! TMat_AB: Temporary Matrix of dimension [AxB]
+    //! N: NAEA
+    //! M: NMO
     ComplexMatrix TMat_NN;
     ComplexMatrix TMat_NM;
     ComplexMatrix TMat_MN;
     ComplexMatrix TMat_MM;
     ComplexMatrix TMat_MM2;
 
-    // storage for contraction of 2-electron integrals with density matrix
+    //! storage for contraction of 2-electron integrals with density matrix
     ComplexMatrix Gcloc;
 };
 

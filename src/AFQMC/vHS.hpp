@@ -15,6 +15,9 @@
 //    Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
 
+/** @file vHS.hpp
+ *  @brief HS potential
+ */
 
 #ifndef  AFQMC_VHS_HPP 
 #define  AFQMC_VHS_HPP 
@@ -29,12 +32,14 @@ namespace qmcplusplus
 namespace base
 {
 
-/*
+/**
  * Calculates the H-S potential: 
- *  vHS = Spvn * X 
- *     vHS(ik,w) = sum_n Spvn(ik,n) * X(n,w) 
+ * \f$ vHS = Spvn * X  \f$
+ *
+ * \f$    vHS(ik,w) = \sum_n Spvn(ik,n) * X(n,w) \f$
+ *
+ * Serial Implementation
  */
-// Serial Implementation
 template< class SpMat,
 	  class Mat	
         >
@@ -49,8 +54,8 @@ inline void get_vHS(const SpMat& Spvn, const Mat& X, Mat& v)
   ma::product(Spvn,X,v);  
 }
 
-/*
- * Calculate S = exp(V)*S using a Taylor expansion of exp(V)
+/**
+ * Calculate \f$S = \exp(V)*S \f$ using a Taylor expansion of exp(V)
  */ 
 template< class MatA,
           class MatB,
