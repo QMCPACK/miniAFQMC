@@ -92,5 +92,18 @@ template <typename ArrayType>
 GPUArray<ArrayType> gpu(ArrayType & array){
   return GPUArray<ArrayType>(array);
 }
-  
-  
+
+template <typename ArrayType>
+bool in_gpu(const constGPUArray<ArrayType> & array){
+  return true;
+}
+
+template <typename ArrayType>
+bool in_gpu(const GPUArray<ArrayType> & array){
+  return true;
+}
+
+template <typename ArrayType>
+bool in_gpu(const ArrayType & array){
+  return false;
+}
