@@ -90,6 +90,10 @@ class constGPUSparseMatrix {
 public:
  
   typedef typename SparseMatrix<Type>::intType intType;
+  typedef typename SparseMatrix<Type>::const_pointer const_pointer;
+  typedef typename SparseMatrix<Type>::const_intPtr const_intPtr;
+  
+  const static int dimensionality = SparseMatrix<Type>::dimensionality;
   
   constGPUSparseMatrix(const SparseMatrix<Type> & matrix):
     const_base_(matrix)
@@ -113,6 +117,30 @@ public:
 
   }
 
+  int rows() const {
+    return const_base_.rows();
+  }
+  
+  int cols() const {
+    return const_base_.cols();
+  }
+
+  const_pointer val() const {
+    return vals_;
+  }
+  
+  const_intPtr indx() const {
+    return cols_;
+  }
+
+  const_intPtr pntrb(long n=0) const {
+    return rows_;
+  }
+
+  const_intPtr pntre(long n=0) const {
+    return rows_ + 1;
+  }
+  
 protected:
   const SparseMatrix<Type> & const_base_;
   Type * vals_;
@@ -148,6 +176,10 @@ bool in_gpu(const GPUArray<ArrayType> & array){
   return true;
 }
 
+template <typename Type>
+bool in_gpu(const constGPUSparseMatrix<Type> &){
+  return true;
+}
 template <typename ArrayType>
 bool in_gpu(const ArrayType & array){
   return false;
