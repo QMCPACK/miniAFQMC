@@ -2,6 +2,7 @@
 #include <array>
 #include <boost/multi_array.hpp>
 #include <cuda_runtime.h>
+#include "Matrix/SparseMatrix.hpp"
 
 template <typename ArrayType>
 class constGPUArray {
@@ -18,8 +19,8 @@ public:
     const_base(array),
     data_(array)
   {
-    cudaMalloc(&gpu_data_, data_.num_elements());
-    cudaMemcpy(gpu_data_, data_.data(), data_.num_elements(), cudaMemcpyHostToDevice);
+    cudaMalloc(&gpu_data_, sizeof(element)*data_.num_elements());
+    cudaMemcpy(gpu_data_, data_.data(), sizeof(element)*data_.num_elements(), cudaMemcpyHostToDevice);
   }
 
   ~constGPUArray(){
@@ -64,7 +65,7 @@ public:
   }
 
   ~GPUArray(){
-    cudaMemcpy(data_.data(), gpu_data_, data_.num_elements(), cudaMemcpyDeviceToHost);
+    cudaMemcpy(data_.data(), gpu_data_, sizeof(element)*data_.num_elements(), cudaMemcpyDeviceToHost);
     base = data_;
   }
 
@@ -81,6 +82,50 @@ private:
   
 };
 
+using qmcplusplus::SparseMatrix;
+  
+template <typename Type>
+class constGPUSparseMatrix {
+  
+public:
+ 
+  typedef typename SparseMatrix<Type>::intType intType;
+  
+  constGPUSparseMatrix(const SparseMatrix<Type> & matrix):
+    const_base_(matrix)
+  {
+    cudaMalloc(&vals_, const_base_.size()*sizeof(Type));
+    cudaMemcpy(vals_, const_base_.values(), const_base_.size()*sizeof(Type), cudaMemcpyHostToDevice);
+
+    cudaMalloc(&cols_, const_base_.size()*sizeof(Type));
+    cudaMemcpy(cols_, const_base_.column_data(), const_base_.size()*sizeof(Type), cudaMemcpyHostToDevice);
+
+    cudaMalloc(&rows_, (const_base_.rows() + 1)*sizeof(Type));
+    cudaMemcpy(rows_, const_base_.row_index(), (const_base_.rows() + 1)*sizeof(Type), cudaMemcpyHostToDevice);
+    
+  }
+
+  ~constGPUSparseMatrix(){
+
+    cudaFree(vals_);
+    cudaFree(cols_);
+    cudaFree(rows_);
+
+  }
+
+protected:
+  const SparseMatrix<Type> & const_base_;
+  Type * vals_;
+  intType * cols_;
+  intType * rows_;
+  
+};
+
+
+template <typename Type>
+constGPUSparseMatrix<Type> gpu(const SparseMatrix<Type> & matrix){
+  return constGPUSparseMatrix<Type>(matrix);
+}
 
 template <typename ArrayType>
 constGPUArray<ArrayType> gpu(const ArrayType & array){
