@@ -1,6 +1,7 @@
 #include <vector>
 #include <array>
-#include<boost/multi_array.hpp>
+#include <boost/multi_array.hpp>
+#include <cuda_runtime.h>
 
 template <typename ArrayType>
 class constGPUArray {
@@ -17,9 +18,12 @@ public:
     const_base(array),
     data_(array)
   {
+    cudaMalloc(&gpu_data_, data_.num_elements());
+    cudaMemcpy(gpu_data_, data_.data(), data_.num_elements(), cudaMemcpyHostToDevice);
   }
 
   ~constGPUArray(){
+    cudaFree(gpu_data_);
   }
 
   const index * strides() const {
@@ -31,12 +35,13 @@ public:
   }
 
   const element * origin() const {
-    return data_.origin();
+    return gpu_data_;
   }
 
 protected:
   const ArrayType & const_base;
   boost::multi_array<element, dimensionality> data_;
+  element * gpu_data_;
   
 };
 
@@ -59,16 +64,19 @@ public:
   }
 
   ~GPUArray(){
-    base = constGPUArray<ArrayType>::data_;
+    cudaMemcpy(data_.data(), gpu_data_, data_.num_elements(), cudaMemcpyDeviceToHost);
+    base = data_;
   }
 
   using constGPUArray<ArrayType>::origin;
   
   element * origin() {
-    return constGPUArray<ArrayType>::data_.origin();
+    return gpu_data_;
   }
 
 private:
+  using constGPUArray<ArrayType>::data_;
+  using constGPUArray<ArrayType>::gpu_data_;
   ArrayType & base;
   
 };
