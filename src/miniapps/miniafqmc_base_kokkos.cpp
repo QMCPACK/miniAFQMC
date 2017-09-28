@@ -38,7 +38,8 @@
 #include <getopt.h>
 #include "io/hdf_archive.h"
 
-#include "AFQMC/afqmc_sys.hpp"
+#include "AFQMC/afqmc_sys_kokkos.hpp"
+// #include "Matrix/initialize_serial_kokkos.hpp"
 #include "Matrix/initialize_serial.hpp"
 #include "AFQMC/mixed_density_matrix.hpp"
 #include "AFQMC/energy.hpp"
@@ -156,9 +157,11 @@ int main(int argc, char **argv)
   base::afqmc_sys AFQMCSys;   // Main AFQMC object. Control access to several apgorithmic functions. 
   ComplexSpMat Spvn;      // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
   ComplexSpMat SpvnT;   // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
-  ComplexMatrix haj;    // 1-Body Hamiltonian Matrix
+  ComplexMatrix haj;
+  // ComplexMatrixKokkos haj("haj", 1, 1);    // 1-Body Hamiltonian Matrix (dummy size, will be resized in afqmc::Initialze)
   ComplexSpMat Vakbl;   // 2-Body Hamiltonian Matrix: (Half-Rotated) 2-electron integrals 
-  ComplexMatrix Propg1;   // propagator for 1-body hamiltonian 
+  ComplexMatrix Propg1;
+  // ComplexMatrixKokkos Propg1("Propg1",1,1);   // propagator for 1-body hamiltonian (dummy size, will be resized in afqmc::Initialze)
 
 //  index_gen indices;
 
@@ -205,6 +208,7 @@ int main(int argc, char **argv)
   ComplexMatrix vHS(extents[NMO*NMO][nwalk]);        // Hubbard-Stratonovich potential
   ComplexMatrix G(extents[NIK][nwalk]);           // density matrix
   ComplexMatrix Gc(extents[NAK][nwalk]);           // compact density matrix for energy evaluation
+  // ComplexMatrix Gc("Gc", NAK, nwalk);           // compact density matrix for energy evaluation
   ComplexMatrix X(extents[nchol][nwalk]);         // X(n,nw) = rand(n,nw) ( + vbias(n,nw)) 
 
   ComplexVector hybridW(extents[nwalk]);         // stores weight factors

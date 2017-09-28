@@ -28,6 +28,8 @@
 #include <Utilities/OhmmsInfo.h>
 #include <Message/Communicate.h>
 
+#include <Kokkos_Core.hpp>
+
 #define byRows   999
 #define byCols   111
 
@@ -104,6 +106,7 @@ namespace qmcplusplus
   typedef boost::multi_array<ValueType,2> ValueMatrix;  
   typedef boost::multi_array<SPValueType,2> SPValueMatrix;  
   typedef boost::multi_array<ComplexType,2> ComplexMatrix;  
+  typedef Kokkos::View<ComplexType**> ComplexMatrixKokkos;  
   typedef boost::multi_array<SPComplexType,2> SPComplexMatrix;  
 
   typedef SparseMatrix<IndexType>     IndexSpMat;
