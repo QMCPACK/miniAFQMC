@@ -1,3 +1,6 @@
+#ifndef MA_GPU
+#define MA_GPU
+
 #include <vector>
 #include <array>
 #include <boost/multi_array.hpp>
@@ -28,11 +31,11 @@ public:
   }
 
   const index * strides() const {
-    data_.strides();
+    return data_.strides();
   }
 
   const size_type * shape() const {
-    data_.shape();
+    return data_.shape();
   }
 
   const element * origin() const {
@@ -184,3 +187,6 @@ template <typename ArrayType>
 bool in_gpu(const ArrayType & array){
   return false;
 }
+
+#endif
+
