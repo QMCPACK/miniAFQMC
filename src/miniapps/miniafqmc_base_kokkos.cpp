@@ -205,11 +205,15 @@ int main(int argc, char **argv)
            <<"    Hamiltonian Sparsity: " <<Vakbl.size()/double(NAEA*NAEA*NMO*NMO*4.0) <<std::endl;
 
   ComplexMatrix vbias(extents[nchol][nwalk]);     // bias potential
+  // ComplexMatrixKokkos vbias("vbias", nchol, nwalk);     // bias potential
   ComplexMatrix vHS(extents[NMO*NMO][nwalk]);        // Hubbard-Stratonovich potential
+  // ComplexMatrixKokkos vHS("vHS", NMO*NMO, nwalk);        // Hubbard-Stratonovich potential
   ComplexMatrix G(extents[NIK][nwalk]);           // density matrix
+  // ComplexMatrixKokkos G("G", NIK, nwalk);           // density matrix
   ComplexMatrix Gc(extents[NAK][nwalk]);           // compact density matrix for energy evaluation
-  // ComplexMatrix Gc("Gc", NAK, nwalk);           // compact density matrix for energy evaluation
+  // ComplexMatrixKokkos Gc("Gc", NAK, nwalk);           // compact density matrix for energy evaluation
   ComplexMatrix X(extents[nchol][nwalk]);         // X(n,nw) = rand(n,nw) ( + vbias(n,nw)) 
+  // ComplexMatrixKokkos X("X", nchol, nwalk);         // X(n,nw) = rand(n,nw) ( + vbias(n,nw)) 
 
   ComplexVector hybridW(extents[nwalk]);         // stores weight factors
   ComplexVector eloc(extents[nwalk]);         // stores local energies
@@ -217,6 +221,7 @@ int main(int argc, char **argv)
   WalkerContainer W(extents[nwalk][2][NMO][NAEA]);
   // 0: eloc, 1: weight, 2: ovlp_up, 3: ovlp_down, 4: w_eloc, 5: old_w_eloc, 6: old_ovlp_alpha, 7: old_ovlp_beta
   ComplexMatrix W_data(extents[nwalk][8]);  
+  // ComplexMatrix W_data("W_data", nwalk, 8);  
   // initialize walkers to trial wave function
   for(int n=0; n<nwalk; n++) 
     for(int nm=0; nm<NMO; nm++) 

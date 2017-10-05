@@ -101,8 +101,8 @@ struct afqmc_sys: public AFQMCInfo
       // boost::multi_array_ref<ComplexType,4> G_4D(G.data(), extents[2][N_][NMO][nwalk]);
 
       // parallelize over nwalk
-      //for(int n=0; n<nwalk; n++) {
-      Kokkos::parallel_for(nwalk, [&](const int n) {
+      for(int n=0; n<nwalk; n++) {
+      // Kokkos::parallel_for(nwalk, [&](const int n) {
         W_data[n][2] = base::MixedDensityMatrix<ComplexType>(trialwfn_alpha,W[n][0],
                        DM,TMat_NN,TMat_NM,IWORK,WORK,compact);
         G_4D[ indices[0][range_t(0,N_)][range_t(0,NMO)][n] ] = DM;
@@ -110,7 +110,7 @@ struct afqmc_sys: public AFQMCInfo
         W_data[n][3] = base::MixedDensityMatrix<ComplexType>(trialwfn_beta,W[n][1],
                        DM,TMat_NN,TMat_NM,IWORK,WORK,compact);
         G_4D[ indices[1][range_t(0,N_)][range_t(0,NMO)][n] ] = DM;
-      });
+      } // );
     }
 
     template<class SpMat,
@@ -136,9 +136,10 @@ struct afqmc_sys: public AFQMCInfo
       assert(W_data.shape()[0] >= W.shape()[0]);
       assert(W_data.shape()[1] >= 4);
       for(int n=0, nw=W.shape()[0]; n<nw; n++) {
+      // Kokkos::parallel_for(W.shape()[0], [&](const int n) {
         W_data[n][2] = base::Overlap<ComplexType>(trialwfn_alpha,W[n][0],TMat_NN,IWORK);
         W_data[n][3] = base::Overlap<ComplexType>(trialwfn_beta,W[n][1],TMat_NN,IWORK);
-      }
+      } //);
     }
 
     template<class WSet, 
@@ -154,6 +155,7 @@ struct afqmc_sys: public AFQMCInfo
       // re-interpretting matrices to avoid new temporary space  
       boost::multi_array_ref<Type,2> T1(TMat_NM.data(), extents[NMO][NAEA]);
       boost::multi_array_ref<Type,2> T2(TMat_MM2.data(), extents[NMO][NAEA]);
+      // for(int nw=0, nwalk=W.shape()[0]; nw<nwalk; nw++) {
       for(int nw=0, nwalk=W.shape()[0]; nw<nwalk; nw++) {
 
         // need deep-copy, since stride()[1] == nw otherwise
