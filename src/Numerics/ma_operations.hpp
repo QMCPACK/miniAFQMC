@@ -23,6 +23,7 @@
 
 #include "ma_blas.hpp"
 #include "ma_lapack.hpp"
+#include "ma_gpu.hpp"
 #include "sparse.hpp"
 
 #include<type_traits> // enable_if
@@ -118,6 +119,10 @@ template<class T, class SparseMatrixA, class MultiArray2DB, class MultiArray2DC,
         typename = void // TODO change to use dispatch 
 >
 MultiArray2DC product(T alpha, SparseMatrixA const& A, MultiArray2DB const& B, T beta, MultiArray2DC&& C){
+  
+	assert(in_gpu(A) == in_gpu(B));
+	assert(in_gpu(B) == in_gpu(C));
+	
         assert(op_tag<SparseMatrixA>::value == 'N' || op_tag<SparseMatrixA>::value == 'T'); 
         assert(op_tag<MultiArray2DB>::value == 'N');
         assert( arg(B).strides()[1] == 1 );
