@@ -613,6 +613,18 @@ ELSE(HDF5_FOUND)
     MESSAGE(FATAL_ERROR "Require hdf5 1.6.4 or higher. Set HDF5_ROOT")
   endif()
 ENDIF(HDF5_FOUND)
+
+#make sure we can find boost if it's not in /usr
+set(Boost_NO_BOOST_CMAKE on)
+find_package(Boost REQUIRED)
+IF(Boost_FOUND)
+  SET(HAVE_LIBBOOST 1)
+  INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS})
+  MESSAGE(STATUS "Setting Boost_INCLUDE_DIRS=${Boost_INCLUDE_DIRS}")
+ELSE()
+  MESSAGE(FATAL_ERROR "Require boost 1.54.x or higher. Set BOOST_ROOT")
+ENDIF()
+
 #
 
 #INCLUDE(${PROJECT_CMAKE}/FindPkgConfig.cmake)
