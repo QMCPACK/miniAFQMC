@@ -292,6 +292,21 @@ class SparseMatrix
     assert(vals->size()<static_cast<unsigned long>(std::numeric_limits<intType>::max())); // right now limited to INT_MAX due to indexing problem.
   }
 
+  void add(const intType r, const std::vector<std::tuple<intType,T>>& v, bool dummy=false)
+  {
+    compressed=false;
+    assert(r-row_offset>=0 && r-row_offset<nr);
+    for(auto&& a: v) {
+#ifdef ASSERT_SPARSEMATRIX
+      assert(std::get<0>(a)-col_offset>=0 && std::get<0(a)-col_offset<nc);
+#endif
+      myrows.push_back(r-row_offset);
+      colms.push_back(std::get<0>(a)-col_offset);
+      vals.push_back(std::get<1>(a));
+    }
+    assert(vals->size()<static_cast<unsigned long>(std::numeric_limits<intType>::max())); // right now limited to INT_MAX due to indexing problem.
+  }
+
   void compress()
   {
     // define comparison operator for tuple_iterator

@@ -18,7 +18,6 @@
 #ifndef MA_COMMUNICATIONS_HPP
 #define MA_COMMUNICATIONS_HPP
 
-#include"Configuration.h"
 #include<type_traits> // enable_if
 #include<mpi.h>
 
@@ -30,39 +29,71 @@ template< class MultiArray2DA,
                 MultiArray2DA::dimensionality == 2 and
                 MultiArray2DB::dimensionality == 2> 
 >
-inline void gather_matrix( MPI_Comm comm, MultiArray2DA& A, MultiArray2DB& B, int type)
+inline void allgather_matrix( MPI_Comm comm, const MultiArray2DA& source, MultiArray2DB&& dest, int type)
 {
-  typedef typename std::decay<MultiArray2DA>::type::element TypeA;
+  typedef typename MultiArray2DA::element TypeA;
   typedef typename std::decay<MultiArray2DB>::type::element TypeB;
   assert(sizeof(TypeA) == sizeof(TypeB));
+  assert(source.strides()[1]==1);  // not sure how to handle a different stride()[1] yet
+  assert(dest.strides()[1]==1);  // not sure how to handle a different stride()[1] yet
+
+  int size;
+  MPI_Comm_size(comm,&size);
 
   if(type == byRows) {
 
-    int size;
-    MPI_Comm_size(comm,&size);
-    assert(A.shape()[0]*size == B.shape()[0]);
-    assert(A.shape()[1] == B.shape()[1]);
+    assert(source.shape()[0]*size == dest.shape()[0]);
+    assert(source.shape()[1] == dest.shape()[1]);
+    assert(source.strides()[0] == source.shape()[1]);
+    assert(dest.strides()[0] == dest.shape()[1]);
     // MPI!!!
-    MPI_Allgather(A.data(),A.shape()[0]*A.shape()[1]*sizeof(TypeA), MPI_CHAR
-        ,B.data(),A.shape()[0]*A.shape()[1]*sizeof(TypeA), MPI_CHAR, comm);
+    MPI_Allgather(source.origin(),source.num_elements()*sizeof(TypeA), MPI_CHAR
+        ,dest.origin(),source.num_elements()*sizeof(TypeA), MPI_CHAR, comm);
 
   } else if(type == byCols) {
 
-    int size, rank;
-    MPI_Comm_size(comm,&size);
-    MPI_Comm_rank(comm,&rank);
-    assert(A.shape()[0] == B.shape()[0]);
-    assert(A.shape()[1]*size == B.shape()[1]);
-    std::vector<TypeA> buff(A.shape()[0]*A.shape()[1]);
+    assert(source.shape()[0] == dest.shape()[0]);
+    assert(source.shape()[1]*size == dest.shape()[1]);
 
-    // learn how to use MPI_TYPE_..._SUBARRAY
-    for(int i=0, col0=0; i<size; i++, col0+=A.shape()[1]) {
-      if( rank == i) std::copy(A.data(), A.data()+buff.size(), buff.data());  
-      MPI_Bcast(buff.data(), buff.size()*sizeof(TypeA), MPI_CHAR, i, comm );
-      for(int k=0, kj=0; k<A.shape()[0]; k++)
-        for(int j=0; j<A.shape()[1]; j++, kj++)
-          B[k][col0+j] = buff[kj];     
-    }
+#if 1 
+    // using Allreduce
+
+    assert(dest.strides()[0] == dest.shape()[1]);
+    assert(source.strides()[0] == source.shape()[1]);
+
+    int rank;
+    MPI_Comm_rank(comm,&rank);
+
+    using boost::indices;
+    using range_t = boost::multi_array_types::index_range;
+
+    std::fill_n(dest.origin(),dest.num_elements(),0);
+    dest[indices[range_t()][range_t(rank*source.shape()[1],(rank+1)*source.shape()[1])]] = source;
+
+    // hard-coded to std::complex<double>
+    MPI_Allreduce(MPI_IN_PLACE,dest.origin(),2*dest.num_elements(),
+                 MPI_DOUBLE,MPI_SUM,comm);
+
+#else
+    // using MPI_Datatype
+
+    MPI_Datatype typeA, typeB_, typeB;
+    MPI_Type_vector(source.shape()[0], source.shape()[1]*sizeof(TypeA), source.strides()[0]*sizeof(TypeA), MPI_CHAR, &typeA);
+    MPI_Type_commit(&typeA);
+    MPI_Type_vector(source.shape()[0], source.shape()[1]*sizeof(TypeA), dest.strides()[0]*sizeof(TypeA), MPI_CHAR, &typeB_);
+    MPI_Type_commit(&typeB_);
+    MPI_Type_create_resized(typeB_, 0, source.shape()[1]*sizeof(TypeA), &typeB);
+    MPI_Type_commit(&typeB);
+    MPI_Type_free(&typeB_);
+
+    MPI_Allgather(source.origin(),1,typeA,
+                  dest.origin(),1,typeB,
+                  comm);
+
+    MPI_Type_free(&typeA);
+    MPI_Type_free(&typeB);
+
+#endif
         
 
   } else {

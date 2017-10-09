@@ -501,6 +501,33 @@ class SMSparseMatrix
     }
   }
 
+  void add(const intType r, const std::vector<std::tuple<intType,T>>& v, bool needs_locks=false)
+  {
+    compressed=false;
+    assert(r-row_offset>=0 && r-row_offset<nr);
+    if(needs_locks) {
+      boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(*mutex);
+      for(auto&& a: v) {
+#ifdef ASSERT_SPARSEMATRIX
+        assert(std::get<0>(a)-col_offset>=0 && std::get<0>(a)-col_offset<nc);
+#endif
+        myrows->push_back(r-row_offset);
+        colms->push_back(std::get<0>(a)-col_offset);
+        vals->push_back(std::get<1>(a));
+      }
+    } else {
+      if(!head) return;
+      for(auto&& a: v) {
+#ifdef ASSERT_SPARSEMATRIX
+        assert(std::get<0>(a)-col_offset>=0 && std::get<0>(a)-col_offset<nc);
+#endif
+        myrows->push_back(r-row_offset);
+        colms->push_back(std::get<0>(a)-col_offset);
+        vals->push_back(std::get<1>(a));
+      }
+    }
+  }
+
   void setup_index()
   {
     if(head) {
@@ -573,7 +600,7 @@ class SMSparseMatrix
     std::vector<int> pos(nblk+1);     
     // a core processes elements from pos[rank]-pos[rank+1]
     FairDivide(vals->size(),nblk,pos); 
-    
+
     // sort local segment
     if(rank < nblk)   
       std::sort(make_tuple_iterator<int_iterator,int_iterator,iterator>(myrows->begin()+pos[rank],colms->begin()+pos[rank],vals->begin()+pos[rank]),

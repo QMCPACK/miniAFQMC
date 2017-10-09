@@ -98,10 +98,7 @@ inline void halfrotate_cholesky(task_group& TG, const Mat& alpha, const Mat& bet
       continue;
     }
 
-//    std::fill(An.begin(), An.end(), zero);
-    for(int a=0; a<M; a++)
-      for(int k=0; k<M; k++)
-        An[a][k]=zero;
+    std::fill_n(An.data(), An.num_elements(), zero);
 
     // extract Cholesky vector i
     for(int nt=0; nt<nterms; nt++, col++, val++) 
@@ -150,10 +147,7 @@ inline void halfrotate_cholesky(task_group& TG, const Mat& alpha, const Mat& bet
       continue;
     }
 
-//    std::fill(An.begin(), An.end(), zero);
-    for(int a=0; a<M; a++)
-      for(int k=0; k<M; k++)
-        An[a][k]=zero;
+    std::fill_n(An.data(), An.num_elements(), zero);
 
     // extract Cholesky vector i
     for(int nt=0; nt<nterms; nt++, col++, val++) 
@@ -195,6 +189,7 @@ inline void halfrotate_cholesky(task_group& TG, const Mat& alpha, const Mat& bet
   // transpose A back
   A.transpose(TG.getNodeCommLocal());
   B.compress(TG.getNodeCommLocal());
+
 }
 
 }

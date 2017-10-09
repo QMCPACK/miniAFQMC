@@ -62,7 +62,7 @@ namespace qmcplusplus
   //using boost::multi_array_types::index_gen;
   using boost::extents;
   using boost::indices;
-  typedef boost::multi_array_types::index_range range_t;
+  using range_t = boost::multi_array_types::index_range;
 
   typedef OHMMS_INDEXTYPE                 IndexType;
   typedef OHMMS_INDEXTYPE                 OrbitalType;

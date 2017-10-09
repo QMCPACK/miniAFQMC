@@ -41,16 +41,16 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
 
   enum InitTimers
   {
-    Total,
     read_Spvn,
+    sort_Spvn,
     read_Vakbl,
-    rotate_Spvn,
+    sort_Vakbl,
   };
   TimerNameList_t<InitTimers> TimerNames = {
-    {Total,"Initialization_Total"},
     {read_Spvn,"read_Spvn"},
+    {sort_Spvn,"sort_Spvn"},
     {read_Vakbl,"read_Vakbl"},
-    {rotate_Spvn,"rotate_Spvn"},
+    {sort_Vakbl,"sort_Vakbl"},
   };  
   TimerList_t Timers;
 
@@ -62,6 +62,7 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
   int ncores_per_TG = TG.getNCoresPerTG();
   int nnodes_per_TG = TG.getNNodesPerTG();
   if(nread<1) nread = ncores; // how many cores in a node read??? 
+  nread = std::min(nread,ncores); 
   int head = (nodeid==0)&&(coreid==0);
   bool reader = (coreid<nread);
   int scl = sizeof(ValueType)/sizeof(RealType); // no templated mpi wrapper, so do it by hand for now
@@ -76,7 +77,6 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
 
     setup_timers(Timers, TimerNames, timer_level_coarse); 
 
-    Timers[Total]->start();
     if(!dump.is_group( std::string("/Wavefunctions/PureSingleDeterminant") )) {
       app_error()<<" ERROR: H5Group /Wavefunctions/PureSingleDeterminant does not exist."<<std::endl;
       return false;
@@ -182,15 +182,44 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
     // read half-rotated hamiltonian
     // careful here!!!
     Timers[read_Vakbl]->start();
-    Vakbl.setup("miniAFQMC_Vakbl",TG.getNodeCommLocal());
-    Vakbl.setDims(Idata[2],Idata[3]);
-    Vakbl.resize(Idata[1]);
-    if(!dump.read(*(Vakbl.getVals()),"SpHijkl_vals")) return false;
-    if(!dump.read(*(Vakbl.getCols()),"SpHijkl_cols")) return false;
-    if(!dump.read(*(Vakbl.getRowIndex()),"SpHijkl_rowIndex")) return false;
-    Vakbl.setRowsFromRowIndex();
-    // morph to "compacted" notation for miniapp
-    { 
+    {
+      simple_matrix_partition<task_group,IndexType,RealType> split(Idata[2],Idata[3],1e-8);
+      std::vector<IndexType> counts;
+      // count dimensions of sparse matrix
+      if(!count_entries_hdf5_SpMat(dump,split,std::string("SpHijkl"),true,counts,TG,true,nread))
+        return false;
+
+      split.partition(TG,true,counts,sets);
+
+      app_log()<<"  Partitioning of Hamiltonian Matrix (rows): ";
+      for(int i=0; i<=nnodes_per_TG; i++)
+        app_log()<<sets[i] <<" ";
+      app_log()<<std::endl;
+      app_log()<<"  Number of terms in each partitioning: ";
+      for(int i=0; i<nnodes_per_TG; i++)
+        app_log()<<accumulate(counts.begin()+sets[i],counts.begin()+sets[i+1],0) <<" ";
+      app_log()<<std::endl;
+
+      MPI_Bcast(sets.data(), sets.size(), MPI_INT, 0, MPI_COMM_WORLD);
+
+      // resize Vakbl 
+      int r0 = sets[TG.getLocalNodeNumber()];
+      int rN = sets[TG.getLocalNodeNumber()+1];
+      int sz = std::accumulate(counts.begin()+r0,counts.begin()+rN,0);
+      MPI_Bcast(&sz, 1, MPI_INT, 0, TG.getNodeCommLocal());
+
+      Vakbl.setup("miniAFQMC_Vakbl",TG.getNodeCommLocal());
+      Vakbl.setDims(Idata[2],Idata[3]);
+      Vakbl.reserve(sz);
+
+      // read Spvn
+      if(!read_hdf5_SpMat(Vakbl,split,dump,std::string("SpHijkl"),TG,true,nread))
+        return false;
+      
+      // morph to "compacted" notation for miniapp
+      // reset r0/rN  
+      r0 = std::numeric_limits<int>::max();
+      rN = 0; 
       typename SpMat::int_iterator it = Vakbl.cols_begin();
       typename SpMat::int_iterator itend = Vakbl.cols_end();
       for(; it!=itend; ++it) {
@@ -210,18 +239,22 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
         if( i < NMO ) assert(i < NAEA);
         else assert(i-NMO < NAEA);
         *it = a*NMO+j;
+        if(a*NMO+j < r0) r0=a*NMO+j;
+        if(a*NMO+j+1 > rN) rN=a*NMO+j+1;
       }    
-    }
-    Vakbl.setDims(2*NMO*NAEA,2*NMO*NAEA);
-    // harcoded to int/long, needs a templated Bcast for generic case
-    MPI_Bcast(reinterpret_cast<char*>(Vakbl.values()),Vakbl.size()*sizeof(ComplexType),
-        MPI_CHAR,0,TG.getHeadOfNodesComm());
-    MPI_Bcast(Vakbl.column_data(),Vakbl.size(),MPI_INT,0,TG.getHeadOfNodesComm());
-    MPI_Bcast(Vakbl.row_data(),Vakbl.size(),MPI_INT,0,TG.getHeadOfNodesComm());
+      // shift rows to range [0,rN-r0)  
+      for(it = Vakbl.rows_begin(),itend = Vakbl.rows_end(); it!=itend; ++it) *it -= r0; 
+      MPI_Bcast(&r0, 1, MPI_INT, 0, TG.getNodeCommLocal());  
+      MPI_Bcast(&rN, 1, MPI_INT, 0, TG.getNodeCommLocal());  
+      Vakbl.setOffset(r0,0);  
+      Vakbl.setDims(rN-r0,2*NMO*NAEA);
 
+    }
     MPI_Barrier(MPI_COMM_WORLD);
-    Vakbl.compress(TG.getNodeCommLocal());  // Should already be compressed, but just in case
     Timers[read_Vakbl]->stop();
+    Timers[sort_Vakbl]->start();
+    Vakbl.compress(TG.getNodeCommLocal());
+    Timers[sort_Vakbl]->stop();
 
     dump.pop();
     dump.pop();
@@ -237,7 +270,6 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
     long ntot = Ldims[0];       // total number of terms
     int nrows = int(Ldims[1]);  // number of rows 
     int nvecs = int(Ldims[2]);  // number of cholesky vectors
-    int nblk = int(Ldims[4]);   // number of blocks
 
     if(nrows != NMO*NMO) return false;
     if(static_cast<int>(Ldims[3]) != NMO) return false;
@@ -246,6 +278,7 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
     
 
     // read 1-body propagator
+    Timers[read_Spvn]->start();
     if(!dump.read(vvec,"Spvn_propg1")) return false;
     if(vvec.size() != NMO*NMO) {
       std::cerr<<" Incorrect dimensions on 1-body propagator: " <<vvec.size() <<std::endl;
@@ -261,9 +294,8 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
     simple_matrix_partition<task_group,IndexType,RealType> split(nrows,nvecs,1e-8);
     std::vector<IndexType> counts;
     // count dimensions of sparse matrix
-    Timers[read_Spvn]->start();
-    count_entries_hdf5_SpMat(dump,split,std::string("Spvn"),nblk,false,counts,TG,true,nread);    
-    Timers[read_Spvn]->stop();
+    if(!count_entries_hdf5_SpMat(dump,split,std::string("Spvn"),false,counts,TG,true,nread))    
+      return false;
 
     split.partition(TG,false,counts,sets);
 
@@ -290,15 +322,16 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
     Spvn.reserve(sz);
 
     // read Spvn
-    Timers[read_Spvn]->start();
-    read_hdf5_SpMat(Spvn,split,dump,std::string("Spvn"),nblk,TG,true,nread);
+    if(!read_hdf5_SpMat(Spvn,split,dump,std::string("Spvn"),TG,true,nread))
+      return false;
     Timers[read_Spvn]->stop();
+
+    Timers[sort_Spvn]->start();
+    Spvn.compress(TG.getNodeCommLocal());
+    Timers[sort_Spvn]->stop();
 
     // scale by sqrt(dt)
     Spvn *= std::sqrt(dt);
-
-    Timers[rotate_Spvn]->start();
-    Timers[rotate_Spvn]->stop();
 
     dump.pop();
     dump.pop();
@@ -343,17 +376,76 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
         MPI_CHAR,0,MPI_COMM_WORLD);
 
     // read Vakbl
-    Vakbl.setup("miniAFQMC_Vakbl",TG.getNodeCommLocal());
-    Vakbl.setDims(2*NMO*NAEA,2*NMO*NAEA);
-    Vakbl.resize(Idata[1]);
-    if(coreid==0) {
-      MPI_Bcast(reinterpret_cast<char*>(Vakbl.values()),Vakbl.size()*sizeof(ComplexType),
-        MPI_CHAR,0,TG.getHeadOfNodesComm());
-      MPI_Bcast(Vakbl.column_data(),Vakbl.size(),MPI_INT,0,TG.getHeadOfNodesComm());
-      MPI_Bcast(Vakbl.row_data(),Vakbl.size(),MPI_INT,0,TG.getHeadOfNodesComm());
-    }  
+    std::vector<IndexType> counts;
+    {
+      simple_matrix_partition<task_group,IndexType,RealType> split(Idata[2],Idata[3],1e-8);
+      // count dimensions of sparse matrix
+      if(!count_entries_hdf5_SpMat(dump,split,std::string("SpHijkl"),true,counts,TG,true,nread))
+        return false;
+
+      MPI_Bcast(sets.data(), sets.size(), MPI_INT, 0, MPI_COMM_WORLD);
+
+      // resize Vakbl 
+      int sz;
+      int r0 = sets[TG.getLocalNodeNumber()];
+      int rN = sets[TG.getLocalNodeNumber()+1];
+      if( coreid==0 )
+        sz = std::accumulate(counts.begin()+r0,counts.begin()+rN,0);
+      MPI_Bcast(&sz, 1, MPI_INT, 0, TG.getNodeCommLocal());
+
+      Vakbl.setup("miniAFQMC_Vakbl",TG.getNodeCommLocal());
+      Vakbl.setDims(Idata[2],Idata[3]);
+      Vakbl.reserve(sz);
+
+      // Read Vakbl 
+      if(reader) {
+        split.partition(TG,true,counts,sets);
+
+        // read Vakbl 
+        if(!read_hdf5_SpMat(Vakbl,split,dump,std::string("SpHijkl"),TG,true,nread))
+          return false;
+      } else {
+        // read Vakbl
+        if(!read_hdf5_SpMat(Vakbl,split,dump,std::string("SpHijkl"),TG,true,nread))
+          return false;
+      }
+
+      if(coreid==0) {
+        // morph to "compacted" notation for miniapp
+        r0 = std::numeric_limits<int>::max();
+        rN = 0; 
+        typename SpMat::int_iterator it = Vakbl.cols_begin();
+        typename SpMat::int_iterator itend = Vakbl.cols_end();
+        for(; it!=itend; ++it) {
+          int i = (*it)/NMO;
+          int j = (*it)%NMO;
+          int a = (i<NMO)?i:(i-NMO+NAEA);
+          if( i < NMO ) assert(i < NAEA);
+          else assert(i-NMO < NAEA);
+          *it = a*NMO+j;
+        }
+        it = Vakbl.rows_begin();
+        itend = Vakbl.rows_end();
+        for(; it!=itend; ++it) {
+          int i = (*it)/NMO;
+          int j = (*it)%NMO;
+          int a = (i<NMO)?i:(i-NMO+NAEA);
+          if( i < NMO ) assert(i < NAEA);
+          else assert(i-NMO < NAEA);
+          *it = a*NMO+j;
+          if(a*NMO+j < r0) r0=a*NMO+j;
+          if(a*NMO+j+1 > rN) rN=a*NMO+j+1;
+        }
+        // shift rows to range [0,rN-r0)  
+        for(it = Vakbl.rows_begin(),itend = Vakbl.rows_end(); it!=itend; ++it) *it -= r0; 
+      }
+      MPI_Bcast(&r0, 1, MPI_INT, 0, TG.getNodeCommLocal());  
+      MPI_Bcast(&rN, 1, MPI_INT, 0, TG.getNodeCommLocal());  
+      Vakbl.setOffset(r0,0);
+      Vakbl.setDims(rN-r0,2*NMO*NAEA);
+    }
     MPI_Barrier(MPI_COMM_WORLD);
-    Vakbl.compress(TG.getNodeCommLocal()); 
+    Vakbl.compress(TG.getNodeCommLocal());
 
     if(reader) {
       dump.pop();
@@ -371,17 +463,16 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
     long ntot = Ldims[0];       // total number of terms
     int nrows = int(Ldims[1]);  // number of rows 
     int nvecs = int(Ldims[2]);  // number of cholesky vectors
-    int nblk = int(Ldims[4]);   // number of blocks
 
     // propagator
     Propg1.resize(extents[NMO][NMO]);
     MPI_Bcast(reinterpret_cast<char*>(Propg1.data()),sizeof(MatType)*Propg1.num_elements(),
         MPI_CHAR,0,MPI_COMM_WORLD);
 
-    std::vector<IndexType> counts;
     simple_matrix_partition<task_group,IndexType,RealType> split(nrows,nvecs,1e-8);
     // count dimensions of sparse matrix
-    count_entries_hdf5_SpMat(dump,split,std::string("Spvn"),nblk,false,counts,TG,true,nread);
+    if(!count_entries_hdf5_SpMat(dump,split,std::string("Spvn"),false,counts,TG,true,nread))
+      return false;
 
     MPI_Bcast(sets.data(), sets.size(), MPI_INT, 0, MPI_COMM_WORLD);
 
@@ -403,11 +494,19 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
       split.partition(TG,false,counts,sets);
 
       // read Spvn
-      read_hdf5_SpMat(Spvn,split,dump,std::string("Spvn"),nblk,TG,true,nread);
+      if(!read_hdf5_SpMat(Spvn,split,dump,std::string("Spvn"),TG,true,nread))
+        return false;
     } else {
       // read Spvn
-      read_hdf5_SpMat(Spvn,split,dump,std::string("Spvn"),nblk,TG,true,nread);
+      if(!read_hdf5_SpMat(Spvn,split,dump,std::string("Spvn"),TG,true,nread))
+        return false;
     }
+
+    Spvn.compress(TG.getNodeCommLocal());
+
+    // scale by sqrt(dt)
+    if(coreid==0)
+      Spvn *= std::sqrt(dt);
 
     if(reader) {
       dump.pop();
@@ -417,11 +516,6 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
   } 
 
   MPI_Barrier(MPI_COMM_WORLD);
-  if(head)  {
-    Timers[Total]->stop();
-    TimerManager.print();
-//  TimerManager.pop_timer();
-  }
 
   return true;
 } 

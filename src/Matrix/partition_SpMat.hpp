@@ -51,7 +51,9 @@ inline bool balance_partition_SpMat(task_group& TG, int type, SpMat& M, SpMat_re
     std::vector<intType> indx_e(nr);
     std::copy(M.index_begin(),M.index_begin()+nr,indx_b.data());
     std::copy(M.index_end(),M.index_end()+nr,indx_e.data());
-    M_ref.setup(M.rows(),M.cols(),M.rows(),M.cols(),0,0,M.values(),M.column_data(),indx_b,indx_e);
+    int roff, coff;
+    std::tie(roff,coff) = M.getOffset();
+    M_ref.setup(M.rows(),M.cols(),M.rows(),M.cols(),roff,0,M.values(),M.column_data(),indx_b,indx_e);
     return true;
   }
 
@@ -102,7 +104,11 @@ inline bool balance_partition_SpMat(task_group& TG, int type, SpMat& M, SpMat_re
       indx_b[i] = static_cast<intType>(b-n0);
       indx_e[i] = static_cast<intType>(e-n0);
     }
-    M_ref.setup(nr, M.cols(), M.rows(),M.cols(),r0,0,M.values()+n0,M.column_data()+n0,indx_b,indx_e);
+    int roff, coff;
+    std::tie(roff,coff) = M.getOffset();
+    //M_ref.setup(nr, M.cols(), M.rows(),M.cols(),r0,0,M.values()+n0,M.column_data()+n0,indx_b,indx_e);
+    // hack hack hack!!!
+    M_ref.setup(nr, M.cols(), M.rows(),M.cols(),r0+roff,0,M.values()+n0,M.column_data()+n0,indx_b,indx_e);
 
   } else if(type == byCols) {
 

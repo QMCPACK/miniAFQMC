@@ -133,6 +133,148 @@ inline Tp Overlap(const MatA& conjA, const MatB& B, Mat& T1, IBuffer& IWORK)
 
 } // namespace base
 
+namespace shm 
+{
+
+/*
+ * Calculates the 1-body mixed density matrix:
+ *   < A | c+i cj | B > / <A|B> = conj(A) * ( T(B) * conj(A) )^-1 * T(B) 
+ *   If compact == True, returns [NEL x M] matrix:
+ *   < A | c+i cj | B > / <A|B> = ( T(B) * conj(A) )^-1 * T(B) 
+ * Parameters:
+ *  - conjA = conj(A)
+ *  - B
+ *  - C = < A | c+i cj | B > / <A|B>
+ *  - T1: [ NEL x NEL ] work matrix   
+ *  - T2: (only used if compact = False) [ NEL x M ] work matrix   
+ *  - IWORK: [ N ] integer biffer for invert. Dimensions must be at least NEL. 
+ *  - WORK: [ >=NEL ] Work space for invert. Dimensions must be at least NEL.   
+ *  - compact (default = True)
+ *  returns:
+ *  - <A|B> = det[ T(B) * conj(A) ]  
+ */
+// Serial Implementation
+template< class Tp,
+          class MatA,
+          class MatB,
+          class MatC,
+          class Mat,
+          class IBuffer,
+          class TBuffer 
+        >
+inline Tp MixedDensityMatrix(const MatA& conjA, const MatB& B, MatC& C, Mat& T1, Mat& T2, IBuffer& IWORK, TBuffer& WORK, int M0, int Mn, int N0, int Nn, MPI_Comm& comm, bool compact=true)
+{
+  // check dimensions are consistent
+  assert( conjA.shape()[0] == B.shape()[0] );
+  assert( conjA.shape()[1] == T1.shape()[1] );
+  assert( B.shape()[1] == T1.shape()[0] );
+  assert( T1.shape()[1] == B.shape()[1] );
+  assert( T2.shape()[0] == T1.shape()[0] );
+  if(compact) {
+    assert( C.shape()[0] == T1.shape()[0] );
+    assert( C.shape()[1] == B.shape()[0] );
+  } else {
+    assert( T2.shape()[1] == B.shape()[0] );
+    assert( C.shape()[0] == conjA.shape()[0] );
+    assert( C.shape()[1] == T2.shape()[1] );
+  }
+
+  using ma::T;
+  using boost::indices;
+  using range_t = boost::multi_array_types::index_range;
+
+  // T(B)*conj(A) 
+  ma::product(T(B),
+              conjA[indices[range_t()][range_t(N0,Nn)]],
+              T1[indices[range_t()][range_t(N0,Nn)]]);  
+
+  MPI_Barrier(comm);
+
+  // NOTE: Using C as temporary 
+  // T1 = T1^(-1)
+  Tp ovlp=Tp(0.);
+  if(N0==0)
+   ovlp = static_cast<Tp>(ma::invert(T1,IWORK,WORK));
+
+  MPI_Barrier(comm);  
+
+  if(compact) {
+
+    // C = T1 * T(B)
+    ma::product(T1[indices[range_t(N0,Nn)][range_t()]],
+                T(B),
+                C[indices[range_t(N0,Nn)][range_t()]]); 
+
+  } else {
+
+    // T2 = T1 * T(B)
+    ma::product(T1[indices[range_t(N0,Nn)][range_t()]],
+                T(B),
+                T2[indices[range_t(N0,Nn)][range_t()]]); 
+
+    MPI_Barrier(comm);
+
+    // C = conj(A) * T2
+    ma::product(conjA[indices[range_t(M0,Mn)][range_t()]],
+                T2,
+                C[indices[range_t(M0,Mn)][range_t()]]);
+
+  }
+
+  MPI_Barrier(comm);
+
+  return ovlp;
+}
+
+
+/*
+ * Returns the overlap of 2 Slater determinants:  <A|B> = det[ T(B) * conj(A) ]  
+ * Parameters:
+ *  - conjA = conj(A)
+ *  - B
+ *  - IWORK: [ M ] integer work matrix   
+ *  - T1: [ NEL x NEL ] work matrix   
+ *  returns:
+ *  - <A|B> = det[ T(B) * conj(A) ]  
+ */
+// Serial Implementation
+template< class Tp,
+          class MatA,
+          class MatB,
+          class Mat,
+          class IBuffer
+        >
+inline Tp Overlap(const MatA& conjA, const MatB& B, Mat& T1, IBuffer& IWORK, int N0, int Nn, MPI_Comm& comm)
+{
+  // check dimensions are consistent
+  assert( conjA.shape()[0] == B.shape()[0] );
+  assert( conjA.shape()[1] == T1.shape()[1] );
+  assert( B.shape()[1] == T1.shape()[0] );
+  assert( T1.shape()[1] == B.shape()[1] );
+
+  using ma::T;
+  using boost::indices;
+  using range_t = boost::multi_array_types::index_range;
+
+  // T(B)*conj(A) 
+  ma::product(T(B),
+              conjA[indices[range_t()][range_t(N0,Nn)]],
+              T1[indices[range_t()][range_t(N0,Nn)]]);
+
+  MPI_Barrier(comm);
+
+  // NOTE: Using C as temporary 
+  // T1 = T1^(-1)
+  Tp ovlp=Tp(0.);
+  if(N0==0)
+   ovlp = static_cast<Tp>(ma::determinant(T1,IWORK));
+
+  return ovlp; 
+}
+
+} // namespace shm 
+
 } // namespace qmcplusplus 
 
 #endif
+

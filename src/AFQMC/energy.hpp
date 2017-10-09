@@ -127,9 +127,9 @@ inline void calculate_energy(const MatA& Gc, MatB& Gcloc, const MatC& haj, const
 
   using Type = typename std::decay<MatB>::type::element; 
 //  index_gen indices;
-  Type zero = Type(0.);
-  Type one = Type(1.); 
-  Type half = Type(0.5); 
+  const Type zero = Type(0.);
+  const Type one = Type(1.); 
+  const Type half = Type(0.5); 
 
   int nwalk = Gc.shape()[1];
   if(locV.size() != nwalk) locV.resize(extents[nwalk]);
@@ -148,7 +148,7 @@ inline void calculate_energy(const MatA& Gc, MatB& Gcloc, const MatC& haj, const
   for(int n=0; n<nwalk; n++) locV[n] *= half;
    
   // not splitting the 1-body part yet 
-  if(r0 == 0 && Vakbl.global_c0() == 0 && addH1) {
+  if(addH1) {
     // one-body contribution
     boost::multi_array_ref<const Type,1> haj_ref(haj.origin(), extents[haj.num_elements()]);
     ma::product(one,ma::T(Gc),haj_ref,one,locV);
