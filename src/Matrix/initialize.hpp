@@ -1,4 +1,4 @@
-//////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////
 // This file is distributed under the University of Illinois/NCSA Open Source
 // License.  See LICENSE file in top directory for details.
 //
@@ -196,9 +196,15 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
         app_log()<<sets[i] <<" ";
       app_log()<<std::endl;
       app_log()<<"  Number of terms in each partitioning: ";
-      for(int i=0; i<nnodes_per_TG; i++)
-        app_log()<<accumulate(counts.begin()+sets[i],counts.begin()+sets[i+1],0) <<" ";
-      app_log()<<std::endl;
+      std::size_t mmin = std::accumulate(counts.begin()+sets[0],counts.begin()+sets[1],std::size_t(0));
+      std::size_t mmax = mmin; 
+      for(int i=0; i<nnodes_per_TG; i++) {
+        std::size_t n = std::accumulate(counts.begin()+sets[i],counts.begin()+sets[i+1],std::size_t(0));
+        mmin = std::min(n,mmin);
+        mmax = std::max(n,mmax);
+        app_log()<<n <<" ";
+      }
+      app_log()<<"\n  Largest work load variation (%): " <<double(mmax-mmin)*100.0/double(std::accumulate(counts.begin(),counts.end(),std::size_t(0))) <<std::endl;
 
       MPI_Bcast(sets.data(), sets.size(), MPI_INT, 0, MPI_COMM_WORLD);
 
@@ -304,9 +310,15 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
       app_log()<<sets[i] <<" ";
     app_log()<<std::endl;
     app_log()<<"  Number of terms in each partitioning: ";
-    for(int i=0; i<nnodes_per_TG; i++)
-      app_log()<<accumulate(counts.begin()+sets[i],counts.begin()+sets[i+1],0) <<" ";
-    app_log()<<std::endl;
+    std::size_t mmin = std::accumulate(counts.begin()+sets[0],counts.begin()+sets[1],std::size_t(0));
+    std::size_t mmax = mmin;
+    for(int i=0; i<nnodes_per_TG; i++) {
+      std::size_t n = std::accumulate(counts.begin()+sets[i],counts.begin()+sets[i+1],std::size_t(0));
+      mmin = std::min(n,mmin);
+      mmax = std::max(n,mmax);
+      app_log()<<n <<" ";
+    }
+    app_log()<<"\n  Largest work load variation (%): " <<double(mmax-mmin)*100.0/double(std::accumulate(counts.begin(),counts.end(),std::size_t(0))) <<std::endl;
 
     MPI_Bcast(sets.data(), sets.size(), MPI_INT, 0, MPI_COMM_WORLD);
 

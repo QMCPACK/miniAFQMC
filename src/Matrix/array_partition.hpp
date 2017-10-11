@@ -113,6 +113,13 @@ struct simple_matrix_partition
         cnt+=*(itc);
         (*itn)=cnt;
       }
+if(TG.getNodeID()==0 && TG.getCoreID()==0) {
+std::cout<<" BEGIN \n";
+std::cout<<counts.size() <<"\n"; 
+for(int i=0; i<nv.size(); i++)
+  std::cout<<nv[i] <<"\n";
+std::cout<<" END " <<std::endl;
+}
       balance_partition_ordered_set(counts.size(),nv.data(),sets);
       int node_number = TG.getLocalNodeNumber(); 
       if(byRow) {
