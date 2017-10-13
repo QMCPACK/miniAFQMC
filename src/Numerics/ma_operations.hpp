@@ -146,17 +146,19 @@ MultiArray2DC product(T alpha, SparseMatrixA const& A, MultiArray2DB const& B, T
 			 arg(B).origin(), arg(B).strides()[0], 
 			 beta, 
 			 std::forward<MultiArray2DC>(C).origin(), std::forward<MultiArray2DC>(C).strides()[0]);
-
+	  
 	} else {
-
+	  
 	  cusparseMatDescr_t descr;
 	  cusparseCreateMatDescr(&descr);
+	  cusparseSetMatType(descr, CUSPARSE_MATRIX_TYPE_GENERAL);
 	  cusparseSetMatIndexBase(descr, CUSPARSE_INDEX_BASE_ZERO);
-	  cusparseSetMatDiagType(descr, CUSPARSE_DIAG_TYPE_NON_UNIT);
-
+	  
 	  typename MultiArray2DB::element alphaz = alpha;
 	  typename MultiArray2DB::element betaz = beta;
-
+	  
+	  std::cout << arg(A).rows() << '\t' << arg(B).shape()[1] << '\t' <<  arg(A).cols() << '\t' << arg(A).nnz() << std::endl;
+	  
 	  cusparse::csrmm2(cusparse::op_tag<op_tag<SparseMatrixA> >(),
 			   cusparse::op_tag<op_tag<MultiArray2DB> >(),
 			   arg(A).rows(), arg(B).shape()[1], arg(A).cols(), arg(A).nnz(), &alphaz,

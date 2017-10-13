@@ -11,6 +11,9 @@ namespace cusparse {
     switch(status) {
     case CUSPARSE_STATUS_SUCCESS :
       return;
+    case CUSPARSE_STATUS_ALLOC_FAILED	:
+      std::cout << "cusparse: the resources could not be allocated."  << std::endl;
+      break;
     case CUSPARSE_STATUS_NOT_INITIALIZED :
       std::cout << "cusparse: the library was not initialized."  << std::endl;
       break;
@@ -102,7 +105,7 @@ namespace cusparse {
 	      const std::complex<float> *beta,
 	      std::complex<float>       *C,
 	      int                       ldc){
-    
+   
     check_status(cusparseCcsrmm2(handle, transA, transB, m, n, k, nnz, (const cuComplex*) alpha, descrA, (const cuComplex*) csrValA, csrRowPtrA, csrColIndA, (const cuComplex*) B, ldb, (const cuComplex*) beta, (cuComplex*) C, ldc));
   }
   
@@ -122,7 +125,7 @@ namespace cusparse {
 	      const std::complex<double> *beta,
 	      std::complex<double>       *C,
 	      int                        ldc){
-    
+
     check_status(cusparseZcsrmm2(handle, transA, transB, m, n, k, nnz, (const cuDoubleComplex*) alpha, descrA, (const cuDoubleComplex*) csrValA, csrRowPtrA, csrColIndA, (const cuDoubleComplex*) B, ldb, (const cuDoubleComplex*) beta, (cuDoubleComplex*) C, ldc));
   }
 

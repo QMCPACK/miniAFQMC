@@ -69,9 +69,12 @@ inline void get_vbias(const SpMat& Spvn, const MatA& G, MatB& v, bool transposed
     const boost::const_multi_array_ref<TypeA,2> Gdn(G.data()+G.shape()[0]*G.shape()[1]/2, 
 					extents[G.shape()[0]/2][G.shape()[1]]);
 
-    std::cout << "MUL" << std::endl;
     // alpha
-    ma::product(T(gpu(Spvn)), gpu(Gup), gpu(v));  
+#if 0
+    ma::product(T(Spvn), Gup, v);
+#else
+    ma::product(T(gpu(Spvn)), gpu(Gup), gpu(v));
+#endif
     // beta
     ma::product(TypeA(1.),T(Spvn), Gdn, TypeA(1.), v);
   }
