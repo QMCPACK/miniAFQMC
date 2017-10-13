@@ -128,6 +128,10 @@ public:
     return const_base_.cols();
   }
 
+  int nnz() const {
+    return const_base_.nnz();
+  }
+  
   const_pointer val() const {
     return vals_;
   }

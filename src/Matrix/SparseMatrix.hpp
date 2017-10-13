@@ -138,6 +138,10 @@ class SparseMatrix
     return nc;
   }
 
+  int nnz() const {
+    return vals.size();
+  }
+  
   const_pointer values(long n=0) const 
   {
     return vals.data()+n;
