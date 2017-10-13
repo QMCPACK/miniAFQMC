@@ -43,6 +43,8 @@
 #include "AFQMC/vHS.hpp"
 #include "AFQMC/vbias.hpp"
 
+#include "Numerics/cusparse.hpp"
+
 using namespace std;
 using namespace qmcplusplus;
 
@@ -95,6 +97,8 @@ int main(int argc, char **argv)
   exit(1);
 #endif
 
+  cusparse::init();
+  
   int nsteps=10;
   int nsubsteps=10; 
   int nwalk=16;
@@ -343,5 +347,7 @@ int main(int argc, char **argv)
   
   TimerManager.print();
 
+  cusparse::end();
+  
   return 0;
 }
