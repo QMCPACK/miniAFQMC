@@ -25,6 +25,7 @@
 #include "ma_lapack.hpp"
 #include "ma_gpu.hpp"
 #include "sparse.hpp"
+#include "cusparse.hpp"
 
 #include<type_traits> // enable_if
 #include<vector>
@@ -120,7 +121,6 @@ template<class T, class SparseMatrixA, class MultiArray2DB, class MultiArray2DC,
 >
 MultiArray2DC product(T alpha, SparseMatrixA const& A, MultiArray2DB const& B, T beta, MultiArray2DC&& C){
   
-	assert(in_gpu(A) == in_gpu(B));
 	assert(in_gpu(B) == in_gpu(C));
 	
         assert(op_tag<SparseMatrixA>::value == 'N' || op_tag<SparseMatrixA>::value == 'T'); 
@@ -137,14 +137,37 @@ MultiArray2DC product(T alpha, SparseMatrixA const& A, MultiArray2DB const& B, T
             assert(arg(B).shape()[1] == std::forward<MultiArray2DC>(C).shape()[1]);
         }        
 
-        SPBLAS::csrmm( op_tag<SparseMatrixA>::value, 
-            arg(A).rows(), arg(B).shape()[1], arg(A).cols(), 
-            alpha, "GxxCxx", 
-            arg(A).val() , arg(A).indx(),  arg(A).pntrb(),  arg(A).pntre(), 
-            arg(B).origin(), arg(B).strides()[0], 
-            beta, 
-            std::forward<MultiArray2DC>(C).origin(), std::forward<MultiArray2DC>(C).strides()[0]);
+	if(!in_gpu(B)){
+	  
+	  SPBLAS::csrmm( op_tag<SparseMatrixA>::value, 
+			 arg(A).rows(), arg(B).shape()[1], arg(A).cols(), 
+			 alpha, "GxxCxx", 
+			 arg(A).val() , arg(A).indx(),  arg(A).pntrb(),  arg(A).pntre(), 
+			 arg(B).origin(), arg(B).strides()[0], 
+			 beta, 
+			 std::forward<MultiArray2DC>(C).origin(), std::forward<MultiArray2DC>(C).strides()[0]);
 
+	} else {
+
+	  cusparseMatDescr_t descr;
+	  cusparseCreateMatDescr(&descr);
+	  cusparseSetMatIndexBase(descr, CUSPARSE_INDEX_BASE_ZERO);
+	  cusparseSetMatDiagType(descr, CUSPARSE_DIAG_TYPE_NON_UNIT);
+
+	  typename MultiArray2DB::element alphaz = alpha;
+	  typename MultiArray2DB::element betaz = beta;
+
+	  cusparse::csrmm2(cusparse::op_tag<op_tag<SparseMatrixA> >(),
+			   cusparse::op_tag<op_tag<MultiArray2DB> >(),
+			   arg(A).rows(), arg(B).shape()[1], arg(A).cols(), arg(A).nnz(), &alphaz,
+			   descr, arg(A).val(), arg(A).pntrb(), arg(A).indx(),
+			   arg(B).origin(), arg(B).strides()[0],
+			   &betaz,
+			   std::forward<MultiArray2DC>(C).origin(), std::forward<MultiArray2DC>(C).strides()[0]);
+	  
+	}
+	
+	  
         return std::forward<MultiArray2DC>(C);
 }
 
