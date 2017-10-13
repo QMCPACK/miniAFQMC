@@ -98,5 +98,14 @@ namespace cusparse {
     return cusparseZcsrmm2(handle, transA, transB, m, n, k, nnz, (const cuDoubleComplex*) alpha, descrA, (const cuDoubleComplex*) csrValA, csrRowPtrA, csrColIndA, (const cuDoubleComplex*) B, ldb, (const cuDoubleComplex*) beta, (cuDoubleComplex*) C, ldc);
   }
 
+  template<typename op_tag_type>
+  cusparseOperation_t op_tag(){
+    if(op_tag_type::value == 'N') return CUSPARSE_OPERATION_NON_TRANSPOSE;
+    if(op_tag_type::value == 'T') return CUSPARSE_OPERATION_TRANSPOSE;
+    if(op_tag_type::value == 'C') return CUSPARSE_OPERATION_CONJUGATE_TRANSPOSE;
+    assert(false);
+  }
+
+  
 }
 #endif
