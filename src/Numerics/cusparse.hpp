@@ -7,15 +7,6 @@ namespace cusparse {
 
   cusparseHandle_t handle = NULL;
 
-  void init(){
-    cusparseStatus_t cusparseStat = cusparseCreate(&handle);
-    assert(CUSPARSE_STATUS_SUCCESS == cusparseStat);
-  }
-
-  void end(){
-    cusparseDestroy(handle);
-  }
-
   void check_status(cusparseStatus_t status){
     switch(status) {
     case CUSPARSE_STATUS_SUCCESS :
@@ -43,6 +34,14 @@ namespace cusparse {
       break;
     }
     exit(1);
+  }
+
+  void init(){
+    check_status(cusparseCreate(&handle));
+  }
+  
+  void end(){
+    check_status(cusparseDestroy(handle));
   }
   
   void csrmm2(cusparseOperation_t      transA,    
