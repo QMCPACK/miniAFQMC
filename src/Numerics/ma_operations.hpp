@@ -25,6 +25,8 @@
 #include "ma_lapack.hpp"
 #include "sparse.hpp"
 
+#include <Kokkos_Core.hpp>
+
 #include<type_traits> // enable_if
 #include<vector>
 
@@ -44,6 +46,16 @@ bool is_hermitian(MultiArray2D const& A){
 	return true;
 }
 
+template<typename T>
+bool is_hermitian(Kokkos::View<T**> &a)
+{
+  if(a.dimension(0) != a.dimension(1)) return false;
+  for(size_t i = 0; i < a.dimension(0); ++i)
+    for(size_t j = 0; j < a.dimension(1); ++j)
+      if(a(i,j) != conj(a(j,i))) return false;
+  return true;
+}
+
 template<class MultiArray2D, typename = typename std::enable_if<(MultiArray2D::dimensionality > 1)>::type>
 bool is_symmetric(MultiArray2D const& A){
 	if(A.shape()[0] != A.shape()[1]) return false;
@@ -53,6 +65,17 @@ bool is_symmetric(MultiArray2D const& A){
 	return true;
 }
 
+template<typename T>
+bool is_symmetric(Kokkos::View<T**> &a)
+{
+  if(a.dimension(0) != a.dimension(1)) return false;
+  for(size_t i = 0; i < a.dimension(0); ++i)
+    for(size_t j = 0; j < a.dimension(1); ++j)
+      if(a(i,j) != a(j,i)) return false;
+  return true;
+}
+
+
 template<class MultiArray2D, typename = typename std::enable_if<(std::decay<MultiArray2D>::type::dimensionality > 1)>::type>
 MultiArray2D transpose(MultiArray2D&& A){
 	assert(A.shape()[0] == A.shape()[1]);
@@ -61,6 +84,16 @@ MultiArray2D transpose(MultiArray2D&& A){
 		for(int j = 0; j != i; ++j)
 			swap(A[i][j], A[j][i]);
 	return std::forward<MultiArray2D>(A);
+}
+
+template<typename T>
+Kokkos::View<T**> transpose(Kokkos::View<T**> &a)
+{
+  assert(a.dimension(0) == a.dimension(1));
+  for(size_t i = 0; i < a.dimension(0); ++i)
+    for(size_t j = 0; j < a.dimension(1); ++j)
+      std::swap(a(i,j), a(j,i));
+  return a;
 }
 
 template<class MA> struct op_tag : std::integral_constant<char, 'N'>{}; // see specializations
@@ -80,6 +113,33 @@ MultiArray1DC product(T alpha, MultiArray2DA const& A, MultiArray1DB const& B, T
 	(alpha, arg(A), B, beta, std::forward<MultiArray1DC>(C));
 }
 
+template<typename T>
+Kokkos::View<T*> product(T alpha, Kokkos::View<T**> &a, Kokkos::View<T*> &x, T beta, Kokkos::View<T*> y)
+{
+  assert(y.dimension(0) == a.dimension(0));
+  assert(x.dimesnion(0) == a.dimension(1));
+
+  if(beta == T(0))
+  {
+    for(size_t i = 0; i != y.dimension(0); ++i)
+      y(i) = T(0);
+  }
+  else if(beta != T(1))
+  {
+    for(size_t i = 0; i != y.dimension(0); ++i)
+      y(i) *= beta;
+  }
+
+  if(alpha == T(0))
+    return y;
+
+  for(size_t i = 0; i != y.dimension(0); ++i)
+    for(size_t j = 0; j != x.dimension(0); ++j)
+      y(i) += alpha * a(i,j) * x(j);
+
+  return y;
+}
+
 template<class MultiArray2DA, class MultiArray1DB, class MultiArray1DC,
         typename = typename std::enable_if<
                 MultiArray2DA::dimensionality == 2 and
@@ -89,6 +149,12 @@ template<class MultiArray2DA, class MultiArray1DB, class MultiArray1DC,
 >
 MultiArray1DC product(MultiArray2DA const& A, MultiArray1DB const& B, MultiArray1DC&& C){
         return product(1., A, B, 0., std::forward<MultiArray1DC>(C));
+}
+
+template<typename T>
+Kokkos::View<T*> product(Kokkos::View<T**> &a, Kokkos::View<T*> &x, Kokkos::View<T*> y)
+{
+  return product(1.0, a, x, 0.0, y);
 }
 
 template<class T, class MultiArray2DA, class MultiArray2DB, class MultiArray2DC,
@@ -104,6 +170,37 @@ MultiArray2DC product(T alpha, MultiArray2DA const& A, MultiArray2DB const& B, T
 		op_tag<MultiArray2DA>::value
 	>
 	(alpha, arg(B), arg(A), beta, std::forward<MultiArray2DC>(C));
+}
+
+template<typename T>
+Kokkos::View<T**> product(T alpha, Kokkos::View<T**> &a, Kokkos::View<T**> &b, T beta, Kokkos::View<T**> &c)
+{
+  assert(c.dimension(0) == a.dimension(0));
+  assert(b.dimesnion(0) == a.dimension(1));
+  assert(c.dimension(1) == b.dimension(1));
+
+  if(beta == T(0))
+  {
+    for(size_t i = 0; i != c.dimension(0); ++i)
+      for(size_t j = 0; j != c.dimension(1); ++j)
+        c(i,j) = T(0);
+  }
+  else if(beta != T(1))
+  {
+    for(size_t i = 0; i != c.dimension(0); ++i)
+      for(size_t j = 0; j != c.dimension(1); ++j)
+        c(i,j) *= beta;
+  }
+
+  if(alpha == T(0))
+    return c;
+
+  for(size_t i = 0; i != c.dimension(0); ++i)
+    for(size_t j = 0; j != c.dimension(1); ++j)
+      for(size_t k = 0; k != b.dimension(0); ++k)
+        c(i,j) += alpha * a(i,k) * b(k,j);
+
+  return c;
 }
 
 // sparse matrix-MultiArray interface 
@@ -142,7 +239,33 @@ MultiArray2DC product(T alpha, SparseMatrixA const& A, MultiArray2DB const& B, T
 
         return std::forward<MultiArray2DC>(C);
 }
+// sparse matrix-Kokkos interface 
+template<class T, class SparseMatrixA>
+MultiArray2DC product(T alpha, SparseMatrixA const& A, Kokkos::View<T**> const& B, T beta, Kokkos::View<T**>& C){
+        assert(op_tag<SparseMatrixA>::value == 'N' || op_tag<SparseMatrixA>::value == 'T');
+        assert(op_tag<MultiArray2DB>::value == 'N');
+        assert( arg(B).strides()[1] == 1 );
+        assert( std::forward<MultiArray2DC>(C).strides()[1] == 1 );
+        if(op_tag<SparseMatrixA>::value == 'N') {
+            assert(arg(A).rows() == std::forward<MultiArray2DC>(C).shape()[0]);
+            assert(arg(A).cols() == arg(B).shape()[0]);
+            assert(arg(B).shape()[1] == std::forward<MultiArray2DC>(C).shape()[1]);
+        } else {
+            assert(arg(A).rows() == arg(B).shape()[0]);
+            assert(arg(A).cols() == std::forward<MultiArray2DC>(C).shape()[0]);
+            assert(arg(B).shape()[1] == std::forward<MultiArray2DC>(C).shape()[1]);
+        }
 
+        SPBLAS::csrmm( op_tag<SparseMatrixA>::value,
+            arg(A).rows(), arg(B).shape()[1], arg(A).cols(),
+            alpha, "GxxCxx",
+            arg(A).val() , arg(A).indx(),  arg(A).pntrb(),  arg(A).pntre(),
+            arg(B).origin(), arg(B).strides()[0],
+            beta,
+            std::forward<MultiArray2DC>(C).origin(), std::forward<MultiArray2DC>(C).strides()[0]);
+
+        return std::forward<MultiArray2DC>(C);
+}
 template<class MultiArray2DA, class MultiArray2DB, class MultiArray2DC,
         typename = typename std::enable_if<
                 (MultiArray2DA::dimensionality == 2 or MultiArray2DA::dimensionality == -2) and

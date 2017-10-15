@@ -48,8 +48,10 @@ struct afqmc_sys: public AFQMCInfo
 
     ~afqmc_sys() {}
 
-    ComplexMatrix trialwfn_alpha;
-    ComplexMatrix trialwfn_beta;
+    ComplexMatrixKokkos trialwfn_alpha;
+    // ComplexMatrix trialwfn_alpha;
+    ComplexMatrixKokkos trialwfn_beta;
+    // ComplexMatrix trialwfn_beta;
 
     void setup(int nmo_, int na) {
       NMO = nmo_;
@@ -81,10 +83,11 @@ struct afqmc_sys: public AFQMCInfo
       TAU.resize(extents[NMO]);
 
       // temporary storage for contraction of density matrix with 2-electron integrals  
-      Gcloc.resize(extents[1][1]); // force resize later 
+      // Gcloc.resize(extents[1][1]); // force resize later 
+      Gcloc = ComplexMatrixKokkos("Gcloc", 1, 1); // force resize later 
 
     } 
-
+/*
     template< class WSet, 
               class Mat 
             >
@@ -112,7 +115,47 @@ struct afqmc_sys: public AFQMCInfo
         G_4D[ indices[1][range_t(0,N_)][range_t(0,NMO)][n] ] = DM;
       } // );
     }
+*/
 
+// Kokkos version
+    template< class WSet,
+              class Mat
+            >
+    void calculate_mixed_density_matrix(const WSet& W, Mat& W_data, Mat& G, bool compact=true)
+    {
+      int nwalk = W.dimension(0);
+      assert(G.dimension(0)*G.dimension(1) >= 2*NAEA*NMO*nwalk);
+      assert(W_data.dimension(0) >= nwalk);
+      assert(W_data.dimension(1) >= 4);
+      int N_ = compact?NAEA:NMO;
+      // assert(G_4d.dimension(1) >= N_);
+      // boost::multi_array_ref<ComplexType,2> DM(TMat_MM.data(), extents[N_][NMO]);
+      // boost::multi_array_ref<ComplexType,4> G_4D(G.data(), extents[2][N_][NMO][nwalk]);
+      Kokkos::View<ComplexType**, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged> > DM(TMat_MM.data(), N_, NMO); 
+      // Kokkos::View<ComplexType****> G_4D(G.data(), 2, N_, NMO, nwalk);
+
+      // parallelize over nwalk
+      for(int n=0; n<nwalk; n++) {
+      // Kokkos::parallel_for(nwalk, [&](const int n) {
+        W_data(n, 2) = base::MixedDensityMatrix<ComplexType>(trialwfn_alpha,Kokkos::subview(W, n, 0, Kokkos::ALL(), Kokkos::ALL()),
+                       DM,TMat_NN,TMat_NM,IWORK,WORK,compact);
+        // G_4D[ indices[0][range_t(0,N_)][range_t(0,NMO)][n] ] = DM;
+        for(int i=0; i<N_; ++i)
+         for(int j=0; j<NMO; ++j)
+           // G_4d(0, i, j, n) = DM(i, j);
+           G(idx3c(0,i,j,2,N_,NMO),n) = DM(i, j);
+
+        W_data(n, 3) = base::MixedDensityMatrix<ComplexType>(trialwfn_beta,Kokkos::subview(W, n, 1, Kokkos::ALL(), Kokkos::ALL()),
+                       DM,TMat_NN,TMat_NM,IWORK,WORK,compact);
+        // G_4D[ indices[1][range_t(0,N_)][range_t(0,NMO)][n] ] = DM;
+        for(int i=0; i<N_; ++i)
+         for(int j=0; j<NMO; ++j)
+           // G_4d(1, i, j, n) = DM(i, j);
+           G(idx3c(1,i,j,2,N_,NMO), n) = DM(i, j);
+      } // );
+    }
+
+/*
     template<class SpMat,
              class Mat
             >
@@ -129,7 +172,27 @@ struct afqmc_sys: public AFQMCInfo
       }
       return eav/wgt;
     }
+*/
 
+    template<class SpMat,
+             class Mat
+            >
+    RealType calculate_energy(Mat& W_data, const Mat& G, const Mat& haj, const SpMat& V)
+    {
+      assert(G.dimension(0) == 2*NAEA*NMO);
+      if(G.dimension(1) != Gcloc.dimension(1))
+        Kokkos::resize(Gcloc, 2*NMO*NAEA, G.dimension(1));
+
+      base::calculate_energy(W_data,G,Gcloc,haj,V);
+      RealType eav = 0., wgt=0.;
+      for(int n=0, nw=G.dimension(1); n<nw; n++) {
+        wgt += W_data(n, 1).real();
+        eav += W_data(n, 0).real()*W_data(n, 1).real();
+      }
+      return eav/wgt;
+    }
+
+/*
     template<class WSet, class Mat>
     void calculate_overlaps(const WSet& W, Mat& W_data)
     {
@@ -141,7 +204,21 @@ struct afqmc_sys: public AFQMCInfo
         W_data[n][3] = base::Overlap<ComplexType>(trialwfn_beta,W[n][1],TMat_NN,IWORK);
       } //);
     }
+*/
 
+    template<class WSet, class Mat>
+    void calculate_overlaps(const WSet& W, Mat& W_data)
+    {
+      assert(W_data.dimension(0) >= W.dimension(0));
+      assert(W_data.dimension(1) >= 4);
+      for(int n=0, nw=W.shape()[0]; n<nw; n++) {
+      // Kokkos::parallel_for(W.dimension(0), [&](const int n) {
+        W_data(n, 2) = base::Overlap<ComplexType>(trialwfn_alpha,Kokkos::subview(W, n, 0, Kokkos::ALL(), Kokkos::ALL()), TMat_NN,IWORK);
+        W_data(n, 3) = base::Overlap<ComplexType>(trialwfn_beta,Kokkos::subview(W, n, 1, Kokkos::ALL(), Kokkos::ALL()),TMat_NN,IWORK);
+      } //);
+    }
+
+/*
     template<class WSet, 
              class MatA,
              class MatB
@@ -171,7 +248,39 @@ struct afqmc_sys: public AFQMCInfo
 
       }
 
-    }    
+    }
+*/
+    
+    template<class WSet,
+             class MatA,
+             class MatB
+            >
+    void propagate(WSet& W, MatA& Propg, MatB& vHS)
+    {
+
+      assert(vHS.dimension(0) == NMO*NMO);
+      typedef typename std::decay<MatB>::type::element Type;
+      boost::multi_array_ref<Type,3> V(vHS.data(), extents[NMO][NMO][vHS.shape()[1]]);
+      // re-interpretting matrices to avoid new temporary space  
+      boost::multi_array_ref<Type,2> T1(TMat_NM.data(), extents[NMO][NAEA]);
+      boost::multi_array_ref<Type,2> T2(TMat_MM2.data(), extents[NMO][NAEA]);
+      // for(int nw=0, nwalk=W.shape()[0]; nw<nwalk; nw++) {
+      for(int nw=0, nwalk=W.dimension(0); nw<nwalk; nw++) {
+
+        // need deep-copy, since stride()[1] == nw otherwise
+        TMat_MM = V[ indices[range_t(0,NMO)][range_t(0,NMO)][nw] ];
+
+        ma::product(Propg,Kokkos::subview(W, nw, 0, Kokkos::ALL(), Kokkos::ALL()), TMat_MN);
+        base::apply_expM(TMat_MM,TMat_MN,T1,T2,6);
+        ma::product(Propg,TMat_MN,Kokkos::subview(W, nw, 0, Kokkos::ALL(), Kokkos::ALL()));
+
+        ma::product(Propg,Kokkos::subview(W, nw, 1, Kokkos::ALL(), Kokkos::ALL()), TMat_MN);
+        base::apply_expM(TMat_MM,TMat_MN,T1,T2,6);
+        ma::product(Propg,TMat_MN,Kokkos::subview(W, nw, 1, Kokkos::ALL(), Kokkos::ALL()));
+
+      }
+
+    }
 
     template<class WSet>
     void orthogonalize(WSet& W)
@@ -227,7 +336,7 @@ struct afqmc_sys: public AFQMCInfo
     ComplexMatrix TMat_MM2;
 
     // storage for contraction of 2-electron integrals with density matrix
-    ComplexMatrix Gcloc;
+    ComplexMatrixKokkos Gcloc;
 };
 
 }

@@ -94,7 +94,7 @@ inline bool Initialize(hdf_archive& dump, const double dt, base::afqmc_sys& sys,
   if(!dump.read(vvec,"hij")) return false;
   // resize haj 
   // haj.resize(extents[2*NAEA][NMO]);
-  resize(haj, 2*NAEA, NMO);
+  Kokkos::resize(haj, 2*NAEA, NMO);
   for(int n=0; n<ivec.size(); n++)
   {
     // ivec[n] = i*NMO+j, with i in [0:2*NMO), j in [0:NMO)
@@ -119,18 +119,24 @@ inline bool Initialize(hdf_archive& dump, const double dt, base::afqmc_sys& sys,
     std::cerr<<" Inconsistent dimensions in Wavefun. " <<std::endl;
     return false;
   }
-  sys.trialwfn_alpha.resize(extents[NMO][NAEA]);
-  sys.trialwfn_beta.resize(extents[NMO][NAEA]);
+  // sys.trialwfn_alpha.resize(extents[NMO][NAEA]);
+  // Kokkos::resize(sys.trialwfn_alpha, NMO, NAEA);
+  sys.trialwfn_alpha = ComplexMatrixKokkos("trialwfn_alpha", NMO, NAEA);
+  // sys.trialwfn_beta.resize(extents[NMO][NAEA]);
+  // Kokkos::resize(sys.trialwfn_beta, NMO, NAEA);
+  sys.trialwfn_beta = ComplexMatrixKokkos("trialwfn_beta", NMO, NAEA);
   int ij=0;
   for(int i=0; i<NMO; i++)
    for(int j=0; j<NAEA; j++, ij++) {
     using std::conj;
-    sys.trialwfn_alpha[i][j] = conj(vvec[ij]);
+    // sys.trialwfn_alpha[i][j] = conj(vvec[ij]);
+    sys.trialwfn_alpha(i, j) = conj(vvec[ij]);
    }
   for(int i=0; i<NMO; i++)
    for(int j=0; j<NAEA; j++, ij++) {
     using std::conj;
-    sys.trialwfn_beta[i][j] = conj(vvec[ij]);
+    // sys.trialwfn_beta[i][j] = conj(vvec[ij]);
+    sys.trialwfn_beta(i, j) = conj(vvec[ij]);
    }
 
   // read half-rotated hamiltonian
@@ -193,7 +199,7 @@ inline bool Initialize(hdf_archive& dump, const double dt, base::afqmc_sys& sys,
     return false;
   }
   // Propg1.resize(extents[NMO][NMO]);
-  resize(Propg1, NMO, NMO);
+  Kokkos::resize(Propg1, NMO, NMO);
   for(int i=0,ij=0; i<NMO; i++)       
     for(int j=0; j<NMO; j++, ij++)
       // Propg1[i][j] = vvec[ij];

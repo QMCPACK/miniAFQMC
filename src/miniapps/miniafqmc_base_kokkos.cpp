@@ -39,12 +39,11 @@
 #include "io/hdf_archive.h"
 
 #include "AFQMC/afqmc_sys_kokkos.hpp"
-// #include "Matrix/initialize_serial_kokkos.hpp"
-#include "Matrix/initialize_serial.hpp"
+#include "Matrix/initialize_serial_kokkos.hpp"
 #include "AFQMC/mixed_density_matrix.hpp"
 #include "AFQMC/energy.hpp"
 #include "AFQMC/vHS.hpp"
-#include "AFQMC/vbias.hpp"
+#include "AFQMC/vbias_kokkos.hpp"
 
 using namespace std;
 using namespace qmcplusplus;
@@ -100,12 +99,19 @@ int main(int argc, char **argv)
 
 // initialize Kokkos
   Kokkos::initialize(argc, argv);
+#define INCREMENTAL_TEST
 
-
+#ifdef INCREMENTAL_TEST
+  int nsteps=1;
+  int nsubsteps=1;
+  int nwalk=16;
+  int northo = 10;
+#else
   int nsteps=10;
   int nsubsteps=10; 
   int nwalk=16;
   int northo = 10;
+#endif
   const double dt = 0.01;  // 1-body propagators are assumed to be generated with a timestep = 0.01
 
   bool verbose = false;
@@ -157,11 +163,11 @@ int main(int argc, char **argv)
   base::afqmc_sys AFQMCSys;   // Main AFQMC object. Control access to several apgorithmic functions. 
   ComplexSpMat Spvn;      // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
   ComplexSpMat SpvnT;   // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
-  ComplexMatrix haj;
-  // ComplexMatrixKokkos haj("haj", 1, 1);    // 1-Body Hamiltonian Matrix (dummy size, will be resized in afqmc::Initialze)
+  // ComplexMatrix haj;
+  ComplexMatrixKokkos haj("haj", 1, 1);    // 1-Body Hamiltonian Matrix (dummy size, will be resized in afqmc::Initialze)
   ComplexSpMat Vakbl;   // 2-Body Hamiltonian Matrix: (Half-Rotated) 2-electron integrals 
-  ComplexMatrix Propg1;
-  // ComplexMatrixKokkos Propg1("Propg1",1,1);   // propagator for 1-body hamiltonian (dummy size, will be resized in afqmc::Initialze)
+  // ComplexMatrix Propg1;
+  ComplexMatrixKokkos Propg1("Propg1",1,1);   // propagator for 1-body hamiltonian (dummy size, will be resized in afqmc::Initialze)
 
 //  index_gen indices;
 
@@ -204,36 +210,44 @@ int main(int argc, char **argv)
            <<"    Chol. Matrix Sparsity: " <<Spvn.size()/double(nchol*NMO*NMO) <<"\n"
            <<"    Hamiltonian Sparsity: " <<Vakbl.size()/double(NAEA*NAEA*NMO*NMO*4.0) <<std::endl;
 
-  ComplexMatrix vbias(extents[nchol][nwalk]);     // bias potential
-  // ComplexMatrixKokkos vbias("vbias", nchol, nwalk);     // bias potential
-  ComplexMatrix vHS(extents[NMO*NMO][nwalk]);        // Hubbard-Stratonovich potential
-  // ComplexMatrixKokkos vHS("vHS", NMO*NMO, nwalk);        // Hubbard-Stratonovich potential
-  ComplexMatrix G(extents[NIK][nwalk]);           // density matrix
-  // ComplexMatrixKokkos G("G", NIK, nwalk);           // density matrix
-  ComplexMatrix Gc(extents[NAK][nwalk]);           // compact density matrix for energy evaluation
-  // ComplexMatrixKokkos Gc("Gc", NAK, nwalk);           // compact density matrix for energy evaluation
-  ComplexMatrix X(extents[nchol][nwalk]);         // X(n,nw) = rand(n,nw) ( + vbias(n,nw)) 
-  // ComplexMatrixKokkos X("X", nchol, nwalk);         // X(n,nw) = rand(n,nw) ( + vbias(n,nw)) 
+  // ComplexMatrix vbias(extents[nchol][nwalk]);     // bias potential
+  ComplexMatrixKokkos vbias("vbias", nchol, nwalk);     // bias potential
+  // ComplexMatrix vHS(extents[NMO*NMO][nwalk]);        // Hubbard-Stratonovich potential
+  ComplexMatrixKokkos vHS("vHS", NMO*NMO, nwalk);        // Hubbard-Stratonovich potential
+  // ComplexMatrix G(extents[NIK][nwalk]);           // density matrix
+  ComplexMatrixKokkos G("G", NIK, nwalk);           // density matrix
+  // ComplexArray4D G("G", 2, NMO, NMO, nwalk);           // density matrix
+  // ComplexMatrix Gc(extents[NAK][nwalk]);           // compact density matrix for energy evaluation
+  ComplexMatrixKokkos Gc("Gc", NAK, nwalk);           // compact density matrix for energy evaluation
+  // ComplexArray4D Gc("Gc", 2, NAEA, NMO, nwalk);           // compact density matrix for energy evaluation
+  // ComplexMatrix X(extents[nchol][nwalk]);         // X(n,nw) = rand(n,nw) ( + vbias(n,nw)) 
+  ComplexMatrixKokkos X("X", nchol, nwalk);         // X(n,nw) = rand(n,nw) ( + vbias(n,nw)) 
 
-  ComplexVector hybridW(extents[nwalk]);         // stores weight factors
-  ComplexVector eloc(extents[nwalk]);         // stores local energies
+  // ComplexVector hybridW(extents[nwalk]);         // stores weight factors
+  ComplexVectorKokkos hybridW("hybridW", nwalk);         // stores weight factors
+  // ComplexVector eloc(extents[nwalk]);         // stores local energies
+  ComplexVectorKokkos eloc("eloc", nwalk);         // stores local energies
 
-  WalkerContainer W(extents[nwalk][2][NMO][NAEA]);
+  // WalkerContainer W(extents[nwalk][2][NMO][NAEA]);
+  WalkerContainerKokkos W("W", nwalk, 2, NMO, NAEA);
   // 0: eloc, 1: weight, 2: ovlp_up, 3: ovlp_down, 4: w_eloc, 5: old_w_eloc, 6: old_ovlp_alpha, 7: old_ovlp_beta
-  ComplexMatrix W_data(extents[nwalk][8]);  
-  // ComplexMatrix W_data("W_data", nwalk, 8);  
+  // ComplexMatrix W_data(extents[nwalk][8]);  
+  ComplexMatrixKokkos W_data("W_data", nwalk, 8);  
   // initialize walkers to trial wave function
   for(int n=0; n<nwalk; n++) 
     for(int nm=0; nm<NMO; nm++) 
       for(int na=0; na<NAEA; na++) {
         using std::conj;
-        W[n][0][nm][na] = conj(AFQMCSys.trialwfn_alpha[nm][na]);
-        W[n][1][nm][na] = conj(AFQMCSys.trialwfn_beta[nm][na]);
+        // W[n][0][nm][na] = conj(AFQMCSys.trialwfn_alpha[nm][na]);
+        // W[n][1][nm][na] = conj(AFQMCSys.trialwfn_beta[nm][na]);
+        W(n, 0, nm, na) = conj(AFQMCSys.trialwfn_alpha(nm, na));
+        W(n, 1, nm, na) = conj(AFQMCSys.trialwfn_beta(nm, na));
       }
 
   // set weights to 1
   for(int n=0; n<nwalk; n++) 
-    W_data[n][1] = ComplexType(1.);
+    // W_data[n][1] = ComplexType(1.);
+    W_data(n, 1) = ComplexType(1.);
 
   // initialize overlaps and energy
   AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc,true);
@@ -278,6 +292,7 @@ int main(int argc, char **argv)
 
       } 
 
+#ifndef INCREMENTAL_TEST
       // 2. calculate X and weight
       //  X(chol,nw) = rand + i*vbias(chol,nw)
       Timers[Timer_X]->start();
@@ -338,6 +353,8 @@ int main(int argc, char **argv)
         Timers[Timer_ovlp]->stop();
       }
        
+#endif
+
     }
 
     Timers[Timer_eloc]->start();

@@ -89,8 +89,22 @@ namespace qmcplusplus
   typedef SMDenseVector<SPComplexType>   SPComplexSMVector;
 */
 
+  size_t inline idx4c(size_t i, size_t j, size_t k, size_t l, size_t ni, size_t nj, size_t nk, size_t nl)
+                     {return ((i*nj + j)*nk + k)*nl + l;}
+  size_t inline idx3c(size_t i, size_t j, size_t k, size_t ni, size_t nj, size_t nk)
+                     {return (i*nj + j)*nk + k;}
+  size_t inline idx2c(size_t i, size_t j, size_t ni, size_t nj) {return i*nj + j;}
+
+  size_t inline idx4f(size_t i, size_t j, size_t k, size_t l, size_t ni, size_t nj, size_t nk, size_t nl)
+                     {return i + (j + (k + l*nk)*nj)*ni;}
+  size_t inline idx3f(size_t i, size_t j, size_t k, size_t ni, size_t nj, size_t nk)
+                     {return i + (j + k*nj)*ni;}
+  size_t inline idx2f( size_t i, size_t j, size_t ni, size_t nj) {return i + j*ni;}
+
   // [nwalk][2][NMO][NAEA]
   typedef boost::multi_array<ValueType,4> WalkerContainer;
+  typedef Kokkos::View<ValueType****> WalkerContainerKokkos;
+  typedef Kokkos::View<ComplexType****> ComplexArray4D;
 
   typedef boost::multi_array<IndexType,1> IndexVector;
   typedef boost::multi_array<RealType,1> RealVector;
@@ -98,6 +112,7 @@ namespace qmcplusplus
   typedef boost::multi_array<ValueType,1> ValueVector;
   typedef boost::multi_array<SPValueType,1> SPValueVector;
   typedef boost::multi_array<ComplexType,1> ComplexVector;
+  typedef Kokkos::View<ComplexType*> ComplexVectorKokkos;
   typedef boost::multi_array<SPComplexType,1> SPComplexVector;
 
   typedef boost::multi_array<IndexType,2> IndexMatrix;  
@@ -108,6 +123,7 @@ namespace qmcplusplus
   typedef boost::multi_array<ComplexType,2> ComplexMatrix;  
   typedef Kokkos::View<ComplexType**> ComplexMatrixKokkos;  
   typedef boost::multi_array<SPComplexType,2> SPComplexMatrix;  
+  typedef Kokkos::View<SPComplexType**> SPComplexMatrixKokkos;  
 
   typedef SparseMatrix<IndexType>     IndexSpMat;
   typedef SparseMatrix<RealType>      RealSpMat;
