@@ -35,17 +35,6 @@ namespace ma{
 double const& conj(double const& d){return d;}
 float const& conj(float const& f){return f;}
 
-template<class MultiArray2D, typename = typename std::enable_if<(MultiArray2D::dimensionality > 1)>::type>
-bool is_hermitian(MultiArray2D const& A){
-	using std::conj;
-	using ma::conj;
-	if(A.shape()[0] != A.shape()[1]) return false;
-	for(int i = 0; i != A.shape()[0]; ++i)
-		for(int j = i + 1; j != A.shape()[1]; ++j)
-			if( A[i][j] != conj(A[j][i]) ) return false;
-	return true;
-}
-
 template<typename T>
 bool is_hermitian(Kokkos::View<T**> &a)
 {

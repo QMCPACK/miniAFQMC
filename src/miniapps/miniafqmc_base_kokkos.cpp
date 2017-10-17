@@ -41,8 +41,8 @@
 #include "AFQMC/afqmc_sys_kokkos.hpp"
 #include "Matrix/initialize_serial_kokkos.hpp"
 #include "AFQMC/mixed_density_matrix.hpp"
-#include "AFQMC/energy.hpp"
-#include "AFQMC/vHS.hpp"
+#include "AFQMC/energy_kokkos.hpp"
+#include "AFQMC/vHS_kokkos.hpp"
 #include "AFQMC/vbias_kokkos.hpp"
 
 using namespace std;

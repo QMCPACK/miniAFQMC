@@ -111,8 +111,6 @@ include_directories(${Kokkos_INCLUDE_DIRS_RET})
 LINK_LIBRARIES(kokkos)
 
 
-
-
 ######################################################################
 # set debug printout
 # DEBUG_PSIBUFFER_ON keep track buffer's locator

@@ -75,6 +75,7 @@ inline void calculate_energy(Mat& W_data, const Mat& Gc, Mat& Gcloc, const Mat& 
   Type half = Type(0.5); 
 
   int nwalk = W_data.dimension(0);
+  // view the haj matrix as a vector. Need to ensure that this has the correct memory layout
   boost::multi_array_ref<const Type,1> haj_ref(haj.origin(), extents[haj.num_elements()]);
 
   // zero 
