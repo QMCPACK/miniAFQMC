@@ -9,6 +9,8 @@
 //    Lawrence Livermore National Laboratory 
 // Alfredo Correa, correaa@llnl.gov 
 //    Lawrence Livermore National Laboratory 
+// Markus Eisenbach, eisenbachm@ornl.gov
+//    Oak Ridge National Laboratory
 //
 // File created by:
 // Miguel A. Morales, moralessilva2@llnl.gov 
@@ -93,7 +95,6 @@ inline bool Initialize(hdf_archive& dump, const double dt, base::afqmc_sys& sys,
   if(!dump.read(ivec,"hij_indx")) return false;
   if(!dump.read(vvec,"hij")) return false;
   // resize haj 
-  // haj.resize(extents[2*NAEA][NMO]);
   Kokkos::resize(haj, 2*NAEA, NMO);
   for(int n=0; n<ivec.size(); n++)
   {
@@ -107,7 +108,6 @@ inline bool Initialize(hdf_archive& dump, const double dt, base::afqmc_sys& sys,
     int a = (i<NMO)?i:(i-NMO+NAEA);
     if( i < NMO ) assert(i < NAEA);
     else assert(i-NMO < NAEA);
-    // haj[a][j] = vvec[n];
     haj(a, j) = vvec[n];
   } 
 

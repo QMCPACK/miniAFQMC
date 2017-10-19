@@ -45,10 +45,11 @@ inline void get_vHS(const SpMat& Spvn, const Mat& X, Mat& v)
   assert( Spvn.rows() == v.dimensione(0) );
   assert( X.dimension(1) == v.dimension(1) );
 
-  typedef typename std::decay<Mat>::type::element ComplexType;
+  // typedef typename std::decay<Mat>::type::element ComplexType;
 
   // Spvn*X 
-  ma::product(Spvn,X,v);  
+  ma::product(Spvn,X,v);
+  // Use Kokkos Sparse spmv
 }
 
 /*

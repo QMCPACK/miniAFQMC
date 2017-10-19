@@ -45,7 +45,9 @@ inline void get_vbias(const SpMat& Spvn, const MatA& G, MatB& v, bool transposed
   assert( G.dimension(0) == G.dimension(1) );
   assert( G.dimension(1) == 1 );
 
-  typedef typename std::decay<MatA>::type::element TypeA;
+  // typedef typename std::decay<MatA>::type::element TypeA;
+  // value type should give the element types in Kokkos Views
+  typedef typename std::decay<MatA>::value_type TypeA;
   if(transposed) {
 
     assert( Spvn.cols() == G.dimension(0) );
