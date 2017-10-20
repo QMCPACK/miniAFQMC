@@ -144,37 +144,20 @@ class TaskGroup {
     if(TG_rank==0) TG_root = true;
     core_root = (core_rank==0);
 
-    // setup list of roots in a TG, which are the only ones who communicate
-    ranks_of_core_roots.reserve(nnodes_per_TG);
-    next_core_root = prev_core_root = -1; 
-    std::vector<int> tmp(2);
-    position_in_ranks_of_core_roots=-1;
-    for(int i=0; i<TG_nproc; i++) {
-      if( TG_rank == i ) tmp[0] = core_rank;  
-      MPI_Bcast(tmp.data(),1,MPI_INT,i,MPI_COMM_TG);
-      if(tmp[0]==0) ranks_of_core_roots.push_back(i);
-      if( core_root && TG_rank == i ) position_in_ranks_of_core_roots = ranks_of_core_roots.size()-1; 
-    }
-    if(core_root) {
-      if( position_in_ranks_of_core_roots < 0 || position_in_ranks_of_core_roots >= nnodes_per_TG ) {
-       std::cerr<<" TaskGroup::setup() position_in_ranks_of_core_roots: " <<position_in_ranks_of_core_roots <<std::endl;
-        APP_ABORT(" Logic error in TaskGroup::setup(). \n\n\n ");
-      }
-      if( ranks_of_core_roots[position_in_ranks_of_core_roots] != TG_rank ) {
-        std::cerr<<" TaskGroup::setup() ranks_of_core_roots[position_in_ranks_of_core_roots]: " <<ranks_of_core_roots[position_in_ranks_of_core_roots] <<std::endl; 
-        APP_ABORT(" Logic error in TaskGroup::setup(). \n\n\n ");
-      }
-      if( position_in_ranks_of_core_roots == 0 ) {
-        next_core_root = ranks_of_core_roots[position_in_ranks_of_core_roots+1];
-        prev_core_root = ranks_of_core_roots[nnodes_per_TG-1];
-      } else if( position_in_ranks_of_core_roots == nnodes_per_TG-1 ) {
-        next_core_root = ranks_of_core_roots[0];
-        prev_core_root = ranks_of_core_roots[position_in_ranks_of_core_roots-1];
-      } else {
-        next_core_root = ranks_of_core_roots[position_in_ranks_of_core_roots+1];
-        prev_core_root = ranks_of_core_roots[position_in_ranks_of_core_roots-1];
-      }
-    }
+    if( TG_rank != node_in_TG*ncores_per_TG+core_rank ) {
+      app_error()<<" Error in TG::setup(): Unexpected TG_rank: " <<TG_rank <<" " <<node_in_TG <<" " <<core_rank <<" " <<node_in_TG*ncores_per_TG+core_rank <<std::endl;
+      APP_ABORT("Error in TG::setup(): Unexpected TG_rank \n");   
+    }    
+
+    // define ring communication pattern
+    // these are the ranks (in TGcomm) of cores with the same core_rank 
+    // on nodes with id +-1 (with respect to local node). 
+    next_core_circular_node_pattern = ((node_in_TG+1)%nnodes_per_TG)*ncores_per_TG+core_rank; 
+    if(node_in_TG==0)
+      prev_core_circular_node_pattern = (nnodes_per_TG-1)*ncores_per_TG+core_rank;   
+    else
+      prev_core_circular_node_pattern = ((node_in_TG-1)%nnodes_per_TG)*ncores_per_TG+core_rank;   
+
     app_log()<<"**************************************************************" <<std::endl;
     initialized=true;
     return true;
@@ -224,46 +207,6 @@ class TaskGroup {
     commBuff->resize(size);
   }
 
-  // on entry, nblock has the number of blocks that should be sent 
-  // on return, nblock has the number of blocks received
-  void rotate_buffer(int& nblock, int block_size)
-  {
-    APP_ABORT("Not implemented \n\n\n");
-/* 
-    int n0 = nblock;
-    if(commBuff->size() < nblock*block_size) {
-      APP_ABORT(" Error in TaskGroup::rotate_buffer(). Buffer size is too small. \n\n\n ");
-    }
-    commBuff->barrier();
-    if(core_root) {
-      local_buffer.resize(commBuff->size());  // this guarantees that I'll be able to receive any message
-      if(nnodes_per_TG%2 != 0) {
-        APP_ABORT("Error: TaskGroup::rotate_buffer curently implemented for an even number on nodes per task group. Aborting!!! \n\n\n");
-      }
-      // simple algorithm for now, make this efficient later
-// this can be made much faster and efficient 
-      if(position_in_ranks_of_core_roots%2==0) {
-        MPI_Status status;
-        myComm->send(commBuff->values(),n0*block_size,next_core_root,1001,MPI_COMM_TG);
-        myComm->recv(local_buffer.data(),local_buffer.size(),prev_core_root,1002,MPI_COMM_TG,&status);
-        // assuming doubles for now, FIX FIX FIX
-        MPI_Get_count(&status,MPI_DOUBLE,&nblock);
-        nblock = nblock/2/block_size; // since I'm communicating std::complex
-        std::copy(local_buffer.begin(),local_buffer.begin()+nblock*block_size,commBuff->begin());
-      } else {
-        MPI_Status status;
-        myComm->recv(local_buffer.data(),local_buffer.size(),prev_core_root,1001,MPI_COMM_TG,&status);
-        // assuming doubles for now, FIX FIX FIX
-        MPI_Get_count(&status,MPI_DOUBLE,&nblock);
-        nblock = nblock/(block_size*(sizeof(SPComplexType)/sizeof(double))); 
-        myComm->send(commBuff->values(),n0*block_size,next_core_root,1002,MPI_COMM_TG);
-        std::copy(local_buffer.begin(),local_buffer.begin()+nblock*block_size,commBuff->begin());
-      }
-    } 
-    commBuff->share(&nblock,1,core_root);
-*/
-  } 
-
   int getGlobalRank() const { return global_rank; }
 
   int getTotalNodes() const { return tot_nodes; }
@@ -289,12 +232,11 @@ class TaskGroup {
   int getNCoresPerTG() const { return ncores_per_TG; }
 
   int getNNodesPerTG() const { return nnodes_per_TG; }
- 
-  void getRanksOfRoots(std::vector<int>& ranks, int& pos ) const { 
-    ranks=ranks_of_core_roots; 
-    pos=position_in_ranks_of_core_roots; 
-  }
 
+  int getNextRingPattern() const { return next_core_circular_node_pattern; } 
+
+  int getPrevRingPattern() const { return prev_core_circular_node_pattern; } 
+ 
   void getSetupInfo(std::vector<int>& data) const
   {  
     data.resize(5);
@@ -326,9 +268,7 @@ class TaskGroup {
   int TG_rank, TG_nproc;   // over full TG, notice that nproc = ncores_per_TG * nnodes_per_TG 
   bool core_root;          // over local node
   int core_rank;           // over local node 
-  std::vector<int> ranks_of_core_roots;
-  int position_in_ranks_of_core_roots; 
-  int next_core_root, prev_core_root; // only meaningful at core_root processes  
+  int next_core_circular_node_pattern, prev_core_circular_node_pattern; 
   MPI_Comm MPI_COMM_TG;   // Communicator over all cores in a given TG 
   MPI_Comm MPI_COMM_TG_HEADS;   // Communicator over all cores in a given TG 
   MPI_Comm MPI_COMM_TG_LOCAL;   // Communicator over all cores in a given TG that reside in the given node 

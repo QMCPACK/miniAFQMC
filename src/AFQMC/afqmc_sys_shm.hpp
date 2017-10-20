@@ -243,6 +243,7 @@ struct afqmc_sys: public AFQMCInfo
         >
     RealType calculate_distributed_energy_v1(MatA& W_data, const MatA& G, MatC&& Gglob, const MatB& haj, const SpMat& V)
     {
+      assert( G.shape()[0] == V.cols());
       assert( G.shape()[0] == 2*NAEA*NMO);
       assert( nwalk == G.shape()[1] );
       assert( nwalk == W_data.shape()[0] );
@@ -282,6 +283,104 @@ struct afqmc_sys: public AFQMCInfo
       return eav[0]/eav[1];
     }
 
+    /*
+     * Calculates the local energy of a set of walkers with distributed hamiltonians.
+     *   v2:
+     *    - compute local component of local energy over a set of walkers
+     *    - rotates walker matrix over nodes in TG in circular fashion
+     *    - overlaps communication and computation with Isend/Irecv
+     */
+    template< class SpMat,
+              class MatA,
+              class MatB,
+              class SMBuff
+        >
+    RealType calculate_distributed_energy_v2(MatA& W_data, const MatA& G, SMBuff& buff, const MatB& haj, const SpMat& V)
+    {
+      assert( G.shape()[0] == 2*NAEA*NMO);
+      assert( G.shape()[0] == V.cols());
+      assert( nwalk == G.shape()[1] );
+      assert( nwalk == W_data.shape()[0] );
+      // enough space for 2 copies of G and 2*nwalk local energies
+      assert( buff.size() >= 2*(G.num_elements() + nwalk) );
+
+      if(nnodes == 1) 
+        return calculate_energy(W_data,G,haj,V);
+
+      if( (Gcloc.shape()[0] != V.rows()) || (Gcloc.shape()[1] != G.shape()[1]) )
+        Gcloc.resize( extents[V.rows()][G.shape()[1]] );
+
+      // define strutures
+      boost::multi_array_ref<ComplexType,2> Gwork(buff.data(), extents[G.shape()[0]][G.shape()[1]]);
+      boost::multi_array_ref<ComplexType,2> Grecv(buff.data()+G.num_elements(), extents[G.shape()[0]][G.shape()[1]]);
+      boost::multi_array_ref<ComplexType,1> Esend(buff.data()+2*G.num_elements(), extents[nwalk]);
+      boost::multi_array_ref<ComplexType,1> Erecv(buff.data()+2*G.num_elements()+nwalk, extents[nwalk]);
+
+      // deep-copy of G to work matrix 
+      Gwork[indices[range_t(NAK_0,NAK_N)][range_t()]] = G[indices[range_t(NAK_0,NAK_N)][range_t()]];
+      if(core_number==0) {
+        std::fill_n(Esend.origin(),nwalk,0);
+        std::fill_n(Erecv.origin(),nwalk,0);
+      }  
+      TG.local_barrier();
+
+      MPI_Request req_Gsend, req_Grecv, req_Esend, req_Erecv; 
+      MPI_Status st, st_Gsend, st_Grecv, st_Esend, st_Erecv; 
+
+      for(int k=0; k<nnodes; k++) { 
+         
+        // wait for G from node behind you, copy to Gwork  
+        if(k>0) {
+          MPI_Wait(&req_Grecv,&st);
+          MPI_Wait(&req_Gsend,&st);     // need to wait for Gsend in order to overwrite Gwork  
+          Gwork[indices[range_t(NAK_0,NAK_N)][range_t()]] = Grecv[indices[range_t(NAK_0,NAK_N)][range_t()]];
+          TG.local_barrier();
+        }
+
+        // post send/recv messages with nodes ahead and behind you
+        if(k < nnodes-1) {
+          ma::isend(TG.getTGComm(),Gwork[indices[range_t(NAK_0,NAK_N)][range_t()]],TG.getNextRingPattern(),k,req_Gsend);  
+          ma::irecv(TG.getTGComm(),Grecv[indices[range_t(NAK_0,NAK_N)][range_t()]],TG.getPrevRingPattern(),k,req_Grecv);
+        }
+
+        // calculate your contribution of the local enery to the set of walkers in Gwork
+        shm::calculate_energy(Gwork,Gcloc,haj,V,locWlkVec,(TG.getCoreRank()==0 && k==0));
+
+        // receive energies, add local contribution, send to next node 
+        if(k > 0 && core_number==0) { 
+          MPI_Wait(&req_Erecv,&st); 
+          MPI_Wait(&req_Esend,&st); 
+          Esend = Erecv;  
+        }
+        TG.local_barrier(); 
+        {
+          boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(*(TG.getBuffer()->getMutex()));
+          BLAS::axpy(nwalk,one,locWlkVec.origin(),1,Esend.origin(),1);
+        }
+        TG.local_barrier(); 
+        if(core_number==0) { 
+          ma::isend(TG.getTGComm(),Esend,TG.getNextRingPattern(),k,req_Esend);
+          ma::irecv(TG.getTGComm(),Erecv,TG.getPrevRingPattern(),k,req_Erecv);
+        }
+
+      }
+
+      RealType eav[2];
+      eav[0] = 0.;
+      eav[1] = 0.;
+      if(core_number==0) {
+        MPI_Wait(&req_Erecv,&st);
+        for(int i=0; i<nwalk; i++) {
+          W_data[i][0] = Erecv[i];
+          eav[1] += W_data[i][1].real();
+          eav[0] += W_data[i][0].real()*W_data[i][1].real();
+        }
+      }
+
+      MPI_Allreduce(MPI_IN_PLACE,eav,2,MPI_DOUBLE,MPI_SUM,TG.getTGComm());
+      return eav[0]/eav[1];
+    }
+
     template<class WSet, class Mat>
     void calculate_overlaps(const WSet& W, Mat& W_data)
     {
@@ -314,43 +413,75 @@ struct afqmc_sys: public AFQMCInfo
              class MatA,
              class MatB
             >
-    void propagate(WSet& W, MatA& Propg, MatB& vHS)
+    void propagate(WSet& W, const MatA& Propg, MatB&& vHS)
     {
 
       assert( nwalk == W.shape()[0]);  
       assert( nwalk == vHS.shape()[1] ); 
       using Type = typename std::decay<MatB>::type::element;
-      boost::multi_array_ref<Type,2> T1(TMat_NM.data(), extents[NMO][NAEA]);
-      boost::multi_array_ref<Type,2> T2(TMat_MM2.data(), extents[NMO][NAEA]);
-      boost::multi_array_ref<Type,3> V(vHS.data(), extents[NMO][NMO][vHS.shape()[1]]);
-      for(int nw=0, cnt=0; nw<nwalk; nw++) {
 
-        if(cnt%ncores == core_number) {
-          ma::product(Propg,W[nw][0],TMat_MN);
-          // need deep-copy, since stride()[1] == nw otherwise
-          TMat_MM = V[ indices[range_t(0,NMO)][range_t(0,NMO)][nw] ];
-          base::apply_expM(TMat_MM,TMat_MN,T1,T2,6);
-          ma::product(Propg,TMat_MN,W[nw][0]);
+      if(2*nwalk >= ncores) {
+     
+        boost::multi_array_ref<Type,2> T1(TMat_NM.data(), extents[NMO][NAEA]);
+        boost::multi_array_ref<Type,2> T2(TMat_MM2.data(), extents[NMO][NAEA]);
+        boost::multi_array_ref<Type,3> V(vHS.origin(), extents[NMO][NMO][vHS.shape()[1]]);
+        for(int nw=0, cnt=0; nw<nwalk; nw++) {
+
+          if(cnt%ncores == core_number) {
+            ma::product(Propg,W[nw][0],TMat_MN);
+            // need deep-copy, since stride()[1] == nw otherwise
+            TMat_MM = V[ indices[range_t(0,NMO)][range_t(0,NMO)][nw] ];
+            base::apply_expM(TMat_MM,TMat_MN,T1,T2,6);
+            ma::product(Propg,TMat_MN,W[nw][0]);
+          }
+          cnt++;
+          if(cnt%ncores == core_number) {
+            ma::product(Propg,W[nw][1],TMat_MN);
+            TMat_MM = V[ indices[range_t(0,NMO)][range_t(0,NMO)][nw] ];
+            base::apply_expM(TMat_MM,TMat_MN,T1,T2,6);
+            ma::product(Propg,TMat_MN,W[nw][1]);
+          }
+          cnt++;
+
         }
-        cnt++;
-        if(cnt%ncores == core_number) {
-          ma::product(Propg,W[nw][1],TMat_MN);
-          TMat_MM = V[ indices[range_t(0,NMO)][range_t(0,NMO)][nw] ];
-          base::apply_expM(TMat_MM,TMat_MN,T1,T2,6);
-          ma::product(Propg,TMat_MN,W[nw][1]);
-        }
-        cnt++;
+
+      } else {
+
+        int nw = local_walker_index/2, sindex=local_walker_index%2;
+
+        boost::multi_array_ref<Type,2> T0(SM_TMats.values(), extents[NMO][NAEA]);
+        boost::multi_array_ref<Type,2> T1(SM_TMats.values()+NMO*NAEA, extents[NMO][NAEA]);
+        boost::multi_array_ref<Type,2> T2(SM_TMats.values()+2*NMO*NAEA, extents[NMO][NAEA]);
+
+        boost::multi_array_ref<Type,3> V(vHS.origin(), extents[NMO][NMO][vHS.shape()[1]]);
+
+        ma::product(Propg[indices[range_t(M_0,M_N)][range_t()]],
+                    W[nw][sindex],
+                    T0[indices[range_t(M_0,M_N)][range_t()]]);
+
+        TMat_MM[indices[range_t(0,M_N-M_0)][range_t()]] = 
+            V[ indices[range_t(M_0,M_N)][range_t()][nw] ];
+
+        MPI_Barrier(MPI_local_group);
+
+        shm::apply_expM(TMat_MM[indices[range_t(0,M_N-M_0)][range_t()]],
+                        T0,T1,T2,M_0,M_N,MPI_local_group,6);
+
+        MPI_Barrier(MPI_local_group);
+
+        ma::product(Propg[indices[range_t(M_0,M_N)][range_t()]],
+                    T0,
+                    W[nw][sindex][indices[range_t(M_0,M_N)][range_t()]]);
 
       }
       TG.local_barrier();  
-
     }    
 
     template<class WSet, 
              class MatA,
              class MatB
             >
-    void propagate_from_global(WSet& W, MatA& Propg, MatB& vHS)
+    void propagate_from_global(WSet& W, const MatA& Propg, MatB&& vHS)
     {
 
       assert( nwalk == W.shape()[0]);  
@@ -361,7 +492,7 @@ struct afqmc_sys: public AFQMCInfo
      
         boost::multi_array_ref<Type,2> T1(TMat_NM.data(), extents[NMO][NAEA]);
         boost::multi_array_ref<Type,2> T2(TMat_MM2.data(), extents[NMO][NAEA]);
-        boost::multi_array_ref<Type,3> V(vHS.data(), extents[NMO][NMO][vHS.shape()[1]]);
+        boost::multi_array_ref<Type,3> V(vHS.origin(), extents[NMO][NMO][vHS.shape()[1]]);
         for(int nw=0, cnt=0; nw<nwalk; nw++) {
 
           if(cnt%ncores == core_number) {
@@ -390,7 +521,7 @@ struct afqmc_sys: public AFQMCInfo
         boost::multi_array_ref<Type,2> T1(SM_TMats.values()+NMO*NAEA, extents[NMO][NAEA]);
         boost::multi_array_ref<Type,2> T2(SM_TMats.values()+2*NMO*NAEA, extents[NMO][NAEA]);
 
-        boost::multi_array_ref<Type,3> V(vHS.data(), extents[NMO][NMO][vHS.shape()[1]]);
+        boost::multi_array_ref<Type,3> V(vHS.origin(), extents[NMO][NMO][vHS.shape()[1]]);
 
         ma::product(Propg[indices[range_t(M_0,M_N)][range_t()]],
                     W[nw][sindex],

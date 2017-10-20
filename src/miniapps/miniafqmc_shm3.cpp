@@ -67,7 +67,9 @@ enum MiniQMCTimers
   Timer_gather,
   Timer_gatherE,
   Timer_reduce,
-  Timer_comm,
+  Timer_comm1,
+  Timer_comm2,
+  Timer_comm3,
   Timer_rotate,
   Timer_init
 };
@@ -86,7 +88,9 @@ TimerNameList_t<MiniQMCTimers> MiniQMCTimerNames = {
     {Timer_gather, "Allgather"},
     {Timer_gatherE, "Allgather_energy"},
     {Timer_reduce, "Allreduce"},
-    {Timer_comm, "Comm"},
+    {Timer_comm1, "Comm1"},
+    {Timer_comm2, "Comm2"},
+    {Timer_comm3, "Comm3"},
     {Timer_rotate, "Rotate"},
     {Timer_init, "Initialization"}
 };
@@ -278,11 +282,12 @@ int main(int argc, char **argv)
   int NIK_0, NIK_N;                    // fair partitioning of NIK over ncores
   int NAK = 2*NAEA*NMO;                // dimensions of linearized "compacted" green function
   int NAK_0, NAK_N;                    // fair partitioning of NAK over ncores
-  int MM_0,  MM_N;                     // fair partitioning of NMO*NMO over ncores
   int cvec0 = cholVec_partition[TG.getLocalNodeNumber()]; 
   int cvecN = cholVec_partition[TG.getLocalNodeNumber()+1]; 
   int nchol = SMSpvn.cols();           // local number of cholesky vectors
   int NX_0, NX_N;                      // fair partitioning of nchol over ncores 
+  int MM_0, MM_N;                      // fair partitioning of NMO*NMO over ncores 
+  int MM1_0, MM1_N;                    // fair partitioning of (NMO*NMO+1) over ncores 
   assert(nchol == cvecN-cvec0);   
   if(transposed_Spvn)
     NIK = NAK;  
@@ -291,6 +296,9 @@ int main(int argc, char **argv)
   std::tie(NAK_0, NAK_N) = FairDivideBoundary(core_rank,NAK,ncores_per_TG); 
   std::tie(NX_0, NX_N) = FairDivideBoundary(core_rank,nchol,ncores_per_TG); 
   std::tie(MM_0, MM_N) = FairDivideBoundary(core_rank,NMO*NMO,ncores_per_TG); 
+  MM1_0 = MM_0;
+  MM1_N = MM_N;
+  if(core_rank==ncores_per_TG-1) MM1_N++;  // the last block includes the hybrid weight when MM1 is used
 
   // partition local Spvn and Vakbl among cores in TG, generate lightweight SparseMatrix_ref
   SparseMatrix_ref<ComplexType> Spvn;    
@@ -344,42 +352,40 @@ int main(int argc, char **argv)
   int nwalk_tot = nwalk*nnodes_per_TG;  
 
   // setup SM memory containers
-  // bias potential
-  SMDenseVector<ComplexType> SM_vbias(std::string("SM_vbias")+str0,TG.getTGCommLocal(),nchol*nwalk_tot);
-  // Hubbard-Stratonovich potential
-  SMDenseVector<ComplexType> SM_vHS(std::string("SM_vHS")+str0,TG.getTGCommLocal(),NMO*NMO*nwalk_tot);
-  // density matrix
-  SMDenseVector<ComplexType> SM_G_for_vbias(std::string("SM_G_for_vbias")+str0,TG.getTGCommLocal(),NIK*nwalk);
+  // bias potential 
+  SMDenseVector<ComplexType> SM_vbias(std::string("SM_vbias")+str0,TG.getTGCommLocal(),nchol*nwalk);
+  // Hubbard-Stratonovich potential (3 copies for distributed algorithm)
+  SMDenseVector<ComplexType> SM_vHS(std::string("SM_vHS")+str0,TG.getTGCommLocal(),(3*NMO*NMO+3)*nwalk);
+  // density matrix ( 2 copies for distributed algorithm )
+  SMDenseVector<ComplexType> SM_G_for_vbias(std::string("SM_G_for_vbias")+str0,TG.getTGCommLocal(),2*NIK*nwalk);
   // compact density matrix for energy evaluation
   SMDenseVector<ComplexType> SM_Gc(std::string("SM_Gc")+str0,TG.getTGCommLocal(),NAK*nwalk);    
   // X(n,nw) = rand(n,nw) ( + vbias(n,nw))
-  SMDenseVector<ComplexType> SM_X(std::string("SM_X")+str0,TG.getTGCommLocal(),nchol*nwalk_tot);     
-  // stores weight factors
-  SMDenseVector<ComplexType> SM_hybridW(std::string("SM_hybridW")+str0,TG.getTGCommLocal(),nwalk_tot);
-  // stores local energies
-  SMDenseVector<ComplexType> SM_eloc(std::string("SM_eloc")+str0,TG.getTGCommLocal(),nwalk_tot);  
+  SMDenseVector<ComplexType> SM_X(std::string("SM_X")+str0,TG.getTGCommLocal(),nchol*nwalk);     
 
   // setup light references to SM
-  boost::multi_array_ref<ComplexType,2> vbias(SM_vbias.data(),extents[nchol][nwalk_tot]);     
-  boost::multi_array_ref<ComplexType,2> vHS(SM_vHS.data(), extents[NMO*NMO][nwalk_tot]);     
+  boost::multi_array_ref<ComplexType,2> vbias(SM_vbias.data(),extents[nchol][nwalk]);     
+  boost::multi_array_ref<ComplexType,2> vHS(SM_vHS.data(), extents[NMO*NMO][nwalk]);     
+  // accumulates vHS and hybridW
+  boost::multi_array_ref<ComplexType,2> vsend(SM_vHS.data()+NMO*NMO*nwalk, extents[NMO*NMO+1][nwalk]);     
+  // accumulates vHS and hybridW
+  boost::multi_array_ref<ComplexType,2> vrecv(SM_vHS.data()+(2*NMO*NMO+1)*nwalk, extents[NMO*NMO+1][nwalk]);     
+  // using SM_vHS
+  boost::multi_array_ref<ComplexType,1> hybridW(SM_vHS.data()+(3*NMO*NMO+2)*nwalk, extents[nwalk]);
   boost::multi_array_ref<ComplexType,2> G_for_vbias(SM_G_for_vbias.data(), extents[NIK][nwalk]);           
+  boost::multi_array_ref<ComplexType,2> Grecv(SM_G_for_vbias.data()+NIK*nwalk, extents[NIK][nwalk]);           
   boost::multi_array_ref<ComplexType,2> Gc(SM_Gc.data(), extents[NAK][nwalk]);        
-  boost::multi_array_ref<ComplexType,2> X(SM_X.data(), extents[nchol][nwalk_tot]);       
-  boost::multi_array_ref<ComplexType,1> eloc(SM_eloc.data(), extents[nwalk_tot]);       
-  boost::multi_array_ref<ComplexType,1> hybridW(SM_hybridW.data(), extents[nwalk_tot]);
+  boost::multi_array_ref<ComplexType,2> X(SM_X.data(), extents[nchol][nwalk]);       
 
   // temporary local container needed if transposed_Spvn=false 
   boost::multi_array<ComplexType,2> loc_vbias;
   if(!transposed_Spvn) 
-    loc_vbias.resize(extents[Spvn_for_vbias.cols()][nwalk_tot]);
+    loc_vbias.resize(extents[Spvn_for_vbias.cols()][nwalk]);
   else
-    loc_vbias.resize(extents[1][nwalk_tot]);
+    loc_vbias.resize(extents[1][nwalk]);
 
-  // some additional global structures
-  SMDenseVector<ComplexType> SM_G_glob(std::string("SM_G_glob")+str0,TG.getTGCommLocal(),NIK*nwalk_tot);
-  boost::multi_array_ref<ComplexType,2> G_glob(SM_G_glob.data(), extents[NIK][nwalk_tot]);
-  // NOTE: Using SM_G_glob's memory for both G_glob and Gc_glob. Which means that they can't be used concurrently
-  boost::multi_array_ref<ComplexType,2> Gc_glob(SM_G_glob.data(), extents[NAK][nwalk_tot]);
+  // SM buffer for distributed energy evaluation
+  SMDenseVector<ComplexType> SM_buff(std::string("SM_buff")+str0,TG.getTGCommLocal(),2*(NAK*nwalk+nwalk));
 
   // Walker container: Shared among local cores in a TG
   SMDenseVector<ComplexType> SM_W(std::string("SM_W")+str0,TG.getTGCommLocal(),nwalk*2*NMO*NAEA);
@@ -405,9 +411,18 @@ int main(int argc, char **argv)
   }
   SM_W.barrier();  
 
+  MPI_Request req_Gsend, req_Grecv, req_vsend, req_vrecv;
+  MPI_Status st;
+
+  ma::send_init(TG.getTGComm(),G_for_vbias[indices[range_t(NIK_0,NIK_N)][range_t()]],TG.getNextRingPattern(),1234,req_Gsend);
+  ma::recv_init(TG.getTGComm(),Grecv[indices[range_t(NIK_0,NIK_N)][range_t()]],TG.getPrevRingPattern(),1234,req_Grecv);
+
+  ma::send_init(TG.getTGComm(),vsend[indices[range_t(MM1_0,MM1_N)][range_t()]],TG.getNextRingPattern(),4321,req_vsend);
+  ma::recv_init(TG.getTGComm(),vrecv[indices[range_t(MM1_0,MM1_N)][range_t()]],TG.getPrevRingPattern(),4321,req_vrecv);
+
   // initialize overlaps and energy
   AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc,true);
-  RealType Eav = AFQMCSys.calculate_distributed_energy_v1(W_data,Gc,Gc_glob,haj,Vakbl);
+  RealType Eav = AFQMCSys.calculate_distributed_energy_v2(W_data,Gc,SM_buff,haj,Vakbl);
 
   app_log()<<"\n";
   app_log()<<"***********************************************************\n";
@@ -494,98 +509,107 @@ int main(int argc, char **argv)
 
       } else {
         // Distributed algorithm
-  
-        // simple algorithm
-        // 1. Allgather G_for_vbias
-        // 2. calculate local contribution to vHS for all walkers in TG
-        // 3. Allreduce vbias
+        // Overlap communication and computation 
 
-        Timers[Timer_gather]->start();      
-        ma::allgather_matrix(TG.getTGCommHeads(),
-                             G_for_vbias[indices[range_t(NIK_0,NIK_N)][range_t()]],
-                             G_glob[indices[range_t(NIK_0,NIK_N)][range_t()]],
-                             byCols);
-        TG.local_barrier();  
-        Timers[Timer_gather]->stop();      
+        Timers[Timer_extra]->start();
+        std::fill_n(vsend.origin()+MM1_0*nwalk,(MM1_N-MM1_0)*nwalk,0);
+        TG.local_barrier();
+        Timers[Timer_extra]->stop();
 
-        Timers[Timer_vbias]->start();
-        if(transposed_Spvn) {
+        for(int k=0; k<nnodes_per_TG; k++) {
 
-          shm::get_vbias(Spvn_for_vbias,G_glob,vbias,transposed_Spvn);  
+          // wait for G from node behind you, copy to Gwork  
+          Timers[Timer_comm1]->start();  
+          if(k>0) {
+            MPI_Wait(&req_Grecv,&st);
+            MPI_Wait(&req_Gsend,&st);     // need to wait for Gsend in order to overwrite Gwork  
+            G_for_vbias[indices[range_t(NIK_0,NIK_N)][range_t()]] = Grecv[indices[range_t(NIK_0,NIK_N)][range_t()]];
+            TG.local_barrier();
+          }
+          Timers[Timer_comm1]->stop();  
 
-        } else {
+          // post send/recv messages with nodes ahead and behind you
+          Timers[Timer_comm2]->start();  
+          if(k < nnodes_per_TG-1) {
+            //ma::isend(TG.getTGComm(),G_for_vbias[indices[range_t(NIK_0,NIK_N)][range_t()]],TG.getNextRingPattern(),k,req_Gsend);
+            MPI_Start(&req_Gsend);
+            //ma::irecv(TG.getTGComm(),Grecv[indices[range_t(NIK_0,NIK_N)][range_t()]],TG.getPrevRingPattern(),k,req_Grecv);
+            MPI_Start(&req_Grecv);
+          }
+          Timers[Timer_comm2]->stop();  
 
-          // careful here, needs temporary matrix local to the core (NOT in SM!!!)
-          shm::get_vbias(Spvn_for_vbias,G_glob,loc_vbias,transposed_Spvn);
-          // no need for lock, partitionings are non-overlapping 
-          vbias[ indices[range_t(Spvn_for_vbias.global_c0(),Spvn_for_vbias.global_cN())][range_t()] ] = 
+          // calculate local contribution to vHS
+          Timers[Timer_vbias]->start();
+          if(transposed_Spvn) {
+
+            shm::get_vbias(Spvn_for_vbias,G_for_vbias,vbias,transposed_Spvn);
+
+          } else {
+
+            // careful here, needs temporary matrix local to the core (NOT in SM!!!)
+            shm::get_vbias(Spvn_for_vbias,G_for_vbias,loc_vbias,transposed_Spvn);
+            // no need for lock, partitionings are non-overlapping 
+            vbias[ indices[range_t(Spvn_for_vbias.global_c0(),Spvn_for_vbias.global_cN())][range_t()] ] = 
               loc_vbias[ indices[range_t(Spvn_for_vbias.global_c0(),Spvn_for_vbias.global_cN())][range_t()] ];
 
-        } 
-        if(core_rank == 0) std::fill_n(hybridW.data(),hybridW.num_elements(),zero); 
-        TG.local_barrier();  
-        Timers[Timer_vbias]->stop();
-
-        // 2. calculate X and weight
-        //  X(chol,nw) = rand + i*vbias(chol,nw)
-        Timers[Timer_X]->start();
-
-        if(debug) {    
-          if(core_rank == 0) {      
-            // burn through unused random numbers
-            for(int n=0; n<cvec0; n++) {   
-              random_th.generate_normal(loc_vbias.data(),nwalk_tot); 
-            }  
-            random_th.generate_normal(X.data(),X.num_elements()); 
-            std::fill(hybridW.begin(),hybridW.end(),zero); 
-            for(int n=0; n<nchol; n++) 
-              for(int nw=0; nw<nwalk_tot; nw++) { 
-                hybridW[nw] -= im*vbias[n][nw]*(X[n][nw]+halfim*vbias[n][nw]);
-                X[n][nw] += im*vbias[n][nw];
-              }
-            // burn through unused random numbers
-            for(int n=cvecN; n<global_nchol; n++)   { 
-              random_th.generate_normal(loc_vbias.data(),nwalk_tot); 
-            }
           }
-        } else {
-          // for distributed effort (real performance measurement) 
-          random_th.generate_normal(X.data()+NX_0*X.shape()[1],(NX_N-NX_0)*X.shape()[1]); 
-          std::fill_n(loc_vbias.data(),nwalk_tot,zero);
+          TG.local_barrier();
+          Timers[Timer_vbias]->stop();
+
+          // 2. calculate X and weight
+          //  X(chol,nw) = rand + i*vbias(chol,nw)
+          Timers[Timer_X]->start();
+          // don't know how to keep it deterministic in this case
+          random_th.generate_normal(X.data()+NX_0*X.shape()[1],(NX_N-NX_0)*X.shape()[1]);
+          std::fill_n(loc_vbias.data(),nwalk,zero);
           for(int n=NX_0; n<NX_N; n++)
-            for(int nw=0; nw<nwalk_tot; nw++) { 
+            for(int nw=0; nw<nwalk; nw++) {
               loc_vbias[0][nw] -= im*vbias[n][nw]*(X[n][nw]+halfim*vbias[n][nw]);
               X[n][nw] += im*vbias[n][nw];
             }
+          TG.local_barrier();
+          Timers[Timer_X]->stop();
+
+          // 3. calculate vHS
+          // vHS(i,k,nw) = sum_n Spvn(i,k,n) * X(n,nw) 
+          Timers[Timer_vHS]->start();
+          shm::get_vHS(Spvn,X,vHS);
+          TG.local_barrier();
+          Timers[Timer_vHS]->stop();
+
+          // receive energies, add local contribution, send to next node 
+          Timers[Timer_comm3]->start();  
+          if(k > 0) {
+            MPI_Wait(&req_vrecv,&st);
+            MPI_Wait(&req_vsend,&st);
+            vsend[indices[range_t(MM1_0,MM1_N)][range_t()]] = vrecv[indices[range_t(MM1_0,MM1_N)][range_t()]];
+          }
+          Timers[Timer_comm3]->stop();  
+          Timers[Timer_comm2]->start();  
+          BLAS::axpy((MM_N-MM_0)*nwalk,one,vHS.origin()+MM_0*nwalk,1,vsend.origin()+MM_0*nwalk,1);
           {
             boost::interprocess::scoped_lock<boost::interprocess::interprocess_mutex> lock(*(TG.getBuffer()->getMutex()));
-            BLAS::axpy(nwalk_tot,one,loc_vbias.data(),1,hybridW.data(),1);
+            BLAS::axpy(nwalk,one,loc_vbias.data(),1,vsend.origin()+NMO*NMO*nwalk,1);
           }
+          TG.local_barrier();
+          //ma::isend(TG.getTGComm(),vsend[indices[range_t(MM1_0,MM1_N)][range_t()]],TG.getNextRingPattern(),k,req_vsend);
+          MPI_Start(&req_vsend);
+          //ma::irecv(TG.getTGComm(),vrecv[indices[range_t(MM1_0,MM1_N)][range_t()]],TG.getPrevRingPattern(),k,req_vrecv);
+          MPI_Start(&req_vrecv);
+          Timers[Timer_comm2]->stop();  
+
         }
-        if(core_rank==0)
-          MPI_Allreduce(MPI_IN_PLACE,hybridW.data(),nwalk_tot*2,MPI_DOUBLE,MPI_SUM,TG.getTGCommHeads());
+
+        Timers[Timer_comm3]->start();  
+        MPI_Wait(&req_vrecv,&st);
+        MPI_Wait(&req_vsend,&st);
         TG.local_barrier();
-        Timers[Timer_X]->stop();
-
-        // 3. calculate vHS
-        // vHS(i,k,nw) = sum_n Spvn(i,k,n) * X(n,nw) 
-        Timers[Timer_vHS]->start();
-        shm::get_vHS(Spvn,X,vHS);      
-        TG.local_barrier();  
-        Timers[Timer_vHS]->stop();
-
-        // each core reduces a submatrix through TG.getTGCommHeads()
-        // Reduce {  vHS [ range(MM_0, MM_N) ] [ range() ]  }
-        Timers[Timer_reduce]->start();
-        MPI_Allreduce(MPI_IN_PLACE,vHS.data()+MM_0*vHS.shape()[1],(MM_N-MM_0)*vHS.shape()[1]*2,
-                      MPI_DOUBLE,MPI_SUM,TG.getTGCommHeads());  
-        TG.local_barrier();  
-        Timers[Timer_reduce]->stop();
+        Timers[Timer_comm3]->stop();  
 
         // 4. propagate walker
         // W(new) = Propg1 * exp(vHS) * Propg1 * W(old)
         Timers[Timer_Propg]->start();
-        AFQMCSys.propagate_from_global(W,Propg1,vHS);
+        AFQMCSys.propagate(W,Propg1,vrecv[indices[range_t(0,NMO*NMO)][range_t()]]);
         Timers[Timer_Propg]->stop();
 
       }
@@ -612,7 +636,7 @@ int main(int argc, char **argv)
         for(int nw=0; nw<nwalk; nw++) {
           ComplexType ratioOverlaps = W_data[nw][2]*W_data[nw][3]/(W_data[nw][6]*W_data[nw][7] );   
           RealType scale = std::max(0.0,std::cos( std::arg( ratioOverlaps )) );
-          W_data[nw][4] = -( hybridW[node_number*nwalk+nw] + std::log(ratioOverlaps) )/dt; 
+          W_data[nw][4] = -( vrecv[NMO*NMO][nw] + std::log(ratioOverlaps) )/dt; 
           W_data[nw][1] *= ComplexType(scale*std::exp( -dt*(0.5*( W_data[nw][4].real() 
                                             + W_data[nw][5].real() ) - Eshift) ),0.0);
           et += W_data[nw][4].real();
@@ -636,7 +660,7 @@ int main(int argc, char **argv)
 
     Timers[Timer_eloc]->start();
     AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc,true);
-    Eav = AFQMCSys.calculate_distributed_energy_v1(W_data,Gc,Gc_glob,haj,Vakbl);
+    Eav = AFQMCSys.calculate_distributed_energy_v2(W_data,Gc,SM_buff,haj,Vakbl);
     Timers[Timer_eloc]->stop();
     app_log()<<step <<"   " <<setprecision(12) <<Eav <<std::endl;
 

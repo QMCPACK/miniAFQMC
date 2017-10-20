@@ -23,6 +23,109 @@
 
 namespace ma{
 
+template< class MultiArray>
+inline void isend( MPI_Comm comm, const MultiArray& source, int dest, int tag, MPI_Request& req)
+{
+
+  typedef typename MultiArray::element Type;  
+
+  MPI_Isend(source.origin(),source.num_elements()*sizeof(Type),MPI_CHAR,dest,tag,comm,&req);
+
+}
+
+template< class MultiArray>
+inline void irecv( MPI_Comm comm, MultiArray&& source, int src, int tag, MPI_Request& req)
+{
+
+  typedef typename std::decay<MultiArray>::type::element Type;  
+
+  MPI_Irecv(source.origin(),source.num_elements()*sizeof(Type),MPI_CHAR,src,tag,comm,&req);
+
+}
+
+template< class MultiArray>
+inline void send( MPI_Comm comm, const MultiArray& source, int dest, int tag)
+{
+
+  typedef typename MultiArray::element Type;
+
+  MPI_Send(source.origin(),source.num_elements()*sizeof(Type),MPI_CHAR,dest,tag,comm);
+
+}
+
+template< class MultiArray>
+inline void recv( MPI_Comm comm, MultiArray&& source, int src, int tag)
+{
+
+  typedef typename std::decay<MultiArray>::type::element Type;
+  MPI_Status st;
+  MPI_Recv(source.origin(),source.num_elements()*sizeof(Type),MPI_CHAR,src,tag,comm,&st);
+
+}
+
+template< class MultiArray>
+inline void send_init( MPI_Comm comm, const MultiArray& source, int dest, int tag, MPI_Request& req)
+{
+
+  typedef typename MultiArray::element Type;
+
+  MPI_Send_init(source.origin(),source.num_elements()*sizeof(Type),MPI_CHAR,dest,tag,comm,&req);
+
+}
+
+template< class MultiArray>
+inline void recv_init( MPI_Comm comm, MultiArray&& source, int src, int tag, MPI_Request& req)
+{
+
+  typedef typename std::decay<MultiArray>::type::element Type;
+
+  MPI_Recv_init(source.origin(),source.num_elements()*sizeof(Type),MPI_CHAR,src,tag,comm,&req);
+
+}
+
+template< class MultiArray>
+inline void ireduce( MPI_Comm comm, MultiArray&& source, int root, MPI_Request& req)
+{
+
+  typedef typename std::decay<MultiArray>::type::element Type;
+  int rank;
+  MPI_Comm_rank(comm,&rank); 
+  if(rank == root)
+    MPI_Ireduce(MPI_IN_PLACE,source.origin(),2*source.num_elements(),
+                 MPI_DOUBLE,MPI_SUM,root,comm,&req);
+  else
+    MPI_Ireduce(source.origin(),source.origin(),2*source.num_elements(),
+                 MPI_DOUBLE,MPI_SUM,root,comm,&req);
+
+}
+
+template< class MultiArray>
+inline void reduce( MPI_Comm comm, MultiArray&& source, int root)
+{
+
+  typedef typename std::decay<MultiArray>::type::element Type;
+  int rank;
+  MPI_Comm_rank(comm,&rank);
+  if(rank == root)
+    MPI_Reduce(MPI_IN_PLACE,source.origin(),2*source.num_elements(),
+                 MPI_DOUBLE,MPI_SUM,root,comm);
+  else
+    MPI_Reduce(source.origin(),source.origin(),2*source.num_elements(),
+                 MPI_DOUBLE,MPI_SUM,root,comm);
+
+}
+
+template< class MultiArray>
+inline void bcast( MPI_Comm comm, MultiArray&& source, int root)
+{
+
+  typedef typename std::decay<MultiArray>::type::element Type;
+
+  MPI_Bcast(source.origin(),2*source.num_elements()*sizeof(Type),
+                 MPI_CHAR,root,comm);
+
+}
+
 template< class MultiArray2DA, 
           class MultiArray2DB, 
         typename = typename std::enable_if<

@@ -115,7 +115,7 @@ class SMDenseVector
         boost::interprocess::shared_memory_object::remove(ID.c_str());
       } catch(std::bad_alloc&) {
         std::cerr<<"Problems de-allocating shared memory in SMDenseVector." <<std::endl;
-        MPI_Abort(MPI_COMM_WORLD,20);
+        MPI_Abort(MPI_COMM_WORLD,21);
       }
     }
     barrier();
@@ -129,7 +129,7 @@ class SMDenseVector
     assert(segment==NULL);
     if(segment!=NULL || SMallocated) {
       std::cerr<<" Error: SMDenseVector: " <<ID <<" already allocated. " <<std::endl;
-      MPI_Abort(MPI_COMM_WORLD,20);
+      MPI_Abort(MPI_COMM_WORLD,22);
     }
     barrier();
     if(head) {
@@ -149,7 +149,7 @@ class SMDenseVector
           segment = new boost::interprocess::managed_shared_memory(boost::interprocess::create_only, ID.c_str(), memory);
         } catch(boost::interprocess::interprocess_exception &ex) {
           std::cerr<<"Problems setting up managed_shared_memory in SMDenseVector." <<std::endl;
-          MPI_Abort(MPI_COMM_WORLD,20);
+          MPI_Abort(MPI_COMM_WORLD,23);
           return false;
         }
       }
@@ -164,7 +164,7 @@ class SMDenseVector
         vals->reserve(n);
       } catch(std::bad_alloc&) {
         std::cerr<<"Problems allocating shared memory in SMDenseVector." <<std::endl;
-        MPI_Abort(MPI_COMM_WORLD,20);
+        MPI_Abort(MPI_COMM_WORLD,24);
         return false;
       }
     }
@@ -178,7 +178,7 @@ class SMDenseVector
         assert(mutex != 0);
       } catch(std::bad_alloc&) {
         std::cerr<<"Problems allocating shared memory in SMDenseVector: initializeChildren() ." <<std::endl;
-        MPI_Abort(MPI_COMM_WORLD,20);
+        MPI_Abort(MPI_COMM_WORLD,25);
         return false;
       }
     }
@@ -193,12 +193,12 @@ class SMDenseVector
     if(!SMallocated || vals==NULL) { 
       if(!reserve(nnz)) {
         std::cerr<<" Error with reserve in SMDenseVector: " <<ID <<std::endl; 
-        MPI_Abort(MPI_COMM_WORLD,20);
+        MPI_Abort(MPI_COMM_WORLD,26);
       }
     }
     if(vals->capacity() < nnz) {  
       std::cerr<<" Error in SMDenseVector: " <<ID <<" Resizing beyond capacity." <<std::endl; 
-      MPI_Abort(MPI_COMM_WORLD,20);
+      MPI_Abort(MPI_COMM_WORLD,27);
     }
     if(head) {
       assert(SMallocated);

@@ -36,7 +36,7 @@ template< class SpMat,
           class Mat,
           class task_group
         >
-inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::afqmc_sys& sys, Mat& Propg1, SpMat& Spvn, Mat& haj, SpMat& Vakbl, std::vector<int>& sets, int nread)
+inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::afqmc_sys& sys, Mat& Propg1, SpMat& Spvn, Mat& haj, SpMat& Vakbl, std::vector<int>& sets, int nread, bool skip_Vakbl=false)
 {
 
   enum InitTimers
@@ -71,7 +71,7 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
   // heads reads and bcasts everything except Vakbl and Spvn.
   // coreid<nread read simultaneously Vakbl and Spvn 
   
-  app_log()<<"  Distributed read of hdf5 using all nodes and " <<nread <<" cores per node. \n";
+  app_log()<<"\n  Distributed read of hdf5 using all nodes and " <<nread <<" cores per node. \n";
 
   if(head) {
 
@@ -181,8 +181,9 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
 
     // read half-rotated hamiltonian
     // careful here!!!
-    Timers[read_Vakbl]->start();
+    if(!skip_Vakbl) 
     {
+      Timers[read_Vakbl]->start();
       simple_matrix_partition<task_group,IndexType,RealType> split(Idata[2],Idata[3],1e-8);
       std::vector<IndexType> counts;
       // count dimensions of sparse matrix
@@ -191,7 +192,7 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
 
       split.partition(TG,true,counts,sets);
 
-      app_log()<<"  Partitioning of Hamiltonian Matrix (rows): ";
+      app_log()<<"\n  Partitioning of Hamiltonian Matrix (rows): ";
       for(int i=0; i<=nnodes_per_TG; i++)
         app_log()<<sets[i] <<" ";
       app_log()<<std::endl;
@@ -255,12 +256,12 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
       Vakbl.setOffset(r0,0);  
       Vakbl.setDims(rN-r0,2*NMO*NAEA);
 
+      MPI_Barrier(MPI_COMM_WORLD);
+      Timers[read_Vakbl]->stop();
+      Timers[sort_Vakbl]->start();
+      Vakbl.compress(TG.getNodeCommLocal());
+      Timers[sort_Vakbl]->stop();
     }
-    MPI_Barrier(MPI_COMM_WORLD);
-    Timers[read_Vakbl]->stop();
-    Timers[sort_Vakbl]->start();
-    Vakbl.compress(TG.getNodeCommLocal());
-    Timers[sort_Vakbl]->stop();
 
     dump.pop();
     dump.pop();
@@ -305,7 +306,7 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
 
     split.partition(TG,false,counts,sets);
 
-    app_log()<<"  Partitioning of Cholesky Vectors: ";
+    app_log()<<"\n  Partitioning of Cholesky Vectors: ";
     for(int i=0; i<=nnodes_per_TG; i++)
       app_log()<<sets[i] <<" ";
     app_log()<<std::endl;
@@ -389,6 +390,7 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
 
     // read Vakbl
     std::vector<IndexType> counts;
+    if(!skip_Vakbl)
     {
       simple_matrix_partition<task_group,IndexType,RealType> split(Idata[2],Idata[3],1e-8);
       // count dimensions of sparse matrix
@@ -455,9 +457,9 @@ inline bool Initialize(hdf_archive& dump, const double dt, task_group& TG, shm::
       MPI_Bcast(&rN, 1, MPI_INT, 0, TG.getNodeCommLocal());  
       Vakbl.setOffset(r0,0);
       Vakbl.setDims(rN-r0,2*NMO*NAEA);
+      MPI_Barrier(MPI_COMM_WORLD);
+      Vakbl.compress(TG.getNodeCommLocal());
     }
-    MPI_Barrier(MPI_COMM_WORLD);
-    Vakbl.compress(TG.getNodeCommLocal());
 
     if(reader) {
       dump.pop();
