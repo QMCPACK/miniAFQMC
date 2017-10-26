@@ -21,7 +21,7 @@
 
 #include <Kokkos_Core.hpp>
 
-#include "Numerics/ma_operations.hpp"
+// #include "Numerics/ma_operations.hpp"
 
 namespace qmcplusplus
 {
@@ -72,10 +72,11 @@ inline Tp MixedDensityMatrix(const MatA& conjA, const MatB& B, MatC& C, Mat& T1,
     assert( C.dimension(1) == T2.dimension(1) );
   }
 
-  using ma::T;
+  // using ma::T;
 
   // T(B)*conj(A) 
-  ma::product(T(B),conjA,T1);  
+  // ma::product(T(B),conjA,T1);
+  KokkosBlas::gemm('t','n',1.0,B,conjA,0.0,T1);
 
   // NOTE: Using C as temporary 
   // T1 = T1^(-1)
@@ -84,15 +85,18 @@ inline Tp MixedDensityMatrix(const MatA& conjA, const MatB& B, MatC& C, Mat& T1,
   if(compact) {
 
     // C = T1 * T(B)
-    ma::product(T1,T(B),C); 
+    //ma::product(T1,T(B),C);
+    KokkosBlas::gemm('n','t',1.0,T1,B,0.0,C);
 
   } else {
 
     // T2 = T1 * T(B)
-    ma::product(T1,T(B),T2); 
+    // ma::product(T1,T(B),T2);
+    KokkosBlas::gemm('n','t',1.0,T1,B,0.0,T2);
 
     // C = conj(A) * T2
-    ma::product(conjA,T2,C);
+    // ma::product(conjA,T2,C);
+    KokkosBlas::gemm('n','n',1.0,conjA,T2,0.0,C);
 
   }
 
@@ -128,7 +132,8 @@ inline Tp Overlap(const MatA& conjA, const MatB& B, Mat& T1, IBuffer& IWORK)
   using ma::T;
 
   // T(B)*conj(A) 
-  ma::product(T(B),conjA,T1);  
+  // ma::product(T(B),conjA,T1);
+  KokkosBlas::gemm('t','n',1.0,B,conjA,0.0,T1);
 
   return static_cast<Tp>(ma::determinant(T1,IWORK));
 }

@@ -19,7 +19,7 @@
 #define  AFQMC_OPS_HPP 
 
 #include <Kokkos_Core.hpp>
-
+#include <KokkosBlas.hpp>
 #include "Configuration.h"
 #include "Numerics/ma_lapack.hpp"
 #include "Numerics/ma_operations.hpp"
@@ -57,12 +57,17 @@ struct afqmc_sys: public AFQMCInfo
       NMO = nmo_;
       NAEA = NAEB = na;
 
-      TMat_NM.resize(extents[NAEA][NMO]);
-      TMat_MN.resize(extents[NMO][NAEA]);
-      TMat_NN.resize(extents[NAEA][NAEA]);
+      // TMat_NM.resize(extents[NAEA][NMO]);
+      TMat_NM = ComplexMatrixKokkos("TMat_NM", NAEA, NMO);
+      // TMat_MN.resize(extents[NMO][NAEA]);
+      TMat_MN = ComplexMatrixKokkos("TMat_MN", NMO, NAEA);
+      TMat_MN2 = ComplexMatrixKokkos("TMat_MN2", NMO, NAEA);
+      // TMat_NN.resize(extents[NAEA][NAEA]);
+      TMat_NN = ComplexMatrixKokkos("TMat_NN", NAEA, NAEA);
       // TMat_MM.resize(extents[NMO][NMO]);
       TMat_MM = ComplexMatrixKokkos("TMat_MM", NMO, NMO);
-      TMat_MM2.resize(extents[NMO][NMO]); 
+      // TMat_MM2.resize(extents[NMO][NMO]);
+      TMat_MM2 = ComplexMatrixKokkos("TMat_MM2", NMO, NMO); 
 
       // reserve enough space in lapack's work array
       // Make sure it is large enough for:
@@ -145,7 +150,7 @@ struct afqmc_sys: public AFQMCInfo
         for(int i=0; i<N_; ++i)
          for(int j=0; j<NMO; ++j)
            // G_4d(0, i, j, n) = DM(i, j);
-           G(idx3c(0,i,j,2,N_,NMO),n) = DM(i, j);
+           G(idx3(0,i,j,2,N_,NMO),n) = DM(i, j);
 
         W_data(n, 3) = base::MixedDensityMatrix<ComplexType>(trialwfn_beta,Kokkos::subview(W, n, 1, Kokkos::ALL(), Kokkos::ALL()),
                        DM,TMat_NN,TMat_NM,IWORK,WORK,compact);
@@ -153,7 +158,7 @@ struct afqmc_sys: public AFQMCInfo
         for(int i=0; i<N_; ++i)
          for(int j=0; j<NMO; ++j)
            // G_4d(1, i, j, n) = DM(i, j);
-           G(idx3c(1,i,j,2,N_,NMO), n) = DM(i, j);
+           G(idx3(1,i,j,2,N_,NMO), n) = DM(i, j);
       } // );
     }
 
@@ -177,15 +182,16 @@ struct afqmc_sys: public AFQMCInfo
 */
 
     template<class SpMat,
-             class Mat
+             class Mat,
+             class Vec
             >
-    RealType calculate_energy(Mat& W_data, const Mat& G, const Mat& haj, const SpMat& V)
+    RealType calculate_energy(Mat& W_data, const Mat& G, const Vec& haj_flat, const SpMat& V)
     {
       assert(G.dimension(0) == 2*NAEA*NMO);
       if(G.dimension(1) != Gcloc.dimension(1))
         Kokkos::resize(Gcloc, 2*NMO*NAEA, G.dimension(1));
 
-      base::calculate_energy(W_data,G,Gcloc,haj,V);
+      base::calculate_energy(W_data,G,Gcloc,haj_flat,V);
       RealType eav = 0., wgt=0.;
       for(int n=0, nw=G.dimension(1); n<nw; n++) {
         wgt += W_data(n, 1).real();
@@ -264,8 +270,10 @@ struct afqmc_sys: public AFQMCInfo
       typedef typename std::decay<MatB>::type::element Type;
       // boost::multi_array_ref<Type,3> V(vHS.data(), extents[NMO][NMO][vHS.shape()[1]]);
       // re-interpretting matrices to avoid new temporary space  
-      boost::multi_array_ref<Type,2> T1(TMat_NM.data(), extents[NMO][NAEA]);
-      boost::multi_array_ref<Type,2> T2(TMat_MM2.data(), extents[NMO][NAEA]);
+      // boost::multi_array_ref<Type,2> T1(TMat_NM.data(), extents[NMO][NAEA]);
+      // boost::multi_array_ref<Type,2> T2(TMat_MM2.data(), extents[NMO][NAEA]);
+      auto T1 = TMat_MN2;
+      auto T2 = Kokkos::subview(TMat_MM2, Kokkos::ALL(), std::pair<size_t, size_t>(0,NAEA));
       // for(int nw=0, nwalk=W.shape()[0]; nw<nwalk; nw++) {
       for(int nw=0, nwalk=W.dimension(0); nw<nwalk; nw++) {
 
@@ -273,16 +281,19 @@ struct afqmc_sys: public AFQMCInfo
         // TMat_MM = V[ indices[range_t(0,NMO)][range_t(0,NMO)][nw] ];
         for(size_t i=0; i<NMO, ++i)
           for(size_t j=0; j<NMO; ++j)
-            TMat_MM(i,j) = vHS(idx2c(i,j,NMO,NMO), nw);
+            TMat_MM(i,j) = vHS(idx2(i,j,NMO,NMO), nw);
 
-        ma::product(Propg,Kokkos::subview(W, nw, 0, Kokkos::ALL(), Kokkos::ALL()), TMat_MN);
+        // ma::product(Propg,Kokkos::subview(W, nw, 0, Kokkos::ALL(), Kokkos::ALL()), TMat_MN);
+        KokkosBlas::gemm('n','n',1.0,Propg,Kokkos::subview(W, nw, 0, Kokkos::ALL(), Kokkos::ALL()),0.0, TMat_MN);
         base::apply_expM(TMat_MM,TMat_MN,T1,T2,6);
-        ma::product(Propg,TMat_MN,Kokkos::subview(W, nw, 0, Kokkos::ALL(), Kokkos::ALL()));
+        // ma::product(Propg,TMat_MN,Kokkos::subview(W, nw, 0, Kokkos::ALL(), Kokkos::ALL()));
+        KokkosBlas::gemm('n','n',1.0,Propg,TMat_MN,0.0,Kokkos::subview(W, nw, 0, Kokkos::ALL(), Kokkos::ALL()));
 
-        ma::product(Propg,Kokkos::subview(W, nw, 1, Kokkos::ALL(), Kokkos::ALL()), TMat_MN);
+        // ma::product(Propg,Kokkos::subview(W, nw, 1, Kokkos::ALL(), Kokkos::ALL()), TMat_MN);
+        KokkosBlas::gemm('n','n',1.0,Propg,Kokkos::subview(W, nw, 1, Kokkos::ALL(), Kokkos::ALL()),0.0,TMat_MN);
         base::apply_expM(TMat_MM,TMat_MN,T1,T2,6);
-        ma::product(Propg,TMat_MN,Kokkos::subview(W, nw, 1, Kokkos::ALL(), Kokkos::ALL()));
-
+        // ma::product(Propg,TMat_MN,Kokkos::subview(W, nw, 1, Kokkos::ALL(), Kokkos::ALL()));
+        KokkosBlas::gemm('n','n',1.0,Propg,TMat_MN,0.0,Kokkos::subview(W, nw, 1, Kokkos::ALL(), Kokkos::ALL()));
       }
 
     }
@@ -334,11 +345,12 @@ struct afqmc_sys: public AFQMCInfo
     // TMat_AB: Temporary Matrix of dimension [AxB]
     // N: NAEA
     // M: NMO
-    ComplexMatrix TMat_NN;
-    ComplexMatrix TMat_NM;
-    ComplexMatrix TMat_MN;
+    ComplexMatrixKokkos TMat_NN;
+    ComplexMatrixKokkos TMat_NM;
+    ComplexMatrixKokkos TMat_MN;
+    ComplexMatrixKokkos TMat_MN2;
     ComplexMatrixKokkos TMat_MM;
-    ComplexMatrix TMat_MM2;
+    ComplexMatrixKokkos TMat_MM2;
 
     // storage for contraction of 2-electron integrals with density matrix
     ComplexMatrixKokkos Gcloc;

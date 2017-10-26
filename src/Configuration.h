@@ -56,6 +56,8 @@
 #include "Matrix/SparseMatrix.hpp"
 #include "Matrix/SparseMatrix_ref.hpp"
 
+#include <KokkosSparse.hpp>
+
 namespace qmcplusplus
 {
 
@@ -101,10 +103,16 @@ namespace qmcplusplus
                      {return i + (j + k*nj)*ni;}
   size_t inline idx2f( size_t i, size_t j, size_t ni, size_t nj) {return i + j*ni;}
 
+  size_t inline idx2(size_t i, size_t j, size_t ni, size_t nj) {return idx2f(i, j, ni, nj);}
+  size_t inline idx3(size_t i, size_t j, size_t k, size_t ni, size_t nj, size_t nk)
+                    {return idx3f(i, j, k, ni, nj, nk);}
+  size_t inline idx4(size_t i, size_t j, size_t k, size_t l, size_t ni, size_t nj, size_t nk, size_t nl)
+                    {return idx4f(i, j, k, l, ni, nj, nk, nl);}
+
   // [nwalk][2][NMO][NAEA]
   typedef boost::multi_array<ValueType,4> WalkerContainer;
-  typedef Kokkos::View<ValueType****> WalkerContainerKokkos;
-  typedef Kokkos::View<ComplexType****> ComplexArray4D;
+  typedef Kokkos::View<ValueType****, Kokkos::LayoutLeft> WalkerContainerKokkos;
+  typedef Kokkos::View<ComplexType****, Kokkos::LayoutLeft> ComplexArray4D;
 
   typedef boost::multi_array<IndexType,1> IndexVector;
   typedef boost::multi_array<RealType,1> RealVector;
@@ -121,15 +129,18 @@ namespace qmcplusplus
   typedef boost::multi_array<ValueType,2> ValueMatrix;  
   typedef boost::multi_array<SPValueType,2> SPValueMatrix;  
   typedef boost::multi_array<ComplexType,2> ComplexMatrix;  
-  typedef Kokkos::View<ComplexType**> ComplexMatrixKokkos;  
+  typedef Kokkos::View<ComplexType**, Kokkos::LayoutLeft> ComplexMatrixKokkos;  
   typedef boost::multi_array<SPComplexType,2> SPComplexMatrix;  
-  typedef Kokkos::View<SPComplexType**> SPComplexMatrixKokkos;  
+  typedef Kokkos::View<SPComplexType**, Kokkos::LayoutLeft> SPComplexMatrixKokkos;  
 
   typedef SparseMatrix<IndexType>     IndexSpMat;
   typedef SparseMatrix<RealType>      RealSpMat;
   typedef SparseMatrix<ValueType>     ValueSpMat;
   typedef SparseMatrix<SPValueType>   SPValueSpMat;
   typedef SparseMatrix<ComplexType>   ComplexSpMat;
+
+  typedef KokkosSparse::CrsMatrix<ComplexType, size_t, Kokkos::Threads> ComplexSpMatKokkos;
+
 /*
   typedef SMSparseMatrix<IndexType>     IndexSMSpMat;
   typedef SMSparseMatrix<RealType>      RealSMSpMat;

@@ -19,6 +19,7 @@
 #define  AFQMC_ENERGY_HPP 
 
 #include <Kokkos_Core.hpp>
+#include <KokkosSparse.hpp>
 #include <type_traits>
 #include "Numerics/ma_operations.hpp"
 
@@ -46,9 +47,10 @@ namespace base
  *   as a vector with "linearized" index ak=a*NMO+k.        
  */
 template< class Mat,
-          class SpMat
+          class SpMat,
+          class Vec
         >
-inline void calculate_energy(Mat& W_data, const Mat& Gc, Mat& Gcloc, const Mat& haj, const SpMat& Vakbl)
+inline void calculate_energy(Mat& W_data, const Mat& Gc, Mat& Gcloc, const Vec& haj_flat, const SpMat& Vakbl)
 {
   // W[nwalk][2][NMO][NAEA]
  
@@ -64,11 +66,12 @@ inline void calculate_energy(Mat& W_data, const Mat& Gc, Mat& Gcloc, const Mat& 
   assert(Gc.dimension(1) == W_data.dimension(0));
   assert(Gc.dimension(1) == Gcloc.dimension(1));
   assert(Gc.dimension(0) == Gcloc.dimension(0));
-  assert(Gc.dimension(0) == haj.num_elements());
+  assert(Gc.dimension(0) == haj_flat.dimension(0));
   assert(Gc.dimension(0) == Vakbl.rows());
   assert(Gc.dimension(0) == Vakbl.cols());
 
-  typedef typename std::decay<Mat>::type::element Type;
+  // typedef typename std::decay<Mat>::type::element Type;
+  typedef typename Mat::value_type Type;
 //  index_gen indices;
   Type zero = Type(0.);
   Type one = Type(1.); 
@@ -76,13 +79,15 @@ inline void calculate_energy(Mat& W_data, const Mat& Gc, Mat& Gcloc, const Mat& 
 
   int nwalk = W_data.dimension(0);
   // view the haj matrix as a vector. Need to ensure that this has the correct memory layout
-  boost::multi_array_ref<const Type,1> haj_ref(haj.origin(), extents[haj.num_elements()]);
+  // boost::multi_array_ref<const Type,1> haj_ref(haj.origin(), extents[haj.num_elements()]);
 
   // zero 
   for(int n=0; n<nwalk; n++) W_data(n, 0) = zero;
 
   // Vakbl * Gc(bl,nw) = Gcloc(ak,nw)
-  ma::product(Vakbl, Gc, Gcloc);
+  // ma::product(Vakbl, Gc, Gcloc);
+  KokkosSparse::spmv("n", 1.0, Vakbl, Gc, 0.0, Gcloc);
+  // KokkosBlas::gemm('n','n',1.0,Vakbl, Gc, 0.0, Gcloc);
 
   // E2(nw) = 0.5*Gc(:,nw)*Gcloc(:,nw) 
     // how do I do this through BLAS?
@@ -93,7 +98,8 @@ inline void calculate_energy(Mat& W_data, const Mat& Gc, Mat& Gcloc, const Mat& 
     
   // one-body contribution
   // ma::product(one,ma::T(Gc),haj_ref,one,W_data[indices[range_t(0,nwalk)][0]]);
-  ma::product(one,ma::T(Gc),haj_ref,one,Kokkos::subview(W_data, Kokkos::ALL(), 0));
+  // ma::product(one,ma::T(Gc),haj_flat,one,Kokkos::subview(W_data, Kokkos::ALL(), 0));
+  KokkosBlas::gemm('t','n',1.0, Gc, haj_flat, 1.0, Kokkos::subview(W_data, Kokkos::ALL(), 0));
 
 }
 

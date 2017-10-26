@@ -110,6 +110,20 @@ add_subdirectory( ${KOKKOS_PATH} ${qmcpack_BINARY_DIR}/kokkos )
 include_directories(${Kokkos_INCLUDE_DIRS_RET})
 LINK_LIBRARIES(kokkos)
 
+SET( KOKKOS_KERNELS_PATH "/ccs/home/eisenbac/Kokkos/kokkos-kernels" )
+INCLUDE_DIRECTORIES( ${KOKKOS_KERNELS_PATH}
+                     ${KOKKOS_KERNELS_PATH}/src
+                     ${KOKKOS_KERNELS_PATH}/src/common
+                     ${KOKKOS_KERNELS_PATH}/src/impl
+                     ${KOKKOS_KERNELS_PATH}/src/impl/tpls
+                     ${KOKKOS_KERNELS_PATH}/src/graph
+                     ${KOKKOS_KERNELS_PATH}/src/graph/impl
+                     ${KOKKOS_KERNELS_PATH}/src/blas
+                     ${KOKKOS_KERNELS_PATH}/src/blas/impl
+                     ${KOKKOS_KERNELS_PATH}/src/sparse
+                     ${KOKKOS_KERNELS_PATH}/src/sparse/impl
+                     ${KOKKOS_KERNELS_PATH}/src/stage/blas3
+                   )
 
 ######################################################################
 # set debug printout

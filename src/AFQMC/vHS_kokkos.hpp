@@ -48,7 +48,8 @@ inline void get_vHS(const SpMat& Spvn, const Mat& X, Mat& v)
   // typedef typename std::decay<Mat>::type::element ComplexType;
 
   // Spvn*X 
-  ma::product(Spvn,X,v);
+  // ma::product(Spvn,X,v);
+  KokkosSparse::spmv('n',1.0,Spvn,X,0.0,v);
   // Use Kokkos Sparse spmv
 }
 
@@ -57,9 +58,10 @@ inline void get_vHS(const SpMat& Spvn, const Mat& X, Mat& v)
  */ 
 template< class MatA,
           class MatB,
-          class MatC
+          class MatC,
+          class MatD
         >
-inline void apply_expM( const MatA& V, MatB& S, MatC& T1, MatC& T2, int order=6)
+inline void apply_expM( const MatA& V, MatB& S, MatC& T1, MatrD& T2, int order=6)
 { 
   assert( V.dimension(0) == V.dimension(1) );
   assert( V.dimension(1) == S.dimension(0) );
@@ -68,13 +70,15 @@ inline void apply_expM( const MatA& V, MatB& S, MatC& T1, MatC& T2, int order=6)
   assert( S.dimension(0) == T2.dimension(0) );
   assert( S.dimension(1) == T2.dimension(1) );
 
-  typedef typename std::decay<MatB>::type::element ComplexType;
+  // typedef typename std::decay<MatB>::type::element ComplexType;
+  typedef typename MatB::value_type ComplexType;
   ComplexType zero(0.);
 
   T1 = S;
   for(int n=1; n<=order; n++) {
     ComplexType fact = ComplexType(0.0,1.0)*static_cast<ComplexType>(1.0/static_cast<double>(n));
-    ma::product(fact,V,T1,zero,T2);
+    // ma::product(fact,V,T1,zero,T2);
+    KokkosBlas::gemm('n','n',fact,V,T1,0.0,T2);
     T1  = T2;
     // overload += ???
     for(int i=0, ie=S.dimension(0); i<ie; i++)

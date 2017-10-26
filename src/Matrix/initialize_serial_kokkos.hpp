@@ -37,8 +37,9 @@ namespace afqmc
 {
 
 template< class SpMat,
-          class Mat>
-inline bool Initialize(hdf_archive& dump, const double dt, base::afqmc_sys& sys, Mat& Propg1, SpMat& Spvn, Mat& haj, SpMat& Vakbl)
+          class Mat,
+          class Vec>
+inline bool Initialize(hdf_archive& dump, const double dt, base::afqmc_sys& sys, Mat& Propg1, SpMat& Spvn, Vec& haj_flat, SpMat& Vakbl)
 {
   int NMO, NAEA;
 
@@ -95,7 +96,8 @@ inline bool Initialize(hdf_archive& dump, const double dt, base::afqmc_sys& sys,
   if(!dump.read(ivec,"hij_indx")) return false;
   if(!dump.read(vvec,"hij")) return false;
   // resize haj 
-  Kokkos::resize(haj, 2*NAEA, NMO);
+  // Kokkos::resize(haj, 2*NAEA, NMO);
+  Kokkos::resize(haj_flat, 2*NAEA*NMO);
   for(int n=0; n<ivec.size(); n++)
   {
     // ivec[n] = i*NMO+j, with i in [0:2*NMO), j in [0:NMO)
@@ -108,7 +110,7 @@ inline bool Initialize(hdf_archive& dump, const double dt, base::afqmc_sys& sys,
     int a = (i<NMO)?i:(i-NMO+NAEA);
     if( i < NMO ) assert(i < NAEA);
     else assert(i-NMO < NAEA);
-    haj(a, j) = vvec[n];
+    haj_flat(idx2(a, j, 2*NAEA, NMO)) = vvec[n];
   } 
 
   // read trial wave function.

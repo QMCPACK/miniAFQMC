@@ -247,33 +247,6 @@ MultiArray2DC product(T alpha, SparseMatrixA const& A, MultiArray2DB const& B, T
         return std::forward<MultiArray2DC>(C);
 }
 
-// sparse matrix-Kokkos interface 
-template<class T, class SparseMatrixA>
-void  product(T alpha, SparseMatrixA const& A, Kokkos::View<T**> const& B, T beta, Kokkos::View<T**>& C){
-        assert(op_tag<SparseMatrixA>::value == 'N' || op_tag<SparseMatrixA>::value == 'T');
-        // assert(op_tag<MultiArray2DB>::value == 'N');
-        assert( arg(B).dimension(1) == 1 );
-        assert( C.dimension(1) == 1 );
-        if(op_tag<SparseMatrixA>::value == 'N') {
-            assert(arg(A).rows() == C.dimension(0));
-            assert(arg(A).cols() == arg(B).dimension(0));
-            assert(arg(B).dimension(1) == C.dimension(1));
-        } else {
-            assert(arg(A).rows() == arg(B).dimension(0));
-            assert(arg(A).cols() == C.dimension(0));
-            assert(arg(B).dimension(1) == C.dimension(1));
-        }
-
-        SPBLAS::csrmm( op_tag<SparseMatrixA>::value,
-            arg(A).rows(), arg(B).dimension(1), arg(A).cols(),
-            alpha, "GxxCxx",
-            arg(A).val() , arg(A).indx(),  arg(A).pntrb(),  arg(A).pntre(),
-            arg(B).origin(), arg(B).dimension(0),
-            beta,
-            std::forward<MultiArray2DC>(C).origin(), C.dimension(0));
-
-        // return std::forward<MultiArray2DC>(C);
-}
 template<class MultiArray2DA, class MultiArray2DB, class MultiArray2DC,
         typename = typename std::enable_if<
                 (MultiArray2DA::dimensionality == 2 or MultiArray2DA::dimensionality == -2) and

@@ -40,7 +40,7 @@
 
 #include "AFQMC/afqmc_sys_kokkos.hpp"
 #include "Matrix/initialize_serial_kokkos.hpp"
-#include "AFQMC/mixed_density_matrix.hpp"
+#include "AFQMC/mixed_density_matrix_kokkos.hpp"
 #include "AFQMC/energy_kokkos.hpp"
 #include "AFQMC/vHS_kokkos.hpp"
 #include "AFQMC/vbias_kokkos.hpp"
@@ -161,11 +161,15 @@ int main(int argc, char **argv)
 
   // Important Data Structures
   base::afqmc_sys AFQMCSys;   // Main AFQMC object. Control access to several apgorithmic functions. 
-  ComplexSpMat Spvn;      // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
-  ComplexSpMat SpvnT;   // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
+  // ComplexSpMat Spvn;      // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
+  ComplexSpMatKokkos Spvn;      // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
+  // ComplexSpMat SpvnT;   // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
+  ComplexSpMatKokkos SpvnT;   // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
   // ComplexMatrix haj;
-  ComplexMatrixKokkos haj("haj", 1, 1);    // 1-Body Hamiltonian Matrix (dummy size, will be resized in afqmc::Initialze)
-  ComplexSpMat Vakbl;   // 2-Body Hamiltonian Matrix: (Half-Rotated) 2-electron integrals 
+  // ComplexMatrixKokkos haj("haj", 1, 1);    // 1-Body Hamiltonian Matrix (dummy size, will be resized in afqmc::Initialze)
+  ComplexVectorKokkos haj_flat("haj", 1);    // 1-Body Hamiltonian Matrix (dummy size, will be resized in afqmc::Initialze)
+  // ComplexSpMat Vakbl;   // 2-Body Hamiltonian Matrix: (Half-Rotated) 2-electron integrals 
+  ComplexSpMatKokkos Vakbl;   // 2-Body Hamiltonian Matrix: (Half-Rotated) 2-electron integrals 
   // ComplexMatrix Propg1;
   ComplexMatrixKokkos Propg1("Propg1",1,1);   // propagator for 1-body hamiltonian (dummy size, will be resized in afqmc::Initialze)
 
@@ -179,7 +183,7 @@ int main(int argc, char **argv)
   std::cout<<"                 Initializing from HDF5                    \n"; 
   std::cout<<"***********************************************************\n";
 
-  if(!afqmc::Initialize(dump,dt,AFQMCSys,Propg1,Spvn,haj,Vakbl)) {
+  if(!afqmc::Initialize(dump,dt,AFQMCSys,Propg1,Spvn,haj_flat,Vakbl)) {
     std::cerr<<" Error initalizing data structures from hdf5 file: " <<init_file <<std::endl;
     exit(1);
   }
@@ -251,7 +255,7 @@ int main(int argc, char **argv)
 
   // initialize overlaps and energy
   AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc,true);
-  RealType Eav = AFQMCSys.calculate_energy(W_data,Gc,haj,Vakbl);
+  RealType Eav = AFQMCSys.calculate_energy(W_data,Gc,haj_flat,Vakbl);
   
   std::cout<<"\n";
   std::cout<<"***********************************************************\n";
@@ -359,7 +363,7 @@ int main(int argc, char **argv)
 
     Timers[Timer_eloc]->start();
     AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc,true);
-    Eav = AFQMCSys.calculate_energy(W_data,Gc,haj,Vakbl);
+    Eav = AFQMCSys.calculate_energy(W_data,Gc,haj_flat,Vakbl);
     std::cout<<step <<"   " <<Eav <<"\n";
     Timers[Timer_eloc]->stop();
 

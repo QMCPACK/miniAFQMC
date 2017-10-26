@@ -20,7 +20,7 @@
 #define  AFQMC_VBIAS_HPP 
 
 #include <Kokkos_Core.hpp>
-
+#include <KokkosSparse.hpp>
 #include "Numerics/ma_operations.hpp"
 
 namespace qmcplusplus
@@ -55,7 +55,8 @@ inline void get_vbias(const SpMat& Spvn, const MatA& G, MatB& v, bool transposed
     assert( G.dimension(1) == v.dimension(1) );
 
     // Spvn*G  
-    ma::product(Spvn,G,v);
+    // ma::product(Spvn,G,v);
+    KokkosSparse::spmv('n',1.0,Spvn,G,0.0,v);
 
   } else {
 
@@ -63,7 +64,7 @@ inline void get_vbias(const SpMat& Spvn, const MatA& G, MatB& v, bool transposed
     assert( Spvn.cols() == v.dimension(0) );
     assert( G.dimension(1) == v.dimension(1) );
 
-    using ma::T;
+    // using ma::T;
 
     // only works if stride()[0] == shape()[1]
 
@@ -74,9 +75,11 @@ inline void get_vbias(const SpMat& Spvn, const MatA& G, MatB& v, bool transposed
     //                            extents[G.shape()[0]/2][G.shape()[1]]);
     auto Gdn = Kokkos::subview(G, std::pair<size_t,size_t>(G.dimension(0)/2, G.dimension(0)-1), Kokkos::ALL()); 
     // alpha
-    ma::product(T(Spvn),Gup,v);  
+    // ma::product(T(Spvn),Gup,v);
+    KokkosSparse::spmv('t',1.0,Spvn,Gup,0.0,v);
     // beta
-    ma::product(TypeA(1.),T(Spvn),Gdn,TypeA(1.),v);
+    // ma::product(TypeA(1.),T(Spvn),Gdn,TypeA(1.),v);
+    KokkosSparse::spmv('t',1.0,Spvn,Gdn,1.0,v);
   }
 }
 
