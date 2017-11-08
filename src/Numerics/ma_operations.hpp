@@ -135,12 +135,16 @@ MultiArray2DC product(T alpha, SparseMatrixA const& A, MultiArray2DB const& B, T
             assert(arg(A).rows() == arg(B).shape()[0]);
             assert(arg(A).cols() == std::forward<MultiArray2DC>(C).shape()[0]);
             assert(arg(B).shape()[1] == std::forward<MultiArray2DC>(C).shape()[1]);
-        }        
+        }
 
+	const auto m = arg(A).rows();
+	const auto n = arg(B).shape()[1];
+	const auto k = arg(A).cols();
+	
 	if(!in_gpu(B)){
 	  
 	  SPBLAS::csrmm( op_tag<SparseMatrixA>::value, 
-			 arg(A).rows(), arg(B).shape()[1], arg(A).cols(), 
+			 m, n, k,
 			 alpha, "GxxCxx", 
 			 arg(A).val() , arg(A).indx(),  arg(A).pntrb(),  arg(A).pntre(), 
 			 arg(B).origin(), arg(B).strides()[0], 
@@ -161,7 +165,7 @@ MultiArray2DC product(T alpha, SparseMatrixA const& A, MultiArray2DB const& B, T
 	  
 	  cusparse::csrmm2(cusparse::op_tag<op_tag<SparseMatrixA> >(),
 			   cusparse::op_tag<op_tag<MultiArray2DB> >(),
-			   arg(A).rows(), arg(B).shape()[1], arg(A).cols(), arg(A).nnz(), &alphaz,
+			   m, n, k, arg(A).nnz(), &alphaz,
 			   descr, arg(A).val(), arg(A).pntrb(), arg(A).indx(),
 			   arg(B).origin(), arg(B).strides()[0],
 			   &betaz,
