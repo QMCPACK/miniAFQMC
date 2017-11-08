@@ -52,6 +52,30 @@ namespace cublas {
     assert(false);
   }
 
+  void transpose(const int m, const int n, double *A, const int lda, double *B, const int ldb){
+    const double one = 1.0;
+    const double zero = 0.0;
+
+    check_status(cublasDgeam(handle, CUBLAS_OP_T, CUBLAS_OP_N,
+			     m, n, &one, A, lda, &zero, NULL, 0, A, lda));
+    
+  }
   
+  void transpose(const int m, const int n, const std::complex<double> *A, const int lda,
+		 const std::complex<double> *B, const int ldb){
+    
+    const std::complex<double> one = 1.0;
+    const std::complex<double> zero = 0.0;
+
+    std::complex<double> * C;
+
+    std::cout << "m = " << m << " n = " << n << " lda = " << lda << " ldb = " << ldb << std::endl;
+    std::cout << A << '\t' << B << std::endl;
+    
+    check_status(cublasZgeam(handle, CUBLAS_OP_T, CUBLAS_OP_N,
+			     m, n, (cuDoubleComplex *) &one, (cuDoubleComplex *) A, lda,
+			     (cuDoubleComplex *) &zero, (cuDoubleComplex *) A, m, (cuDoubleComplex *) B, ldb));
+
+  }
 }
 #endif
