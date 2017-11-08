@@ -26,6 +26,7 @@
 #include "ma_gpu.hpp"
 #include "sparse.hpp"
 #include "cusparse.hpp"
+#include "cublas.hpp"
 
 #include<type_traits> // enable_if
 #include<vector>
@@ -162,6 +163,15 @@ MultiArray2DC product(T alpha, SparseMatrixA const& A, MultiArray2DB const& B, T
 	  typename MultiArray2DB::element betaz = beta;
 	  
 	  std::cout << arg(A).rows() << '\t' << arg(B).shape()[1] << '\t' <<  arg(A).cols() << '\t' << arg(A).nnz() << std::endl;
+
+	  std::complex<double> * transposed_C;
+	  cudaMalloc(&transposed_C, m*n*sizeof(std::complex<double>));
+	  
+	  if(betaz != 0.0){
+	    
+	    cublas::transpose(m, n, arg(C).origin(), std::forward<MultiArray2DC>(C).strides()[0], transposed_C, m);
+	    
+	  }
 	  
 	  cusparse::csrmm2(cusparse::op_tag<op_tag<SparseMatrixA> >(),
 			   cusparse::op_tag<op_tag<MultiArray2DB> >(),
@@ -169,8 +179,10 @@ MultiArray2DC product(T alpha, SparseMatrixA const& A, MultiArray2DB const& B, T
 			   descr, arg(A).val(), arg(A).pntrb(), arg(A).indx(),
 			   arg(B).origin(), arg(B).strides()[0],
 			   &betaz,
-			   std::forward<MultiArray2DC>(C).origin(), std::forward<MultiArray2DC>(C).strides()[0]);
+			   transposed_C, m);
 	  
+	  cublas::transpose(n, m, transposed_C, m, arg(C).origin(), std::forward<MultiArray2DC>(C).strides()[0]);
+
 	}
 	
 	  
