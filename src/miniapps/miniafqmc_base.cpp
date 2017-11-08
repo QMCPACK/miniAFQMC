@@ -44,6 +44,7 @@
 #include "AFQMC/vbias.hpp"
 
 #include "Numerics/cusparse.hpp"
+#include "Numerics/cublas.hpp"
 
 using namespace std;
 using namespace qmcplusplus;
@@ -97,6 +98,7 @@ int main(int argc, char **argv)
   exit(1);
 #endif
 
+  cublas::init();
   cusparse::init();
   
   int nsteps=10;
@@ -348,6 +350,7 @@ int main(int argc, char **argv)
   TimerManager.print();
 
   cusparse::end();
+  cublas::end();
   
   return 0;
 }
