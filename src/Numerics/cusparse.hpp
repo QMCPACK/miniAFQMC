@@ -18,7 +18,7 @@ namespace cusparse {
       std::cout << "cusparse: the library was not initialized."  << std::endl;
       break;
     case CUSPARSE_STATUS_INVALID_VALUE :
-      std::cout << "cusparse: invalid parameters were passed (m,n <0)."  << std::endl;
+      std::cout << "cusparse: invalid parameters were passed."  << std::endl;
       break;
     case CUSPARSE_STATUS_ARCH_MISMATCH :
       std::cout << "cusparse: the device does not support double precision."  << std::endl;
