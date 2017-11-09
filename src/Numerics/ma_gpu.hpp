@@ -104,11 +104,11 @@ public:
     cudaMalloc(&vals_, const_base_.size()*sizeof(Type));
     cudaMemcpy(vals_, const_base_.values(), const_base_.size()*sizeof(Type), cudaMemcpyHostToDevice);
 
-    cudaMalloc(&cols_, const_base_.size()*sizeof(Type));
-    cudaMemcpy(cols_, const_base_.column_data(), const_base_.size()*sizeof(Type), cudaMemcpyHostToDevice);
+    cudaMalloc(&cols_, const_base_.size()*sizeof(typename SparseMatrix<Type>::intType));
+    cudaMemcpy(cols_, const_base_.column_data(), const_base_.size()*sizeof(typename SparseMatrix<Type>::intType), cudaMemcpyHostToDevice);
 
-    cudaMalloc(&rows_, (const_base_.rows() + 1)*sizeof(Type));
-    cudaMemcpy(rows_, const_base_.row_index(), (const_base_.rows() + 1)*sizeof(Type), cudaMemcpyHostToDevice);
+    cudaMalloc(&rows_, (const_base_.rows() + 1)*sizeof(typename SparseMatrix<Type>::intType));
+    cudaMemcpy(rows_, const_base_.row_index(), (const_base_.rows() + 1)*sizeof(typename SparseMatrix<Type>::intType), cudaMemcpyHostToDevice);
     
   }
 
