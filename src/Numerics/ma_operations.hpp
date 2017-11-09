@@ -164,25 +164,42 @@ MultiArray2DC product(T alpha, SparseMatrixA const& A, MultiArray2DB const& B, T
 	  
 	  std::cout << arg(A).rows() << '\t' << arg(B).shape()[1] << '\t' <<  arg(A).cols() << '\t' << arg(A).nnz() << std::endl;
 
+	  std::complex<double> * transposed_B;
 	  std::complex<double> * transposed_C;
-	  cudaMalloc(&transposed_C, m*n*sizeof(std::complex<double>));
+
+	  cudaMalloc(&transposed_B, m*n*sizeof(std::complex<double>));
+	  cudaMalloc(&transposed_C, k*n*sizeof(std::complex<double>));
+
+	  cublas::transpose(m, n, arg(B).origin(), arg(B).strides()[0], transposed_B, m);
 	  
 	  if(betaz != 0.0){
-	    
-	    cublas::transpose(m, n, arg(C).origin(), std::forward<MultiArray2DC>(C).strides()[0], transposed_C, m);
-	    
+	    cublas::transpose(k, n, arg(C).origin(), std::forward<MultiArray2DC>(C).strides()[0], transposed_C, k);
 	  }
+
+	  std::cout << "transpose " << op_tag<SparseMatrixA>::value << '\t' <<  op_tag<MultiArray2DB>::value << std::endl;
+
+	  std::cout << "A " << arg(A).rows() << " x " << arg(A).cols() << std::endl;
+	  std::cout << "B " << arg(B).shape()[0] << " x " << arg(B).shape()[1] << std::endl;
+	  std::cout << "C " << std::forward<MultiArray2DC>(C).shape()[0] << " x " << std::forward<MultiArray2DC>(C).shape()[1] << std::endl;
+
+	  std::cout << "m = " << m << " n = " << n << " k = " << k << " nnz = " << arg(A).nnz() << std::endl;
+
+	  //	  cusparse::op_tag<op_tag<SparseMatrixA> >(),
+	  //      cusparse::op_tag<op_tag<MultiArray2DB> >(),
 	  
-	  cusparse::csrmm2(cusparse::op_tag<op_tag<SparseMatrixA> >(),
-			   cusparse::op_tag<op_tag<MultiArray2DB> >(),
+	  cusparse::csrmm2(CUSPARSE_OPERATION_TRANSPOSE,
+			   CUSPARSE_OPERATION_NON_TRANSPOSE,
 			   m, n, k, arg(A).nnz(), &alphaz,
 			   descr, arg(A).val(), arg(A).pntrb(), arg(A).indx(),
-			   arg(B).origin(), arg(B).strides()[0],
+			   transposed_B, n,
 			   &betaz,
-			   transposed_C, m);
-	  
+			   transposed_C, k);
+
 	  cublas::transpose(n, m, transposed_C, m, arg(C).origin(), std::forward<MultiArray2DC>(C).strides()[0]);
 
+	  cudaFree(transposed_B);
+	  cudaFree(transposed_C);
+	  
 	}
 	
 	  
