@@ -195,7 +195,7 @@ MultiArray2DC product(T alpha, SparseMatrixA const& A, MultiArray2DB const& B, T
 			   &betaz,
 			   transposed_C, k);
 
-	  cublas::transpose(n, m, transposed_C, m, arg(C).origin(), std::forward<MultiArray2DC>(C).strides()[0]);
+	  cublas::transpose(n, k, transposed_C, k, arg(C).origin(), std::forward<MultiArray2DC>(C).strides()[0]);
 
 	  cudaFree(transposed_B);
 	  cudaFree(transposed_C);
