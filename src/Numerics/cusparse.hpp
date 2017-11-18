@@ -32,8 +32,11 @@ namespace cusparse {
     case CUSPARSE_STATUS_MATRIX_TYPE_NOT_SUPPORTED :
       std::cout << "cusparse: the matrix type is not supported."  << std::endl;
       break;
+    case CUSPARSE_STATUS_MAPPING_ERROR :
+      std::cout << "cusparse: the texture binding failed."  << std::endl;
+      break;
     default :
-      std::cout << "cusparse: Unknown error."  << std::endl;
+      std::cout << "cusparse: Unknown error number " << status << "." << std::endl;
       break;
     }
     exit(1);
