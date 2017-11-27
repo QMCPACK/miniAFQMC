@@ -186,12 +186,11 @@ MultiArray2DC product(T alpha, SparseMatrixA const& A, MultiArray2DB const& B, T
 
 	  //	  cusparse::op_tag<op_tag<SparseMatrixA> >(),
 	  //      cusparse::op_tag<op_tag<MultiArray2DB> >(),
-	  
 	  cusparse::csrmm2(CUSPARSE_OPERATION_TRANSPOSE,
 			   CUSPARSE_OPERATION_NON_TRANSPOSE,
 			   m, n, k, arg(A).nnz(), &alphaz,
 			   descr, arg(A).val(), arg(A).pntrb(), arg(A).indx(),
-			   transposed_B, n,
+			   transposed_B, m,
 			   &betaz,
 			   transposed_C, k);
 
