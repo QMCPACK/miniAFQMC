@@ -7,6 +7,17 @@
 #include <cuda_runtime.h>
 #include "Matrix/SparseMatrix.hpp"
 
+void check_status(cudaError_t status){
+  switch(status) {
+  case cudaSuccess :
+    return;
+  default :
+    std::cout << "cuda: Unknown error number " << status << "." << std::endl;
+    break;
+  }
+  exit(1);
+}
+
 template <typename ArrayType>
 class constGPUArray {
 
@@ -101,14 +112,14 @@ public:
   constGPUSparseMatrix(const SparseMatrix<Type> & matrix):
     const_base_(matrix)
   {
-    cudaMalloc(&vals_, const_base_.size()*sizeof(Type));
-    cudaMemcpy(vals_, const_base_.values(), const_base_.size()*sizeof(Type), cudaMemcpyHostToDevice);
+    check_status(cudaMalloc(&vals_, const_base_.size()*sizeof(Type)));
+    check_status(cudaMemcpy(vals_, const_base_.values(), const_base_.size()*sizeof(Type), cudaMemcpyHostToDevice));
 
-    cudaMalloc(&cols_, const_base_.size()*sizeof(intType));
-    cudaMemcpy(cols_, const_base_.indx(), const_base_.size()*sizeof(intType), cudaMemcpyHostToDevice);
+    check_status(cudaMalloc(&cols_, const_base_.size()*sizeof(intType)));
+    check_status(cudaMemcpy(cols_, const_base_.indx(), const_base_.size()*sizeof(intType), cudaMemcpyHostToDevice));
 
-    cudaMalloc(&rows_, (const_base_.rows() + 1)*sizeof(intType));
-    cudaMemcpy(rows_, const_base_.pntrb(), (const_base_.rows() + 1)*sizeof(intType), cudaMemcpyHostToDevice);
+    check_status(cudaMalloc(&rows_, (const_base_.rows() + 1)*sizeof(intType)));
+    check_status(cudaMemcpy(rows_, const_base_.pntrb(), (const_base_.rows() + 1)*sizeof(intType), cudaMemcpyHostToDevice));
     
   }
 
