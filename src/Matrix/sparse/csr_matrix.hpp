@@ -2,6 +2,17 @@
 (echo "#include<"$0">" > $0x.cpp) && time c++ -O3 -std=c++1z -Wall `#-Wfatal-errors` -lboost_timer -D_TEST_SPARSE_CSR_MATRIX $0x.cpp -lstdc++fs -lboost_system -o $0x.x && time $0x.x $@ && rm -f $0x.cpp; exit
 #endif
 
+//////////////////////////////////////////////////////////////////////
+// File developed by:
+// Alfredo Correa, correaa@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+//
+// File created by:
+// Alfredo Correa, correaa@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+////////////////////////////////////////////////////////////////////////////////
+
+
 #ifndef SPARSE_CSR_MATRIX_HPP
 #define SPARSE_CSR_MATRIX_HPP
 

@@ -2,6 +2,17 @@
 (echo "#include<"$0">" > $0x.cpp) && clang++ -O3 -std=c++14 -Wfatal-errors -I.. -D_TEST_UBLAS_ADAPTORS -DADD_ -Drestrict=__restrict__ $0x.cpp -lblas -llapack -Wl,-rpath=/usr/local/Wolfram/Mathematica/11.1/SystemFiles/Libraries/Linux-x86-64 -L/usr/local/Wolfram/Mathematica/11.1/SystemFiles/Libraries/Linux-x86-64 -lmkl_core -lmkl_intel_ilp64 -lmkl_sequential -o $0x.x && time $0x.x $@ && rm -f $0x.cpp; exit
 #endif
 
+//////////////////////////////////////////////////////////////////////
+// File developed by:
+// Alfredo Correa, correaa@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+//
+// File created by:
+// Alfredo Correa, correaa@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+////////////////////////////////////////////////////////////////////////////////
+
+
 #ifndef UBLAS_ADAPTORS_HPP
 #define UBLAS_ADAPTORS_HPP
 

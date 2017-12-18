@@ -4,6 +4,17 @@
 
 #ifndef SPARSE_BLAS_HPP
 
+//////////////////////////////////////////////////////////////////////
+// File developed by:
+// Alfredo Correa, correaa@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+//
+// File created by:
+// Alfredo Correa, correaa@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+////////////////////////////////////////////////////////////////////////////////
+
+
 #include "mkl.hpp"
 #include<cassert>
 

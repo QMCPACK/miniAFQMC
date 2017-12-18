@@ -102,7 +102,7 @@ namespace ma{
 			}
 			template<class O> auto operator>(O&& t) const{
 				return operator T const&() > std::forward<O>(t);
-			} 
+			}
 			reference const& operator=(T const& t) const{
 				auto in = sv_.js_.insert(j_);
 				if(in.second)
