@@ -25,7 +25,7 @@
 #include <vector>
 #include <map>
 #include <complex>
-#include <Utilities/OhmmsInfo.h>
+#include <Utilities/OutputManager.h>
 #include <Message/Communicate.h>
 
 #define byRows   999
@@ -120,21 +120,6 @@ namespace qmcplusplus
   typedef SMSparseMatrix<SPComplexType>   SPComplexSMSpMat;
 */
 
-inline std::ostream &app_log() { return OhmmsInfo::Log->getStream(); }
-
-inline std::ostream &app_error()
-{
-  OhmmsInfo::Log->getStream() << "ERROR ";
-  return OhmmsInfo::Error->getStream();
-}
-
-inline std::ostream &app_warning()
-{
-  OhmmsInfo::Log->getStream() << "WARNING ";
-  return OhmmsInfo::Warn->getStream();
-}
-
-inline std::ostream &app_debug() { return OhmmsInfo::Debug->getStream(); }
 }
 
 namespace std{
