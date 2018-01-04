@@ -15,11 +15,12 @@
 #ifndef SPARSE_CSR_MATRIX_CONST_HPP
 #define SPARSE_CSR_MATRIX_CONST_HPP
 
-#include "compressed_vector.hpp"
+//#include "compressed_vector.hpp"
 #include "coo_matrix.hpp"
 
 #include "detail/zipper.hpp"
 
+#include<algorithm> // sort
 #include<array>
 #include<cstddef>  // ptrdiff_t
 #include<vector>
@@ -64,9 +65,9 @@ class csr_matrix<T const, Alloc> : nonmember{
 	using alloc_ts = std::allocator_traits<Alloc>; 
 	using index_allocator = typename alloc_ts::template rebind_alloc<index>;
 	int cols_;
-	vector<index, index_allocator> pointers_;
-	vector<index, index_allocator> cs_;
-	vector<T, Alloc> vs_;
+	std::vector<index, index_allocator> pointers_;
+	std::vector<index, index_allocator> cs_;
+	std::vector<T, Alloc> vs_;
 	public:
 	using element =  T;
 //	bool operator==(csr_matrix const& other) const = delete;
