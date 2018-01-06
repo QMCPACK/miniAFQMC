@@ -20,10 +20,6 @@ TARGET_LINK_LIBRARIES(miniafqmc_shm3 qmcutil ${QMC_UTIL_LIBS} ${MPI_LIBRARY})
 ADD_EXECUTABLE(benchmark benchmark.cpp)
 TARGET_LINK_LIBRARIES(benchmark qmcutil ${QMC_UTIL_LIBS} ${MPI_LIBRARY})
 
-#(PETSC_MAT_LIB /usr/tce/packages/petsc/petsc-3.7.2-mvapich2-2.2-gcc-4.8-redhat/include/)
-#ADD_EXECUTABLE(benchmark_petsc benchmark_petsc.cpp)
-#TARGET_LINK_LIBRARIES(benchmark_petsc qmcutil ${QMC_UTIL_LIBS} ${MPI_LIBRARY})
-
 endif()
 
 
