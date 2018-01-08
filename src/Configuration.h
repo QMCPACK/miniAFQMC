@@ -52,7 +52,6 @@
 #include<boost/multi_array.hpp>
 
 #include "Matrix/SparseMatrix.hpp"
-#include "Matrix/SparseMatrix_ref.hpp"
 
 namespace qmcplusplus
 {
