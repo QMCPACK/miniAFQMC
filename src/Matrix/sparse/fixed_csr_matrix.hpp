@@ -190,7 +190,7 @@ int boost::mpi3::main(int, char*[], mpi3::communicator& world){
 			cout << '\n';
 		}
 	}
-	return 0;
+//	return 0;
 
 	fixed_csr_matrix<double> small({4,4}, 2);
 	small[3][3] = 1;
