@@ -97,9 +97,10 @@ class fixed_csr_matrix{
 	template<class Pair = std::array<index, 2>, class... Args>
 	void emplace(Pair&& indices, Args&&... args){
 		using std::get;
+		assert(0);
 		if(pointers_end_[get<0>(indices)] - pointers_begin_[get<0>(indices)] < max_num_non_zeros_per_row_){
-			allocator_.construct(data_ + pointers_end_[get<0>(indices)], std::forward<Args>(args)...);
-			allocator_.construct(jdata_ + pointers_end_[get<0>(indices)], get<1>(indices));
+			allocator_.construct(&*(data_ + pointers_end_[get<0>(indices)]), std::forward<Args>(args)...);
+			allocator_.construct(&*(jdata_ + pointers_end_[get<0>(indices)]), get<1>(indices));
 			++pointers_end_[get<0>(indices)];
 		} else throw std::out_of_range("row size exceeded the maximum");
 	}
