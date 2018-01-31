@@ -97,10 +97,9 @@ class fixed_csr_matrix{
 	template<class Pair = std::array<index, 2>, class... Args>
 	void emplace(Pair&& indices, Args&&... args){
 		using std::get;
-		assert(0);
 		if(pointers_end_[get<0>(indices)] - pointers_begin_[get<0>(indices)] < max_num_non_zeros_per_row_){
 			allocator_.construct(&*(data_ + pointers_end_[get<0>(indices)]), std::forward<Args>(args)...);
-			allocator_.construct(&*(jdata_ + pointers_end_[get<0>(indices)]), get<1>(indices));
+			ialloc_ts::construct(iallocator_, &*(jdata_ + pointers_end_[get<0>(indices)]), get<1>(indices));
 			++pointers_end_[get<0>(indices)];
 		} else throw std::out_of_range("row size exceeded the maximum");
 	}
@@ -176,9 +175,9 @@ int boost::mpi3::main(int, char*[], mpi3::communicator& world){
 	//	Alloc::pointer p = A.allocate(10);
 		fixed_csr_matrix<double, Alloc> med({4,4}, 2, A);
 		node.barrier();
-		if(node.rank() == 1) med[3][3] = 1;
+		if(node.rank() == 0) med[3][3] = 1;
 		if(node.rank() == 1) med[2][1] = 3;
-		if(node.rank() == 1) med[0][1] = 9;
+		if(node.rank() == 2) med[0][1] = 9;
 		node.barrier();
 		if(node.rank() == 0){
 			for(int i = 0; i != 8; ++i) cout << med.non_zero_values_data()[i] << ' ';
