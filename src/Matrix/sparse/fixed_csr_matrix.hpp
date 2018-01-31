@@ -1,5 +1,9 @@
 #if COMPILATION_INSTRUCTIONS
-(echo "#include<"$0">" > $0x.cpp) && clang++ -O3 -std=c++14 -Wall -Wfatal-errors -I.. -D_TEST_SPARSE_FIXED_CSR_MATRIX $0x.cpp -lstdc++fs -lboost_system -lboost_timer -o $0x.x && time $0x.x $@ && rm -f $0x.cpp; exit
+(echo "#include\""$0"\"" > $0x.cpp) && mpic++ -O3 -std=c++14 -Wall `#-Wfatal-errors` -D_TEST_SPARSE_FIXED_CSR_MATRIX $0x.cpp -o $0x.x && time mpirun -np 2 $0x.x $@ && rm -f $0x.x $0x.cpp; exit
+#endif
+
+#if COMPILATION_INSTRUCTIONS
+(echo "#include\""$0"\"" > $0x.cpp) && clang++ -O3 -std=c++14 -Wall -Wfatal-errors -I.. -D_TEST_SPARSE_FIXED_CSR_MATRIX $0x.cpp -lstdc++fs -lboost_system -lboost_timer -o $0x.x && time $0x.x $@ && rm -f $0x.cpp; exit
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -21,6 +25,8 @@
 #include<vector>
 #include<tuple>
 
+#include<memory> 
+
 namespace ma{
 namespace sparse{
 
@@ -31,7 +37,8 @@ using index               = std::ptrdiff_t;
 template<class T, class Alloc = std::allocator<T>>
 class fixed_csr_matrix{
 	using alloc_ts = std::allocator_traits<Alloc>; 
-	using index_allocator = typename alloc_ts::template rebind_alloc<index>;
+	using index_allocator = typename Alloc::template rebind<index>::other;//  alloc_ts::template rebind_alloc<index>;
+	using ialloc_ts = std::allocator_traits<index_allocator>; 
 	Alloc allocator_;
 	index_allocator iallocator_;
 	size_type size1_;
@@ -49,6 +56,7 @@ class fixed_csr_matrix{
 		Alloc alloc = Alloc{}
 	) : 
 		allocator_(alloc), 
+		iallocator_(alloc),
 		size1_(std::get<0>(arr)), size2_(std::get<1>(arr)), 
 		max_num_non_zeros_per_row_(max_num_non_zeros_per_row),
 		data_(allocator_.allocate(size1_*max_num_non_zeros_per_row_)),
@@ -57,16 +65,19 @@ class fixed_csr_matrix{
 		pointers_end_(iallocator_.allocate(size1_))
 	{
 		for(index i = 0; i != size1_; ++i){
-			iallocator_.construct(pointers_begin_ + i, i*max_num_non_zeros_per_row_);
-			iallocator_.construct(pointers_end_   + i, i*max_num_non_zeros_per_row_);
+			ialloc_ts::construct(iallocator_, &*(pointers_begin_ + i), i*max_num_non_zeros_per_row_);
+			ialloc_ts::construct(iallocator_, &*(pointers_end_   + i), i*max_num_non_zeros_per_row_);
+		//	iallocator_.construct(pointers_begin_ + i, i*max_num_non_zeros_per_row_);
+		//	iallocator_.construct(pointers_end_   + i, i*max_num_non_zeros_per_row_);
 		}
 	}
 	~fixed_csr_matrix(){
 		for(index i = 0; i != size1_; ++i){
-			for(auto p = data_ + pointers_begin_[i]; p != data_ + pointers_end_[i]; ++p) allocator_.destroy(p);
-			for(auto p = jdata_ + pointers_begin_[i]; p != jdata_ + pointers_end_[i]; ++p) iallocator_.destroy(p);
-			iallocator_.destroy(pointers_begin_ + i);
-			iallocator_.destroy(pointers_end_ + i);
+		//	for(auto p = data_ + pointers_begin_[i]; p != data_ + pointers_end_[i]; ++p)
+		//		allocator_.destroy(p);
+		//	for(auto p = jdata_ + pointers_begin_[i]; p != jdata_ + pointers_end_[i]; ++p) iallocator_.destroy(p);
+		//	iallocator_.destroy(pointers_begin_ + i);
+		//	iallocator_.destroy(pointers_end_ + i);
 		}
 		allocator_.deallocate(data_, size1_*max_num_non_zeros_per_row_);
 		iallocator_.deallocate(jdata_, size1_*max_num_non_zeros_per_row_);
@@ -141,18 +152,52 @@ class fixed_csr_matrix{
 #include<iostream>
 #include<random>
 
+#include "alf/boost/mpi3/main.hpp"
+#include "alf/boost/mpi3/shared_window.hpp"
+#include "alf/boost/mpi3/shared_communicator.hpp"
+
 using std::cout;
 using std::cerr;
 using std::get;
 
-int main(){
+namespace mpi3 = boost::mpi3; using std::cout;
+
+//int main(){
+int boost::mpi3::main(int, char*[], mpi3::communicator& world){
+
+	mpi3::shared_communicator node = world.split_shared();
 
 	using ma::sparse::fixed_csr_matrix;
+
+	{
+		using Alloc = boost::mpi3::intranode::allocator<double>;
+		Alloc A(node);
+	//	Alloc::pointer p = A.allocate(10);
+		fixed_csr_matrix<double, Alloc> med({4,4}, 2, A);
+		node.barrier();
+		if(node.rank() == 1) med[3][3] = 1;
+		if(node.rank() == 1) med[2][1] = 3;
+		if(node.rank() == 1) med[0][1] = 9;
+		node.barrier();
+		if(node.rank() == 0){
+			for(int i = 0; i != 8; ++i) cout << med.non_zero_values_data()[i] << ' ';
+			cout << '\n';
+			for(int i = 0; i != 8; ++i) cout << med.non_zero_indices2_data()[i] << ' ';
+			cout << '\n';
+			for(int i = 0; i != 4; ++i) cout << med.pointers_begin()[i] << ' ';
+			cout << '\n';
+			for(int i = 0; i != 4; ++i) cout << med.pointers_end()[i] << ' ';
+			cout << '\n';
+		}
+	}
+	return 0;
 
 	fixed_csr_matrix<double> small({4,4}, 2);
 	small[3][3] = 1;
 	small[2][1] = 3;
 	small[0][1] = 9;
+	small[0][2] = 9;
+
 //	try{
 //		small[3][0] = 8;
 //	}catch(std::out_of_range& e){
@@ -168,7 +213,7 @@ int main(){
 	cout << '\n';
 	for(int i = 0; i != 4; ++i) cout << small.pointers_end()[i] << ' ';
 	cout << '\n';
-
+	return 0;
 }
 
 #endif
