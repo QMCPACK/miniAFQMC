@@ -1,5 +1,5 @@
 #if COMPILATION_INSTRUCTIONS
-(echo "#include\""$0"\"" > $0x.cpp) && mpic++ -O3 -std=c++14 -Wall `#-Wfatal-errors` -D_TEST_SPARSE_FIXED_CSR_MATRIX $0x.cpp -o $0x.x && time mpirun -np 2 $0x.x $@ && rm -f $0x.x $0x.cpp; exit
+(echo "#include\""$0"\"" > $0x.cpp) && mpic++ -O3 -I${HOME}/prj -std=c++14 -Wall -Wfatal-errors -D_TEST_SPARSE_FIXED_CSR_MATRIX $0x.cpp -o $0x.x && time mpirun -np 4 $0x.x $@ && rm -f $0x.x $0x.cpp; exit
 #endif
 
 #if COMPILATION_INSTRUCTIONS
@@ -34,7 +34,16 @@ using size_type           = std::ptrdiff_t; //std::size_t;
 using difference_type     = std::ptrdiff_t;
 using index               = std::ptrdiff_t;
 
-template<class T, class Alloc = std::allocator<T>>
+template<class Allocator>
+struct null_is_root{
+	null_is_root(Allocator){}
+	bool root(){return true;}
+};
+
+template<
+	class T, class Alloc = std::allocator<T>, 
+	class IsRoot = null_is_root<Alloc> 
+>
 class fixed_csr_matrix{
 	using alloc_ts = std::allocator_traits<Alloc>; 
 	using index_allocator = typename Alloc::template rebind<index>::other;//  alloc_ts::template rebind_alloc<index>;
@@ -64,25 +73,29 @@ class fixed_csr_matrix{
 		pointers_begin_(iallocator_.allocate(size1_)),
 		pointers_end_(iallocator_.allocate(size1_))
 	{
-		for(index i = 0; i != size1_; ++i){
-			ialloc_ts::construct(iallocator_, &*(pointers_begin_ + i), i*max_num_non_zeros_per_row_);
-			ialloc_ts::construct(iallocator_, &*(pointers_end_   + i), i*max_num_non_zeros_per_row_);
-		//	iallocator_.construct(pointers_begin_ + i, i*max_num_non_zeros_per_row_);
-		//	iallocator_.construct(pointers_end_   + i, i*max_num_non_zeros_per_row_);
+		IsRoot r(allocator_);
+		if(r.root()){
+			for(index i = 0; i != size1_; ++i){
+				ialloc_ts::construct(iallocator_, &*(pointers_begin_ + i), i*max_num_non_zeros_per_row_);
+				ialloc_ts::construct(iallocator_, &*(pointers_end_   + i), i*max_num_non_zeros_per_row_);
+			}
 		}
 	}
 	~fixed_csr_matrix(){
-		for(index i = 0; i != size1_; ++i){
-		//	for(auto p = data_ + pointers_begin_[i]; p != data_ + pointers_end_[i]; ++p)
-		//		allocator_.destroy(p);
-		//	for(auto p = jdata_ + pointers_begin_[i]; p != jdata_ + pointers_end_[i]; ++p) iallocator_.destroy(p);
-		//	iallocator_.destroy(pointers_begin_ + i);
-		//	iallocator_.destroy(pointers_end_ + i);
+		IsRoot r(allocator_);
+		if(r.root()){
+			for(index i = 0; i != size1_; ++i){
+				for(auto p = data_ + pointers_begin_[i]; p != data_ + pointers_end_[i]; ++p)
+					allocator_.destroy(&*p);
+				for(auto p = jdata_ + pointers_begin_[i]; p != jdata_ + pointers_end_[i]; ++p) iallocator_.destroy(&*p);
+				iallocator_.destroy(&pointers_begin_[i]);
+				iallocator_.destroy(&pointers_end_[i]);
+			}
+			allocator_.deallocate(data_, size1_*max_num_non_zeros_per_row_);
+			iallocator_.deallocate(jdata_, size1_*max_num_non_zeros_per_row_);
+			iallocator_.deallocate(pointers_begin_, size1_);
+			iallocator_.deallocate(pointers_end_  , size1_);
 		}
-		allocator_.deallocate(data_, size1_*max_num_non_zeros_per_row_);
-		iallocator_.deallocate(jdata_, size1_*max_num_non_zeros_per_row_);
-		iallocator_.deallocate(pointers_begin_, size1_);
-		iallocator_.deallocate(pointers_end_  , size1_);
 	}
 	auto pointers_begin() const{return pointers_begin_;}
 	auto pointers_end() const{return pointers_end_;}
@@ -142,8 +155,8 @@ class fixed_csr_matrix{
 
 #ifdef _TEST_SPARSE_FIXED_CSR_MATRIX
 
-#include "alf/boost/iterator/zipper.hpp"
-#include "alf/boost/timer/timed.hpp"
+//#include "alf/boost/iterator/zipper.hpp"
+//#include "alf/boost/timer/timed.hpp"
 
 #include <boost/timer/timer.hpp>
 
@@ -173,7 +186,7 @@ int boost::mpi3::main(int, char*[], mpi3::communicator& world){
 		using Alloc = boost::mpi3::intranode::allocator<double>;
 		Alloc A(node);
 	//	Alloc::pointer p = A.allocate(10);
-		fixed_csr_matrix<double, Alloc> med({4,4}, 2, A);
+		fixed_csr_matrix<double, Alloc, boost::mpi3::intranode::is_root> med({4,4}, 2, A);
 		node.barrier();
 		if(node.rank() == 0) med[3][3] = 1;
 		if(node.rank() == 1) med[2][1] = 3;
@@ -190,7 +203,7 @@ int boost::mpi3::main(int, char*[], mpi3::communicator& world){
 			cout << '\n';
 		}
 	}
-//	return 0;
+	return 0;
 
 	fixed_csr_matrix<double> small({4,4}, 2);
 	small[3][3] = 1;
