@@ -27,6 +27,7 @@
 #include <complex>
 #include <Utilities/OhmmsInfo.h>
 #include <Message/Communicate.h>
+#include "boost/multi_array.hpp"
 
 #define byRows   999
 #define byCols   111
@@ -49,17 +50,11 @@
 #define DEBUG_PSIBUFFER(who, msg)
 #endif
 
-#include<boost/multi_array.hpp>
-
-#include "Matrix/SparseMatrix.hpp"
-#include "Matrix/SparseMatrix_ref.hpp"
-#include "Matrix/SMSparseMatrix.hpp"
-#include "Matrix/SMDenseVector.hpp"
+#include "Utilities/NewTimer.h"
 
 namespace qmcplusplus
 {
 
-  //using boost::multi_array_types::index_gen;
   using boost::extents;
   using boost::indices;
   using range_t = boost::multi_array_types::index_range;
@@ -78,49 +73,6 @@ namespace qmcplusplus
 #endif
   typedef std::complex<RealType>         ComplexType;
   typedef std::complex<SPRealType>       SPComplexType;
-
-
-/*
-  typedef SMDenseVector<IndexType>     IndexSMVector;
-  typedef SMDenseVector<RealType>      RealSMVector;
-  typedef SMDenseVector<ValueType>     ValueSMVector;
-  typedef SMDenseVector<SPValueType>   SPValueSMVector;
-  typedef SMDenseVector<ComplexType>   ComplexSMVector;
-  typedef SMDenseVector<SPComplexType>   SPComplexSMVector;
-*/
-
-  // [nwalk][2][NMO][NAEA]
-  typedef boost::multi_array<ValueType,4> WalkerContainer;
-
-  typedef boost::multi_array<IndexType,1> IndexVector;
-  typedef boost::multi_array<RealType,1> RealVector;
-  typedef boost::multi_array<SPRealType,1> SPRealVector;
-  typedef boost::multi_array<ValueType,1> ValueVector;
-  typedef boost::multi_array<SPValueType,1> SPValueVector;
-  typedef boost::multi_array<ComplexType,1> ComplexVector;
-  typedef boost::multi_array<SPComplexType,1> SPComplexVector;
-
-  typedef boost::multi_array<IndexType,2> IndexMatrix;  
-  typedef boost::multi_array<RealType,2> RealMatrix;  
-  typedef boost::multi_array<SPRealType,2> SPRealMatrix;  
-  typedef boost::multi_array<ValueType,2> ValueMatrix;  
-  typedef boost::multi_array<SPValueType,2> SPValueMatrix;  
-  typedef boost::multi_array<ComplexType,2> ComplexMatrix;  
-  typedef boost::multi_array<SPComplexType,2> SPComplexMatrix;  
-
-  typedef SparseMatrix<IndexType>     IndexSpMat;
-  typedef SparseMatrix<RealType>      RealSpMat;
-  typedef SparseMatrix<ValueType>     ValueSpMat;
-  typedef SparseMatrix<SPValueType>   SPValueSpMat;
-  typedef SparseMatrix<ComplexType>   ComplexSpMat;
-/*
-  typedef SMSparseMatrix<IndexType>     IndexSMSpMat;
-  typedef SMSparseMatrix<RealType>      RealSMSpMat;
-  typedef SMSparseMatrix<ValueType>     ValueSMSpMat;
-  typedef SMSparseMatrix<SPValueType>   SPValueSMSpMat;
-  typedef SMSparseMatrix<ComplexType>   ComplexSMSpMat;
-  typedef SMSparseMatrix<SPComplexType>   SPComplexSMSpMat;
-*/
 
 inline std::ostream &app_log() { return OhmmsInfo::Log->getStream(); }
 

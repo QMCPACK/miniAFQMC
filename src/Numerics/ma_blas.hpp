@@ -15,10 +15,6 @@
 //    Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
 
-#if COMPILATION_INSTRUCTIONS
-(echo "#include<"$0">" > $0x.cpp) && c++ -O3 -std=c++11 -Wfatal-errors -I.. -D_TEST_MA_BLAS -DADD_ -Drestrict=__restrict__ $0x.cpp -lblas -llapack -o $0x.x && time $0x.x $@ && rm -f $0x.cpp; exit
-#endif
-
 #ifndef MA_BLAS_HPP
 #define MA_BLAS_HPP
 
@@ -28,6 +24,18 @@
 #include<iostream>
 
 namespace ma{
+
+template<class MultiArray1Dx, 
+         class MultiArray1Dy,
+         typename = typename std::enable_if<std::decay<MultiArray1Dx>::type::dimensionality == 1>::type,
+         typename = typename std::enable_if<std::decay<MultiArray1Dy>::type::dimensionality == 1>::type 
+>
+// decltype(BLAS::dot(x.size(), x.origin(), x.strides()[0], y.origin(), y.strides()[0]))
+auto 
+dot(MultiArray1Dx&& x, MultiArray1Dy&& y){
+        assert(x.size() == y.size());
+        return BLAS::dot(x.size(), x.origin(), x.strides()[0], y.origin(), y.strides()[0]);
+}
 
 template<class T, class MultiArray1D, typename = typename std::enable_if<std::decay<MultiArray1D>::type::dimensionality == 1>::type >
 MultiArray1D scal(T a, MultiArray1D&& x){
@@ -53,8 +61,8 @@ template<char IN, class T, class MultiArray2DA, class MultiArray1DX, class Multi
 	typename = typename std::enable_if< MultiArray2DA::dimensionality == 2 and MultiArray1DX::dimensionality == 1 and std::decay<MultiArray1DY>::type::dimensionality == 1>::type
 >
 MultiArray1DY gemv(T alpha, MultiArray2DA const& A, MultiArray1DX const& x, T beta, MultiArray1DY&& y){
-        assert( (IN == 'N') || (IN == 'T') || (IN == 'H')  );
-	if(IN == 'T' or IN == 'H') assert( x.shape()[0] == A.shape()[1] and y.shape()[0] == A.shape()[0]);
+        assert( (IN == 'N') || (IN == 'T') || (IN == 'C')  );
+	if(IN == 'T' or IN == 'C') assert( x.shape()[0] == A.shape()[1] and y.shape()[0] == A.shape()[0]);
 	else if(IN == 'N') assert( x.shape()[0] == A.shape()[0] and y.shape()[0] == A.shape()[1]);
 	assert( A.strides()[1] == 1 ); // gemv is not implemented for arrays with non-leading stride != 1
 	int M = A.shape()[1];
@@ -80,8 +88,8 @@ MultiArray2DC gemm(T alpha, MultiArray2DA const& a, MultiArray2DB const& b, T be
 	assert( a.strides()[1] == 1 );
 	assert( b.strides()[1] == 1 );
 	assert( c.strides()[1] == 1 );
-	assert( (TA == 'N') || (TA == 'T') || (TA == 'H')  );
-	assert( (TB == 'N') || (TB == 'T') || (TB == 'H')  );
+	assert( (TA == 'N') || (TA == 'T') || (TA == 'C')  );
+	assert( (TB == 'N') || (TB == 'T') || (TB == 'C')  );
 	int M = -1;
 	int N = -1;
 	int K = -1;
@@ -91,19 +99,19 @@ MultiArray2DC gemm(T alpha, MultiArray2DA const& a, MultiArray2DB const& b, T be
 		K = a.shape()[0];
 		assert(a.shape()[0] == b.shape()[1] and c.shape()[0] == b.shape()[0] and c.shape()[1] == a.shape()[1]);
 	}
-	if((TA == 'T' or TA == 'H') and (TB == 'T' or TB == 'H')){
+	if((TA == 'T' or TA == 'C') and (TB == 'T' or TB == 'C')){
 		M = a.shape()[0];
 		N = b.shape()[1];
 		K = a.shape()[1];
 		assert(a.shape()[1] == b.shape()[0] and c.shape()[0] == b.shape()[1] and c.shape()[1] == a.shape()[0]);
 	}
-	if((TA == 'T' or TA == 'H') and TB == 'N'){
+	if((TA == 'T' or TA == 'C') and TB == 'N'){
 		M = a.shape()[0];
 		N = b.shape()[0];
 		K = a.shape()[1];
 		assert(a.shape()[1] == b.shape()[1] and c.shape()[0] == b.shape()[0] and c.shape()[1] == a.shape()[0]);
 	}
-	if(TA == 'N' and (TB == 'T' or TB == 'H')){
+	if(TA == 'N' and (TB == 'T' or TB == 'C')){
 		M = a.shape()[1];
 		N = b.shape()[1];
 		K = a.shape()[0];

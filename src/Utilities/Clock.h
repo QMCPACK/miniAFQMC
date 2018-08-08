@@ -53,16 +53,16 @@ inline double cpu_clock()
 }
 
 #else
-#if defined(ENABLE_OPENMP)
-inline double cpu_clock() { return omp_get_wtime(); }
-#else
+//#if defined(ENABLE_OPENMP)
+//inline double cpu_clock() { return omp_get_wtime(); }
+//#else
 inline double cpu_clock()
 {
   struct timeval tv;
   gettimeofday(&tv, NULL);
   return (double)tv.tv_sec + (1.e-6) * tv.tv_usec;
 }
-#endif //
+//#endif //
 #endif
 #endif
 }

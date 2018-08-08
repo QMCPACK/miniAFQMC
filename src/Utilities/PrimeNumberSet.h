@@ -24,6 +24,9 @@
 #define QMCPLUSPLUS_PRIME_NUMBER_SET_H
 #include <vector>
 #include <limits>
+#include <iostream>
+#include <fstream>
+#include <sstream>
 
 /// dummy declaration
 template <typename UIntType> struct PrimeConstants

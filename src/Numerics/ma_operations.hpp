@@ -15,23 +15,23 @@
 //    Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
 
-#if COMPILATION_INSTRUCTIONS
-(echo "#include<"$0">" > $0x.cpp) && clang++ -O3 -std=c++11 -Wfatal-errors -I.. -D_TEST_MA_OPERATIONS -DADD_ -Drestrict=__restrict__ $0x.cpp -lblas -llapack -o $0x.x && time $0x.x $@ && rm -f $0x.cpp; exit
-#endif
 #ifndef MA_OPERATIONS_HPP
 #define MA_OPERATIONS_HPP
 
 #include "ma_blas.hpp"
 #include "ma_lapack.hpp"
-#include "sparse.hpp"
+#include "spblas.hpp"
 
 #include<type_traits> // enable_if
 #include<vector>
 
+#include "boost/multi_array.hpp"
+#include "Utilities/type_conversion.hpp"
+
 namespace ma{
 
-double const& conj(double const& d){return d;}
-float const& conj(float const& f){return f;}
+inline double const& conj(double const& d){return d;}
+inline float const& conj(float const& f){return f;}
 
 template<class MultiArray2D, typename = typename std::enable_if<(MultiArray2D::dimensionality > 1)>::type>
 bool is_hermitian(MultiArray2D const& A){
@@ -40,7 +40,7 @@ bool is_hermitian(MultiArray2D const& A){
 	if(A.shape()[0] != A.shape()[1]) return false;
 	for(int i = 0; i != A.shape()[0]; ++i)
 		for(int j = i + 1; j != A.shape()[1]; ++j)
-			if( A[i][j] != conj(A[j][i]) ) return false;
+			if( std::abs(A[i][j] - conj(A[j][i])) > 1e-12 ) return false;
 	return true;
 }
 
@@ -49,7 +49,7 @@ bool is_symmetric(MultiArray2D const& A){
 	if(A.shape()[0] != A.shape()[1]) return false;
 	for(int i = 0; i != A.shape()[0]; ++i)
 		for(int j = i + 1; j != A.shape()[1]; ++j)
-			if( A[i][j] != A[j][i] ) return false;
+			if( std::abs(A[i][j] - A[j][i]) > 1e-12 ) return false;
 	return true;
 }
 
@@ -61,6 +61,22 @@ MultiArray2D transpose(MultiArray2D&& A){
 		for(int j = 0; j != i; ++j)
 			swap(A[i][j], A[j][i]);
 	return std::forward<MultiArray2D>(A);
+}
+
+template<class MultiArray2DA, 
+         class MultiArray2DB,
+         typename = typename std::enable_if<(std::decay<MultiArray2DA>::type::dimensionality > 1)>::type,
+         typename = typename std::enable_if<(std::decay<MultiArray2DB>::type::dimensionality > 1)>::type,
+         typename = typename std::enable_if<(std::decay<MultiArray2DA>::type::dimensionality 
+                                                == std::decay<MultiArray2DB>::type::dimensionality)>::type
+        >
+MultiArray2DB transpose(MultiArray2DA&& A, MultiArray2DB&& B){
+        using range_t = boost::multi_array_types::index_range;
+        assert(A.shape()[0] == B.shape()[1]);
+        assert(A.shape()[1] == B.shape()[0]);
+        for(int i = 0; i != A.shape()[0]; ++i)
+                B[boost::indices[range_t()][i]] = A[boost::indices[i][range_t()]];
+        return std::forward<MultiArray2DB>(B);
 }
 
 template<class MA> struct op_tag : std::integral_constant<char, 'N'>{}; // see specializations
@@ -80,9 +96,44 @@ MultiArray1DC product(T alpha, MultiArray2DA const& A, MultiArray1DB const& B, T
 	(alpha, arg(A), B, beta, std::forward<MultiArray1DC>(C));
 }
 
+// sparse matrix-MultiArray<1> interface 
+template<class T, class SparseMatrixA, class MultiArray1DB, class MultiArray1DC,
+        typename = typename std::enable_if<
+                SparseMatrixA::dimensionality == -2 and
+                MultiArray1DB::dimensionality == 1 and
+                std::decay<MultiArray1DC>::type::dimensionality == 1
+        >::type,
+        typename = void,
+        typename = void, // TODO change to use dispatch 
+        typename = void // TODO change to use dispatch 
+>
+MultiArray1DC product(T alpha, SparseMatrixA const& A, MultiArray1DB const& B, T beta, MultiArray1DC&& C){
+        assert(op_tag<SparseMatrixA>::value == 'N' || op_tag<SparseMatrixA>::value == 'T');
+        assert(op_tag<MultiArray1DB>::value == 'N');
+        if(op_tag<SparseMatrixA>::value == 'N') {
+            assert(arg(A).shape()[0] == std::forward<MultiArray1DC>(C).shape()[0]);
+            assert(arg(A).shape()[1] == arg(B).shape()[0]);
+        } else {
+            assert(arg(A).shape()[0] == arg(B).shape()[0]);
+            assert(arg(A).shape()[1] == std::forward<MultiArray1DC>(C).shape()[0]);
+        }
+
+        SPBLAS::csrmv( op_tag<SparseMatrixA>::value,
+            arg(A).shape()[0], arg(A).shape()[1],
+            alpha, "GxxCxx",
+            std::addressof(*arg(A).non_zero_values_data()),
+            std::addressof(*arg(A).non_zero_indices2_data()),
+            std::addressof(*arg(A).pointers_begin()),  
+            std::addressof(*arg(A).pointers_end()),
+            arg(B).origin(), beta, std::forward<MultiArray1DC>(C).origin());
+
+        return std::forward<MultiArray1DC>(C);
+}
+
+///*
 template<class MultiArray2DA, class MultiArray1DB, class MultiArray1DC,
         typename = typename std::enable_if<
-                MultiArray2DA::dimensionality == 2 and
+                (MultiArray2DA::dimensionality == 2 or MultiArray2DA::dimensionality == -2) and
                 MultiArray1DB::dimensionality == 1 and
                 std::decay<MultiArray1DC>::type::dimensionality == 1
         >::type, typename = void // TODO change to use dispatch 
@@ -90,6 +141,7 @@ template<class MultiArray2DA, class MultiArray1DB, class MultiArray1DC,
 MultiArray1DC product(MultiArray2DA const& A, MultiArray1DB const& B, MultiArray1DC&& C){
         return product(1., A, B, 0., std::forward<MultiArray1DC>(C));
 }
+//*/
 
 template<class T, class MultiArray2DA, class MultiArray2DB, class MultiArray2DC,
 	typename = typename std::enable_if<
@@ -106,6 +158,7 @@ MultiArray2DC product(T alpha, MultiArray2DA const& A, MultiArray2DB const& B, T
 	(alpha, arg(B), arg(A), beta, std::forward<MultiArray2DC>(C));
 }
 
+
 // sparse matrix-MultiArray interface 
 template<class T, class SparseMatrixA, class MultiArray2DB, class MultiArray2DC,
         typename = typename std::enable_if<
@@ -113,8 +166,7 @@ template<class T, class SparseMatrixA, class MultiArray2DB, class MultiArray2DC,
                 MultiArray2DB::dimensionality == 2 and
                 std::decay<MultiArray2DC>::type::dimensionality == 2
         >::type,  
-//        typename = typename std::enable_if<SparseMatrixA::sparse == true>::type,
-        typename = void, // TODO change to use dispatch 
+        typename = void, 
         typename = void // TODO change to use dispatch 
 >
 MultiArray2DC product(T alpha, SparseMatrixA const& A, MultiArray2DB const& B, T beta, MultiArray2DC&& C){
@@ -123,19 +175,22 @@ MultiArray2DC product(T alpha, SparseMatrixA const& A, MultiArray2DB const& B, T
         assert( arg(B).strides()[1] == 1 );
         assert( std::forward<MultiArray2DC>(C).strides()[1] == 1 );
         if(op_tag<SparseMatrixA>::value == 'N') {
-            assert(arg(A).rows() == std::forward<MultiArray2DC>(C).shape()[0]);
-            assert(arg(A).cols() == arg(B).shape()[0]);
+            assert(arg(A).shape()[0] == std::forward<MultiArray2DC>(C).shape()[0]);
+            assert(arg(A).shape()[1] == arg(B).shape()[0]);
             assert(arg(B).shape()[1] == std::forward<MultiArray2DC>(C).shape()[1]);
         } else {
-            assert(arg(A).rows() == arg(B).shape()[0]);
-            assert(arg(A).cols() == std::forward<MultiArray2DC>(C).shape()[0]);
+            assert(arg(A).shape()[0] == arg(B).shape()[0]);
+            assert(arg(A).shape()[1] == std::forward<MultiArray2DC>(C).shape()[0]);
             assert(arg(B).shape()[1] == std::forward<MultiArray2DC>(C).shape()[1]);
         }        
 
         SPBLAS::csrmm( op_tag<SparseMatrixA>::value, 
-            arg(A).rows(), arg(B).shape()[1], arg(A).cols(), 
+            arg(A).shape()[0], arg(B).shape()[1], arg(A).shape()[1], 
             alpha, "GxxCxx", 
-            arg(A).val() , arg(A).indx(),  arg(A).pntrb(),  arg(A).pntre(), 
+            std::addressof(*(arg(A).non_zero_values_data())) , 
+            std::addressof(*(arg(A).non_zero_indices2_data())),
+            std::addressof(*(arg(A).pointers_begin())),  
+            std::addressof(*(arg(A).pointers_end())),
             arg(B).origin(), arg(B).strides()[0], 
             beta, 
             std::forward<MultiArray2DC>(C).origin(), std::forward<MultiArray2DC>(C).strides()[0]);
@@ -143,6 +198,7 @@ MultiArray2DC product(T alpha, SparseMatrixA const& A, MultiArray2DB const& B, T
         return std::forward<MultiArray2DC>(C);
 }
 
+///*
 template<class MultiArray2DA, class MultiArray2DB, class MultiArray2DC,
         typename = typename std::enable_if<
                 (MultiArray2DA::dimensionality == 2 or MultiArray2DA::dimensionality == -2) and
@@ -151,10 +207,17 @@ template<class MultiArray2DA, class MultiArray2DB, class MultiArray2DC,
         >::type
 >
 MultiArray2DC product(MultiArray2DA const& A, MultiArray2DB const& B, MultiArray2DC&& C){
-	return product(1., A, B, 0., std::forward<MultiArray2DC>(C));
+        return product(1., A, B, 0., std::forward<MultiArray2DC>(C));
 }
+//*/
 
-template<class MultiArray2D> struct normal_tag{
+//template<class MultiArrayA, class MultiArrayB, class MultiArrayC>
+//MultiArrayC product(MultiArrayA const& A, MultiArrayB const& B, MultiArrayC&& C){
+//        return product(1., A, B, 0., std::forward<MultiArrayC>(C));
+//}
+
+template<class MultiArray2D>
+struct normal_tag{
 	MultiArray2D arg1;
 	static auto const dimensionality = std::decay<MultiArray2D>::type::dimensionality;
 	normal_tag(normal_tag const&) = delete;
@@ -171,7 +234,8 @@ template<class MultiArray2D> normal_tag<MultiArray2D> normal(MultiArray2D&& arg)
 template<class MultiArray2D>
 MultiArray2D arg(normal_tag<MultiArray2D> const& nt){return nt.arg1;}
 
-template<class MultiArray2D> struct transpose_tag{
+template<class MultiArray2D>
+struct transpose_tag{
 	MultiArray2D arg1; 
 	static auto const dimensionality = std::decay<MultiArray2D>::type::dimensionality;
 	transpose_tag(transpose_tag const&) = delete;
@@ -188,12 +252,13 @@ template<class MultiArray2D> transpose_tag<MultiArray2D> transposed(MultiArray2D
 template<class MultiArray2D>
 MultiArray2D arg(transpose_tag<MultiArray2D> const& tt){return tt.arg1;}
 
-template<class MultiArray2D> struct hermitian_tag{
+template<class MultiArray2D>
+struct hermitian_tag{
 	MultiArray2D arg1; 
 	static auto const dimensionality = std::decay<MultiArray2D>::type::dimensionality;
 	hermitian_tag(hermitian_tag const&) = delete;
 	hermitian_tag(hermitian_tag&&) = default;
-	static const char tag = 'H';
+	static const char tag = 'C';
 };
 
 template<class MultiArray2D> hermitian_tag<MultiArray2D> hermitian(MultiArray2D&& arg){
@@ -203,7 +268,7 @@ template<class MultiArray2D> hermitian_tag<MultiArray2D> hermitian(MultiArray2D&
 template<class MultiArray2D>
 MultiArray2D arg(hermitian_tag<MultiArray2D> const& nt){return nt.arg1;}
 
-template<class MultiArray2D> struct op_tag<hermitian_tag<MultiArray2D>> : std::integral_constant<char, 'H'>{};
+template<class MultiArray2D> struct op_tag<hermitian_tag<MultiArray2D>> : std::integral_constant<char, 'C'>{};
 
 template<class MultiArray2D>
 MultiArray2D arg(hermitian_tag<MultiArray2D>& ht){return ht.arg1;}
@@ -288,6 +353,53 @@ T determinant(MultiArray2D&& m, MultiArray1D&& pivot){
 		}
 	}
 	return detvalue;
+}
+
+template<class MultiArray2D,
+         typename = typename std::enable_if_t<MultiArray2D::dimensionality == 2>
+        >
+MultiArray2D exp(MultiArray2D const& A) { 
+        using Type = typename MultiArray2D::element;
+        using RealType = typename qmcplusplus::afqmc::remove_complex<Type>::value_type;
+        using TVec = boost::multi_array<RealType,1>;
+        using TMat = boost::multi_array<Type,2>;
+        using eigSys = std::pair<TVec,TMat>; 
+        assert(A.shape()[0]==A.shape()[1]);
+        size_t N = A.shape()[0];
+
+        MultiArray2D ExpA(boost::extents[N][N]);
+        std::fill_n(ExpA.origin(),N*N,Type(0));
+
+        if(is_hermitian(A)) { 
+        
+          // A = V*M*H(Z)
+          eigSys V = symEig<TVec,TMat>(A);        
+
+          // exp(A) = V*exp(M)*H(Z) 
+          MultiArray2D TA(boost::extents[N][N]);
+          for(int i=0; i<N; i++)
+            for(int j=0; j<N; j++)
+              TA[i][j] = V.second[i][j] * std::exp(V.first[j]);
+          product(TA,H(V.second),ExpA);
+
+        } else {
+          throw std::runtime_error("exp(A) not implemented for non-symmetric A");
+        }
+        
+        return ExpA;
+}
+
+template<class MultiArray2D,
+         typename = typename std::enable_if_t<MultiArray2D::dimensionality == 2>
+        >
+MultiArray2D cholesky(MultiArray2D&& A){
+        assert(A.shape()[0]==A.shape()[1]);
+        if(is_hermitian(A)) { 
+          return potrf( transpose( std::forward<MultiArray2D>(A)) );
+        } else {
+          throw std::runtime_error("cholesky(A) not implemented for non-symmetric A");
+          return std::forward<MultiArray2D>(A);
+        }
 }
 
 template<class MultiArray2D>

@@ -17,6 +17,8 @@
 //    University of Illinois at Urbana-Champaign
 ////////////////////////////////////////////////////////////////////////////////
 
+#include <tuple>
+
 #ifndef OHMMS_UTILITYFUNCTIONS_H
 #define OHMMS_UTILITYFUNCTIONS_H
 /**@file UtilityFunctions.h

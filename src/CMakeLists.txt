@@ -119,10 +119,16 @@ ENDIF()
   ####################################
   SET(UTILITIES
     Utilities/RandomGenerator.cpp 
+    Utilities/SimpleParser.cpp
+    Utilities/readWfn.cpp
     Utilities/OhmmsInform.cpp 
     Utilities/OhmmsInfo.cpp 
     Utilities/NewTimer.cpp
     io/hdf_archive.cpp
+    Walkers/SharedWalkerSet.cpp
+    Propagators/AFQMCSharedPropagator.cpp
+    Propagators/PropagatorFactory.cpp
+    Wavefunctions/WavefunctionFactory.cpp
     ${GITREV_TMP}
     )
 
