@@ -75,7 +75,8 @@ TimerNameList_t<AFQMCTimerIDs> AFQMCTimerNames =
   {G_for_vbias_timer,"G_for_vbias"},
   {propagate_timer, "Propagate"},
   {E_comm_overhead_timer, "Energy_comm_overhead"},
-  {vHS_comm_overhead_timer, "vHS_comm_overhead"}
+  {vHS_comm_overhead_timer, "vHS_comm_overhead"},
+  {StepPopControl, "Population_Control"}
 };
 
 void print_help()
@@ -87,8 +88,8 @@ void print_help()
   printf("-s                Number of substeps (default: 10)\n");
   printf("-w                Number of walkers (default: 16)\n");
   printf("-o                Number of substeps between orthogonalization (default: 10)\n");
-  printf("-r                Number of reader cores in a node (default all)"); 
-  printf("-c                Number of cores in a task group (default: all cores)"); 
+  printf("-r                Number of reader cores in a node (default all)\n"); 
+  printf("-c                Number of cores in a task group (default: all cores)\n"); 
   printf("-n                Number of nodes in a task group (default: all nodes)\n");
   printf("-f                Input file name (default: ./afqmc.h5)\n");
   printf("-b                Number of substeps with fixed vbias (default: 1)\n");
@@ -100,6 +101,7 @@ void print_help()
   printf("-v                Verbose output\n");
 }
 
+// Not the "real" energy, since weight are ignored for simplicity!!!
 template<class WalkerSet>
 double average_energy(WalkerSet& wset) {
   double et=0.0;
@@ -239,21 +241,7 @@ int main(int argc, char **argv)
   int NIK = 2*NMO*NMO;                // dimensions of linearized green function
   int NAK = 2*NAEA*NMO;               // dimensions of linearized "compacted" green function
 
-  app_log()<<"\n";
-  app_log()<<"***********************************************************\n";
-  app_log()<<"                         Summary                           \n";
-  app_log()<<"***********************************************************\n";
-
-
-  app_log()<<"\n";
-  app_log()<<"  Execution details: \n"
-           <<"    nsteps: " <<nsteps <<"\n"
-           <<"    nsubsteps: " <<nsubsteps <<"\n"
-           <<"    nwalk: " <<nwalk <<"\n"
-           <<"    verbose: " <<std::boolalpha <<verbose <<"\n"
-           <<"    # Chol Vectors: " <<nchol <<"\n"
-           <<std::endl;
-
+  std::vector<ComplexType> curData;
   AFQMCInfo AFinfo("",NMO,NAEA,NAEA);
   TaskGroup_ walkTG(gTG,"Walker",1,ncores_per_TG);
   WalkerSet WSet(walkTG,AFinfo,&random_th);
@@ -274,6 +262,22 @@ int main(int argc, char **argv)
 
   app_log()<<"\n";
   app_log()<<"***********************************************************\n";
+  app_log()<<"                         Summary                           \n";
+  app_log()<<"***********************************************************\n";
+
+
+  app_log()<<"\n";
+  app_log()<<"  Execution details: \n"
+           <<"    nsteps: " <<nsteps <<"\n"
+           <<"    nsubsteps: " <<nsubsteps <<"\n"
+           <<"    nwalk per TG: " <<nwalk <<"\n"
+           <<"    global nwalk: " <<WSet.GlobalPopulation() <<"\n"
+           <<"    verbose: " <<std::boolalpha <<verbose <<"\n"
+           <<"    # Chol Vectors: " <<nchol <<"\n"
+           <<std::endl;
+
+  app_log()<<"\n";
+  app_log()<<"***********************************************************\n";
   app_log()<<"                     Beginning Steps                       \n";
   app_log()<<"***********************************************************\n\n";
   app_log()<<"# Step   Energy   \n";
@@ -286,11 +290,23 @@ int main(int argc, char **argv)
 
     Wfn.Orthogonalize(WSet,true);
 
+    AFQMCTimers[StepPopControl]->start();
+    WSet.popControl(curData);
+    AFQMCTimers[StepPopControl]->stop();
+
+    // calculate energy
     AFQMCTimers[energy_timer]->start();
     Wfn.Energy(WSet);
     AFQMCTimers[energy_timer]->stop();
+
+    // update Shift and print energy
     double et = average_energy(WSet);
-    Eshift = et/nwalk;
+    if(walkTG.TG_local().root()) {
+      et /= walkTG.TG_heads().size(); 
+      walkTG.TG_heads().all_reduce_in_place_n(&et,1,std::plus<>());
+    }
+    walkTG.TG_local().broadcast_value(et);
+    Eshift = et;
     app_log()<<step <<"   " <<et <<"\n";
 
     // Branching in real code would happen here!!!

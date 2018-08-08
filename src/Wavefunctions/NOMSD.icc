@@ -595,6 +595,10 @@ namespace afqmc
           }   
           // first setup
           local_group_comm = std::move(shared_communicator(TG.TG_local().split(last_task_index))); 
+#ifdef __bgq__
+          if(nextra > 1)
+            APP_ABORT("Error: nextra > 1 in BGQ. Change number of walkers or fix shared memory. !!! \n");
+#endif
           shmbuff_for_G = std::move(std::make_unique<SHM_Buffer>(local_group_comm,dm_size(true)));
         } 
         if(last_task_index < 0 || last_task_index > nextra) 

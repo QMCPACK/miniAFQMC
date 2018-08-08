@@ -78,7 +78,8 @@ namespace qmcplusplus
     G_for_vbias_timer,
     propagate_timer,
     E_comm_overhead_timer,
-    vHS_comm_overhead_timer
+    vHS_comm_overhead_timer,
+    StepPopControl
   };
   //extern TimerNameList_t<AFQMCTimerIDs> AFQMCTimerNames;  
 
