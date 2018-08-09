@@ -93,7 +93,7 @@ void print_help()
   printf("-n                Number of nodes in a task group (default: all nodes)\n");
   printf("-f                Input file name (default: ./afqmc.h5)\n");
   printf("-b                Number of substeps with fixed vbias (default: 1)\n");
-  printf("-t                If set to no, do not use half-rotated transposed Cholesky matrix to calculate bias potential (default yes).\n");
+  printf("-t                Timestep (default: 0.005) \n"); 
 #ifdef __bgq__
   printf("-m                Size (in MB) of pool shared memory. (default 1024 MB).\n");
 #endif
@@ -133,7 +133,7 @@ int main(int argc, char **argv)
   int nread = 0;  
   int ncores_per_TG = 0;
   int nnodes_per_TG = 0;
-  const double dt = 0.01;  // 1-body propagators are assumed to be generated with a timestep = 0.01
+  double dt = 0.005;  // 1-body propagators are assumed to be generated with a timestep = 0.01
   int fix_bias = 1;
 
   bool verbose = false;
@@ -179,7 +179,7 @@ int main(int argc, char **argv)
       ncores_per_TG = atoi(optarg);
       break;
     case 't':
-      transposed_Spvn = (std::string(optarg) != "no");
+      dt = atof(optarg); 
       break;
     case 'f':
       init_file = std::string(optarg);
@@ -290,9 +290,9 @@ int main(int argc, char **argv)
 
     Wfn.Orthogonalize(WSet,true);
 
-    AFQMCTimers[StepPopControl]->start();
-    WSet.popControl(curData);
-    AFQMCTimers[StepPopControl]->stop();
+    //AFQMCTimers[StepPopControl]->start();
+    //WSet.popControl(curData);
+    //AFQMCTimers[StepPopControl]->stop();
 
     // calculate energy
     AFQMCTimers[energy_timer]->start();
