@@ -37,6 +37,7 @@ class simple_stack_allocator
 
 };
 #else
+#include "Configuration.h"
 class simple_stack_allocator
 {
   void *ptr;
@@ -65,6 +66,7 @@ class simple_stack_allocator
         T* result = reinterpret_cast<T*>(ptr);
         ptr = (char*)ptr + n*sizeof(T);
         left -= n*sizeof(T);
+        qmcplusplus::app_log()<<" Remaining shared memory in simple_stack_allocator: " <<left/1024.0/1024.0 <<" MB. " <<"\n";
         return result;
     } else
       throw std::out_of_range("simple_stack_allocator::problems in simple_stack_allocator:;allocate");

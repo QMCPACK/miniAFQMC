@@ -38,7 +38,9 @@ void AFQMCSharedPropagator::reset_nextra(int nextra)
         break;
       }
     }
+#ifndef __bgq__
     local_group_comm = std::move(shared_communicator(TG.TG_local().split(last_task_index)));
+#endif
   }
   if(last_task_index < 0 || last_task_index >= nextra)
     APP_ABORT("Error: Problems in AFQMCSharedPropagator::reset_nextra()\n");

@@ -30,6 +30,8 @@ namespace qmcplusplus
 namespace afqmc
 {
 
+double mem(double n) { return n*16/1024.0/1024.0/1024.0; }
+
 // Some code duplication with THCHamiltonian class.
 template<typename T>
 THCOps<T> loadTHCOps(hdf_archive& dump, WALKER_TYPES type, int NMO, int NAEA, int NAEB, std::vector<PsiT_Matrix>& PsiT, TaskGroup_& TGprop, TaskGroup_& TGwfn, RealType cutvn, RealType cutv2)
@@ -130,7 +132,9 @@ THCOps<T> loadTHCOps(hdf_archive& dump, WALKER_TYPES type, int NMO, int NAEA, in
   }
 
   // read 1-body hamiltonian and exchange potential (v0)
+app_log()<<" allocating " <<mem(NMO*NMO) <<"\n";
   boost::multi_array<ComplexType,2> H1(extents[NMO][NMO]);
+app_log()<<" allocating " <<mem(NMO*NMO) <<"\n";
   boost::multi_array<ComplexType,2> v0(extents[NMO][NMO]);
   if(TGwfn.Global().root()) {
     if(!dump.read(H1,"H1")) {
@@ -242,6 +246,8 @@ THCOps<T> loadTHCOps(hdf_archive& dump, WALKER_TYPES type, int NMO, int NAEA, in
     check_wavefunction_consistency(type,&PsiT[nd],&PsiT[nd+skp],NMO,NAEA,NAEB);
     hij.emplace_back(rotateHij(type,NMO,NAEA,NAEB,&PsiT[nd],&PsiT[nd+skp],H1));
   }
+
+app_log()<<" before THCOps constructor. \n"; 
 
   return THCOps<T>(TGwfn.TG_local(),NMO,NAEA,NAEB,type,std::move(H1),
                                       std::move(hij),std::move(rotMuv),std::move(rotPiu),

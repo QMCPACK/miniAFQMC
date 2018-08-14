@@ -111,7 +111,12 @@ class SlaterDetOperations
     T MixedDensityMatrix(const MatA& hermA, const MatB& B, MatC&& C, communicator& comm, bool compact=false) {
       int NMO = hermA.shape()[1];
       int NAEA = hermA.shape()[0];
+#ifdef __bgq__
+      // to avoid multiple allocations due to SHM issue
+      set_shm_buffer(comm,std::max(3*NAEA*NMO,NAEA*(NAEA+NMO)));
+#else
       set_shm_buffer(comm,NAEA*(NAEA+NMO));
+#endif
       assert(SM_TMats->size() >= NAEA*(NAEA+NMO));
       boost::multi_array_ref<T,2> TNN(SM_TMats->data(), extents[NAEA][NAEA]);
       boost::multi_array_ref<T,2> TNM(SM_TMats->data()+NAEA*NAEA, extents[NAEA][NMO]);  
@@ -137,7 +142,13 @@ class SlaterDetOperations
     template<class MatA, class MatB>
     T Overlap(const MatA& hermA, const MatB& B, communicator& comm) { 
       int NAEA = hermA.shape()[0];
+#ifdef __bgq__
+      int NMO = B.shape()[0];
+      // to avoid multiple allocations due to SHM issue
+      set_shm_buffer(comm,std::max(3*NAEA*NMO,NAEA*(NAEA+NMO)));
+#else
       set_shm_buffer(comm,NAEA*NAEA);
+#endif
       assert(SM_TMats->size() >= NAEA*NAEA);
       boost::multi_array_ref<T,2> TNN(SM_TMats->data(), extents[NAEA][NAEA]);
       return SlaterDeterminantOperations::shm::Overlap<T>(hermA,B,TNN,IWORK,comm);
@@ -161,7 +172,12 @@ class SlaterDetOperations
     void Propagate(Mat&& A, const MatP1& P1, const MatV& V, communicator& comm, int order=6) {
       int NMO = A.shape()[0];
       int NAEA = A.shape()[1];
+#ifdef __bgq__
+      // to avoid multiple allocations due to SHM issue
+      set_shm_buffer(comm,std::max(3*NAEA*NMO,NAEA*(NAEA+NMO)));
+#else
       set_shm_buffer(comm,3*NAEA*NMO);
+#endif
       assert(SM_TMats->size() >= 3*NAEA*NAEA);
       boost::multi_array_ref<T,2> T0(SM_TMats->data(), extents[NMO][NAEA]);
       boost::multi_array_ref<T,2> T1(SM_TMats->data()+NMO*NAEA, extents[NMO][NAEA]);

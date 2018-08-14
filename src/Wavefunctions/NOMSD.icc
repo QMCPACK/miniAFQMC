@@ -668,6 +668,10 @@ namespace afqmc
         }
         Ov[iw] += ov_;
       }
+#ifdef __bgq__
+      if(nextra > 1)
+        APP_ABORT("Error: nextra > 1 in BGQ. Change number of walkers or fix shared memory. !!! \n");
+#endif
 
       // all remaining overlaps are performed in parallel with blocks of cores
       // partition processors in nextra groups
@@ -773,6 +777,11 @@ namespace afqmc
         Ov[iw] += std::conj(ci[nd])*ov*((walker_type==CLOSED)?(ov):(ComplexType(1.0,0.0)));
       }
 
+#ifdef __bgq__
+      if(nextra > 1)
+        APP_ABORT("Error: nextra > 1 in BGQ. Change number of walkers or fix shared memory. !!! \n");
+#endif
+
       // all remaining overlaps are performed in parallel with blocks of cores
       // partition processors in nextra groups
       if(nextra > 0) {
@@ -821,6 +830,11 @@ namespace afqmc
         ov_ *= SDetOp.Overlap(OrbMats[2*nd+1],wset[iw].SlaterMatrix(Beta));
         Ov[iw] += std::conj(ci[nd])*ov_; 
       }
+
+#ifdef __bgq__
+      if(nextra > 1)
+        APP_ABORT("Error: nextra > 1 in BGQ. Change number of walkers or fix shared memory. !!! \n");
+#endif
 
       // all remaining overlaps are performed in parallel with blocks of cores
       // partition processors in nextra groups

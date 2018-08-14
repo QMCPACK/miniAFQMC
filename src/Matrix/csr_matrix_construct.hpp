@@ -387,7 +387,7 @@ CSR construct_distributed_csr_matrix_from_distributed_containers(Container & Q, 
     if(dn > 0) 
       nminus[i] = long(dn);
   }
-
+/*
   //
   if(deltaN > 0) {
     // I'm sending somewhere
@@ -440,7 +440,7 @@ CSR construct_distributed_csr_matrix_from_distributed_containers(Container & Q, 
     if(deltaN > long(0))
       throw std::out_of_range("detlaN > 0");
   } 
-
+*/
   long final_nterms_node = TG.Node().all_reduce_value(Q.size(),std::plus<>());
   std::vector<long> final_counts = TG.Cores().gather_value(final_nterms_node);
   if(TG.Global().root()) {
