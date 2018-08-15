@@ -309,9 +309,9 @@ int main(int argc, char **argv)
     SMDenseVector<ComplexType> SM_M2(std::string("SM_M2")+str0,TG.getTGCommLocal(),NMO*NMO);
     SMDenseVector<ComplexType> SM_M3(std::string("SM_M3")+str0,TG.getTGCommLocal(),NMO*NMO);
 
-    boost::multi_array_ref<ComplexType,2> M1(SM_M1.data(), extents[NMO][NMO]);
-    boost::multi_array_ref<ComplexType,2> M2(SM_M2.data(), extents[NMO][NMO]);
-    boost::multi_array_ref<ComplexType,2> M3(SM_M3.data(), extents[NMO][NMO]);
+    MArray_ref<ComplexType,2> M1(SM_M1.data(), extents[NMO][NMO]);
+    MArray_ref<ComplexType,2> M2(SM_M2.data(), extents[NMO][NMO]);
+    MArray_ref<ComplexType,2> M3(SM_M3.data(), extents[NMO][NMO]);
     
     for(int i=1; i<=ncores_per_TG; i++) {
 
@@ -345,10 +345,10 @@ int main(int argc, char **argv)
     int nw = nwalk*std::pow(2,np);  
 
     // setup light references to SM
-    boost::multi_array_ref<ComplexType,2> vbias(SM_vbias.data(),extents[nchol][nw]);     
-    boost::multi_array_ref<ComplexType,2> vHS(SM_vHS.data(), extents[NMO*NMO][nw]);     
-    boost::multi_array_ref<ComplexType,2> G_for_vbias(SM_G_for_vbias.data(), extents[NIK][nw]);
-    boost::multi_array_ref<ComplexType,2> X(SM_X.data(), extents[nchol][nw]);       
+    MArray_ref<ComplexType,2> vbias(SM_vbias.data(),extents[nchol][nw]);     
+    MArray_ref<ComplexType,2> vHS(SM_vHS.data(), extents[NMO*NMO][nw]);     
+    MArray_ref<ComplexType,2> G_for_vbias(SM_G_for_vbias.data(), extents[NIK][nw]);
+    MArray_ref<ComplexType,2> X(SM_X.data(), extents[nchol][nw]);       
   
     double t0=0,t1=0,t2=0,t3=0;
 

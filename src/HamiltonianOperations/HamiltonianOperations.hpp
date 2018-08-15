@@ -41,11 +41,11 @@ class dummy_HOps
   public:
   dummy_HOps() {};
 
-  boost::multi_array<ComplexType,2> getOneBodyPropagatorMatrix(TaskGroup_& TG, 
-                                                               boost::multi_array<ComplexType,1> const& vMF)
+  MArray<ComplexType,2> getOneBodyPropagatorMatrix(TaskGroup_& TG, 
+                                                               MArray<ComplexType,1> const& vMF)
   {
     throw std::runtime_error("calling visitor on dummy_HOps object");
-    return boost::multi_array<ComplexType,2>{};
+    return MArray<ComplexType,2>{};
   }
   
   template<class Mat, class MatB>
@@ -112,8 +112,10 @@ class dummy_HOps
 
 }
 
-
-#ifdef QMC_COMPLEX
+#ifdef __THC_ONLY__
+class HamiltonianOperations: 
+        public boost::variant<dummy::dummy_HOps,THCOps<ValueType>>
+#elif QMC_COMPLEX
 class HamiltonianOperations: 
         public boost::variant<dummy::dummy_HOps,THCOps<ValueType>,SparseTensor<ComplexType,ComplexType>>
 #else
@@ -126,30 +128,32 @@ class HamiltonianOperations:
                              >
 #endif
 {
+#ifndef __THC_ONLY__
 #ifndef QMC_COMPLEX
     using STRR = SparseTensor<RealType,RealType>;
     using STRC = SparseTensor<RealType,ComplexType>,
     using STCR = SparseTensor<ComplexType,RealType>,
 #endif
     using STCC = SparseTensor<ComplexType,ComplexType>;
+#endif
 
     public: 
 
     HamiltonianOperations(): variant() {}
+#ifndef __THC_ONLY__
 #ifndef QMC_COMPLEX
     explicit HamiltonianOperations(STRR&& other) : variant(std::move(other)) {}
     explicit HamiltonianOperations(STRC&& other) : variant(std::move(other)) {}
     explicit HamiltonianOperations(STCR&& other) : variant(std::move(other)) {}
-#endif
-    explicit HamiltonianOperations(STCC&& other) : variant(std::move(other)) {}
-    explicit HamiltonianOperations(THCOps<ValueType>&& other) : variant(std::move(other)) {}
-
-#ifndef QMC_COMPLEX
     explicit HamiltonianOperations(STRR const& other) = delete;
     explicit HamiltonianOperations(STRC const& other) = delete;
     explicit HamiltonianOperations(STCR const& other) = delete;
 #endif
+    explicit HamiltonianOperations(STCC&& other) : variant(std::move(other)) {}
     explicit HamiltonianOperations(STCC const& other) = delete;
+#endif
+
+    explicit HamiltonianOperations(THCOps<ValueType>&& other) : variant(std::move(other)) {}
     explicit HamiltonianOperations(THCOps<ValueType> const& other) = delete;
 
     HamiltonianOperations(HamiltonianOperations const& other) = delete;
@@ -159,7 +163,7 @@ class HamiltonianOperations:
     HamiltonianOperations& operator=(HamiltonianOperations&& other) = default;
 
     template<class... Args>
-    boost::multi_array<ComplexType,2> getOneBodyPropagatorMatrix(Args&&... args) {
+    MArray<ComplexType,2> getOneBodyPropagatorMatrix(Args&&... args) {
         return boost::apply_visitor(
             [&](auto&& a){return a.getOneBodyPropagatorMatrix(std::forward<Args>(args)...);},
             *this

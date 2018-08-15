@@ -15,6 +15,7 @@
 //    Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
 
+#ifndef __THC_ONLY__
 #ifndef  AFQMC_HAMILTONIANOPERATIONS_ENERGY_HPP 
 #define  AFQMC_HAMILTONIANOPERATIONS_ENERGY_HPP 
 
@@ -64,13 +65,11 @@ inline void calculate_energy(EMat&& locV, const MatA& Gc, MatB&& Gcloc, const Ma
   assert(Gc.shape()[0] == Vakbl.shape()[1]);
 
   using Type = typename std::decay<MatC>::type::element;
-//  index_gen indices;
   Type zero = Type(0.);
   Type one = Type(1.); 
   Type half = Type(0.5); 
 
   int nwalk = Gc.shape()[1];
-  //if(locV.shape()[0] != nwalk || locV.shape()[1] != 3) locV.resize(extents[nwalk][3]);
   if(locV.shape()[0] != nwalk || locV.shape()[1] < 3) 
     APP_ABORT(" Error in AFQMC/HamiltonianOperations/sparse_matrix_energy::calculate_energy(). Incorrect matrix dimensions \n");
   for(int n=0; n<nwalk; n++) 
@@ -87,8 +86,8 @@ inline void calculate_energy(EMat&& locV, const MatA& Gc, MatB&& Gcloc, const Ma
     
   // one-body contribution
   if(addH1) {  
-    boost::const_multi_array_ref<Type,1> haj_ref(haj.origin(), extents[haj.num_elements()]);
-    ma::product(one,ma::T(Gc),haj_ref,one,locV[indices[range_t()][0]]);
+    boost::multi::const_array_ref<Type,1> haj_ref(haj.origin(), {haj.num_elements()});
+    ma::product(one,ma::T(Gc),haj_ref,one,locV({0,locV.shape()[0]},0));
   }
 }
 
@@ -131,13 +130,11 @@ inline void calculate_energy(EMat&& locV, const MatA& Gc, MatB&& Gcloc, const Ma
   assert(Gc.shape()[0] == Vakbl.shape()[1]);
 
   using Type = typename std::decay<MatB>::type::element; 
-//  index_gen indices;
   const Type zero = Type(0.);
   const Type one = Type(1.); 
   const Type half = Type(0.5); 
 
   int nwalk = Gc.shape()[1];
-  //if(locV.shape()[0] != nwalk || locV.shape()[1] != 3) locV.resize(extents[nwalk][3]);
   if(locV.shape()[0] != nwalk || locV.shape()[1] < 3) 
     APP_ABORT(" Error in AFQMC/HamiltonianOperations/sparse_matrix_energy::calculate_energy(). Incorrect matrix dimensions \n");
   for(int n=0; n<nwalk; n++) 
@@ -157,8 +154,8 @@ inline void calculate_energy(EMat&& locV, const MatA& Gc, MatB&& Gcloc, const Ma
   // not splitting the 1-body part yet 
   if(addH1) {
     // one-body contribution
-    boost::multi_array_ref<const Type,1> haj_ref(haj.origin(), extents[haj.num_elements()]);
-    ma::product(one,ma::T(Gc),haj_ref,one,locV[indices[range_t()][0]]);
+    MArray_cref<const Type,1> haj_ref(haj.origin(), {haj.num_elements()});
+    //ma::product(one,ma::T(Gc),haj_ref,one,locV(locV.extension(0),0));  
   }
 
 }
@@ -169,4 +166,5 @@ inline void calculate_energy(EMat&& locV, const MatA& Gc, MatB&& Gcloc, const Ma
 
 }
 
+#endif
 #endif

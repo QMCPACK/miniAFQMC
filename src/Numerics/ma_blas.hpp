@@ -146,11 +146,11 @@ int main(){
 
 	std::vector<double> v = {1.,2.,3.};
 	{
-		boost::multi_array_ref<double, 1> V(v.data(), boost::extents[v.size()]);
+		MArray_ref<double, 1> V(v.data(), boost::extents[v.size()]);
 		ma::scal(2., V);
 		{
 			std::vector<double> v2 = {2.,4.,6.};
-			boost::multi_array_ref<double, 1> V2(v2.data(), boost::extents[v2.size()]);
+			MArray_ref<double, 1> V2(v2.data(), boost::extents[v2.size()]);
 			assert( V == V2 );
 		}
 	}
@@ -160,7 +160,7 @@ int main(){
 		4.,5.,6.,
 		7.,8.,9.
 	};
-	boost::multi_array_ref<double, 2> M(m.data(), boost::extents[3][3]);
+	MArray_ref<double, 2> M(m.data(), boost::extents[3][3]);
 	assert( M.num_elements() == m.size());
 	ma::scal(2., M[2]);
 	{
@@ -169,11 +169,11 @@ int main(){
 			4.,5.,6.,
 			14.,16.,18.
 		};
-		boost::multi_array_ref<double, 2> M2(m2.data(), boost::extents[3][3]);
+		MArray_ref<double, 2> M2(m2.data(), boost::extents[3][3]);
 		assert( M == M2 );
 	}
-	typedef boost::multi_array_types::index_range range_t;
-	boost::multi_array_types::index_gen indices;
+	typedef MArray_types::index_range range_t;
+	MArray_types::index_gen indices;
 
 	ma::scal(2., M[ indices[range_t(0,3)][2] ]);
 	{
@@ -182,7 +182,7 @@ int main(){
 			4.,5.,12.,
 			14.,16.,36.
 		};
-		boost::multi_array_ref<double, 2> M2(m2.data(), boost::extents[3][3]);
+		MArray_ref<double, 2> M2(m2.data(), boost::extents[3][3]);
 		assert( M == M2 );
 	}
 	ma::scal(2., M[ indices[range_t(0,2)][1] ]);
@@ -192,7 +192,7 @@ int main(){
 			4.,10.,12.,
 			14.,16.,36.
 		};
-		boost::multi_array_ref<double, 2> M2(m2.data(), boost::extents[3][3]);
+		MArray_ref<double, 2> M2(m2.data(), boost::extents[3][3]);
 		assert( M == M2 );
 	}
 	ma::axpy(2., M[1], M[0]); // M[0] += a*M[1]
@@ -202,7 +202,7 @@ int main(){
 			4.,10.,12.,
 			14.,16.,36.
 		};
-		boost::multi_array_ref<double, 2> M2(m2.data(), boost::extents[3][3]);
+		MArray_ref<double, 2> M2(m2.data(), boost::extents[3][3]);
 		assert( M == M2 );
 	}
 	{
@@ -211,16 +211,16 @@ int main(){
 			4.,10.,12., 7.,
 			14.,16.,36., 1.
 		};
-		boost::multi_array_ref<double, 2> M(m.data(), boost::extents[3][4]);
+		MArray_ref<double, 2> M(m.data(), boost::extents[3][4]);
 		assert( M[2][0] == 14. );
 		std::vector<double> x = {1.,2.,3., 4.};
-		boost::multi_array_ref<double, 1> X(x.data(), boost::extents[x.size()]);
+		MArray_ref<double, 1> X(x.data(), boost::extents[x.size()]);
 		std::vector<double> y = {4.,5.,6.};
-		boost::multi_array_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
+		MArray_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
 		ma::gemv<'T'>(1., M, X, 0., Y); // y := M x
 
 		std::vector<double> y2 = {183., 88.,158.};
-		boost::multi_array_ref<double, 1> Y2(y2.data(), boost::extents[y2.size()]);
+		MArray_ref<double, 1> Y2(y2.data(), boost::extents[y2.size()]);
 		assert( Y == Y2 );
 	}
 	{
@@ -229,20 +229,20 @@ int main(){
 			4.,10.,12., 7.,
 			14.,16.,36., 1.
 		};
-		boost::multi_array_ref<double, 2> M(m.data(), boost::extents[3][4]);
-		typedef boost::multi_array_types::index_range range_t;
-		boost::multi_array_types::index_gen indices;
+		MArray_ref<double, 2> M(m.data(), boost::extents[3][4]);
+		typedef MArray_types::index_range range_t;
+		MArray_types::index_gen indices;
 
 		std::vector<double> x = {1.,2.};
-		boost::multi_array_ref<double, 1> X(x.data(), boost::extents[x.size()]);
+		MArray_ref<double, 1> X(x.data(), boost::extents[x.size()]);
 		std::vector<double> y = {4.,5.};
-		boost::multi_array_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
+		MArray_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
 		
 		auto const& mm = M[ indices[range_t(0,2,1)][range_t(0,2,1)] ];//, X, 0., Y); // y := M x
 		ma::gemv<'T'>(1., M[ indices[range_t(0,2,1)][range_t(0,2,1)] ], X, 0., Y); // y := M x
 
 		std::vector<double> y2 = {57., 24.};
-		boost::multi_array_ref<double, 1> Y2(y2.data(), boost::extents[y2.size()]);
+		MArray_ref<double, 1> Y2(y2.data(), boost::extents[y2.size()]);
 		assert( Y == Y2 );
 	}
 	{
@@ -252,15 +252,15 @@ int main(){
 			14.,16.,36.,
 			4.,9.,1.
 		};
-		boost::multi_array_ref<double, 2> M(m.data(), boost::extents[4][3]);
+		MArray_ref<double, 2> M(m.data(), boost::extents[4][3]);
 		assert( M[2][0] == 14. );
 		std::vector<double> x = {1.,2.,3.};
-		boost::multi_array_ref<double, 1> X(x.data(), boost::extents[x.size()]);
+		MArray_ref<double, 1> X(x.data(), boost::extents[x.size()]);
 		std::vector<double> y = {4.,5.,6., 7.};
-		boost::multi_array_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
+		MArray_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
 		ma::gemv<'T'>(1., M, X, 0., Y); // y := M x
 		std::vector<double> y2 = {147., 60.,154.,25.};
-		boost::multi_array_ref<double, 1> Y2(y2.data(), boost::extents[y2.size()]);
+		MArray_ref<double, 1> Y2(y2.data(), boost::extents[y2.size()]);
 		assert( Y == Y2 );
 	}
 	{
@@ -269,15 +269,15 @@ int main(){
 			4.,10.,12., 7.,
 			14.,16.,36., 1.
 		};
-		boost::multi_array_ref<double, 2> M(m.data(), boost::extents[3][4]);
+		MArray_ref<double, 2> M(m.data(), boost::extents[3][4]);
 		assert( M[2][0] == 14. );
 		std::vector<double> x = {1.,2.,3.};
-		boost::multi_array_ref<double, 1> X(x.data(), boost::extents[x.size()]);
+		MArray_ref<double, 1> X(x.data(), boost::extents[x.size()]);
 		std::vector<double> y = {4.,5.,6.,7.};
-		boost::multi_array_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
+		MArray_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
 		ma::gemv<'N'>(1., M, X, 0., Y); // y := M^T x
 		std::vector<double> y2 = {59., 92., 162., 26.};
-		boost::multi_array_ref<double, 1> Y2(y2.data(), boost::extents[y2.size()]);
+		MArray_ref<double, 1> Y2(y2.data(), boost::extents[y2.size()]);
 		assert( Y == Y2 );
 	}
 	{
@@ -285,18 +285,18 @@ int main(){
 			9.,24.,30., 2.,
 			4.,10.,12., 9.
 		};
-		boost::multi_array_ref<double, 2> A(a.data(), boost::extents[2][4]);
+		MArray_ref<double, 2> A(a.data(), boost::extents[2][4]);
 		assert( A.num_elements() == a.size() );
 		std::vector<double> b = {
 			9.,24., 6., 8., 
 			4.,10., 2., 5.,
 			14.,16., 9., 0.
 		};
-		boost::multi_array_ref<double, 2> B(b.data(), boost::extents[3][4]);
+		MArray_ref<double, 2> B(b.data(), boost::extents[3][4]);
 		assert( B.num_elements() == b.size());
 
 		std::vector<double> c(6);
-		boost::multi_array_ref<double, 2> C(c.data(), boost::extents[3][2]);
+		MArray_ref<double, 2> C(c.data(), boost::extents[3][2]);
 		assert( C.num_elements() == c.size());
 
 		ma::gemm<'T', 'N'>(1., A, B, 0., C); // C = T(A*T(B)) = B*T(A) or T(C) = A*T(B)
@@ -306,7 +306,7 @@ int main(){
 			346., 185.,
 			780., 324.
 		};
-		boost::multi_array_ref<double, 2> TAB(tab.data(), boost::extents[3][2]);
+		MArray_ref<double, 2> TAB(tab.data(), boost::extents[3][2]);
 		assert( TAB.num_elements() == tab.size());
 
 		assert( C == TAB );
@@ -316,17 +316,17 @@ int main(){
 			9.,24.,30.,
 			4.,10.,12.
 		};
-		boost::multi_array_ref<double, 2> A(a.data(), boost::extents[2][3]);
+		MArray_ref<double, 2> A(a.data(), boost::extents[2][3]);
 		assert( A.num_elements() == a.size() );
 		std::vector<double> b = {
 			9.,24., 6., 8., 
 			4.,10., 2., 5.,
 		};
-		boost::multi_array_ref<double, 2> B(b.data(), boost::extents[2][4]);
+		MArray_ref<double, 2> B(b.data(), boost::extents[2][4]);
 		assert( B.num_elements() == b.size());
 
 		std::vector<double> c(12);
-		boost::multi_array_ref<double, 2> C(c.data(), boost::extents[4][3]);
+		MArray_ref<double, 2> C(c.data(), boost::extents[4][3]);
 		assert( C.num_elements() == c.size());
 
 
@@ -338,7 +338,7 @@ int main(){
 			62., 164., 204.,
 			92., 242., 300.
 		};
-		boost::multi_array_ref<double, 2> TAB(tab.data(), boost::extents[4][3]);
+		MArray_ref<double, 2> TAB(tab.data(), boost::extents[4][3]);
 		assert( TAB.num_elements() == tab.size());
 
 		cout << "A = \n";
@@ -366,18 +366,18 @@ int main(){
 			3.,11.,45.,
 			1.,2., 6.
 		};
-		boost::multi_array_ref<double, 2> A(a.data(), boost::extents[4][3]);
+		MArray_ref<double, 2> A(a.data(), boost::extents[4][3]);
 		assert( A.num_elements() == a.size() );
 		std::vector<double> b = {
 			9.,24., 6., 8., 
 			4.,10., 2., 5.,
 			14.,16., 9., 0.
 		};
-		boost::multi_array_ref<double, 2> B(b.data(), boost::extents[3][4]);
+		MArray_ref<double, 2> B(b.data(), boost::extents[3][4]);
 		assert( B.num_elements() == b.size());
 
 		std::vector<double> c(9);
-		boost::multi_array_ref<double, 2> C(c.data(), boost::extents[3][3]);
+		MArray_ref<double, 2> C(c.data(), boost::extents[3][3]);
 		assert( C.num_elements() == c.size());
 
 		ma::gemm<'N', 'N'>(1., A, B, 0., C); // C = B*A = T(T(A)*T(B)) or T(C) = T(A)*T(B)
@@ -387,7 +387,7 @@ int main(){
 			87., 228., 360.,
 			217., 595., 1017.
 		};
-		boost::multi_array_ref<double, 2> TAB(tab.data(), boost::extents[3][3]);
+		MArray_ref<double, 2> TAB(tab.data(), boost::extents[3][3]);
 		assert( TAB.num_elements() == tab.size());
 		assert( C == TAB );
 	}
@@ -397,17 +397,17 @@ int main(){
 			4.,10.,12.,
 			14.,16.,36.
 		};
-		boost::multi_array_ref<double, 2> A(a.data(), boost::extents[3][3]);
+		MArray_ref<double, 2> A(a.data(), boost::extents[3][3]);
 		assert( A.num_elements() == a.size() );
 		std::vector<double> b = {
 			9.,24., 4.,
 			4.,10., 1.,
 			14.,16.,3.
 		};
-		boost::multi_array_ref<double, 2> B(b.data(), boost::extents[3][3]);
+		MArray_ref<double, 2> B(b.data(), boost::extents[3][3]);
 		assert( B.num_elements() == b.size());
 		std::vector<double> c(9);
-		boost::multi_array_ref<double, 2> C(c.data(), boost::extents[3][3]);
+		MArray_ref<double, 2> C(c.data(), boost::extents[3][3]);
 		assert( C.num_elements() == c.size());
 
 		
@@ -421,18 +421,18 @@ int main(){
 			9.,24.,30.,
 			4.,10.,12.
 		};
-		boost::multi_array_ref<double, 2> A(a.data(), boost::extents[2][3]);
+		MArray_ref<double, 2> A(a.data(), boost::extents[2][3]);
 		assert( A.num_elements() == a.size() );
 		std::vector<double> b = {
 			9.,24., 6., 8., 
 			4.,10., 2., 5.,
 			14.,16., 9., 0.
 		};
-		boost::multi_array_ref<double, 2> B(b.data(), boost::extents[3][4]);
+		MArray_ref<double, 2> B(b.data(), boost::extents[3][4]);
 		assert( B.num_elements() == b.size());
 
 		std::vector<double> c(8);
-		boost::multi_array_ref<double, 2> C(c.data(), boost::extents[4][2]);
+		MArray_ref<double, 2> C(c.data(), boost::extents[4][2]);
 		assert( C.num_elements() == c.size());
 
 		ma::gemm<'T', 'T'>(1., A, B, 0., C); // C = T(A*B) = T(B)*T(A) or T(C) = A*B
@@ -443,7 +443,7 @@ int main(){
 			372, 152,
 			192, 82
 		};
-		boost::multi_array_ref<double, 2> TAB(tab.data(), boost::extents[4][2]);
+		MArray_ref<double, 2> TAB(tab.data(), boost::extents[4][2]);
 		assert( TAB.num_elements() == tab.size());
 		assert( C == TAB );
 	}
@@ -452,7 +452,7 @@ int main(){
 			9.,24.,30., 45.,
 			4.,10.,12., 12.
 		};
-		boost::multi_array_ref<double, 2> A(a.data(), boost::extents[2][4]);
+		MArray_ref<double, 2> A(a.data(), boost::extents[2][4]);
 		assert( A.num_elements() == a.size() );
 		std::vector<double> b = {
 			9.,24., 56.,
@@ -460,13 +460,13 @@ int main(){
 			14.,16., 90.,
 			6., 9., 18.
 		};
-		boost::multi_array_ref<double, 2> B(b.data(), boost::extents[4][3]);
+		MArray_ref<double, 2> B(b.data(), boost::extents[4][3]);
 		assert( B.num_elements() == b.size());
 		std::vector<double> c = {
 			9.,24., 8.,
 			4.,10., 9.
 		};
-		boost::multi_array_ref<double, 2> C(c.data(), boost::extents[3][2]);
+		MArray_ref<double, 2> C(c.data(), boost::extents[3][2]);
 		assert( C.num_elements() == c.size());
 		ma::gemm<'T', 'T'>(1., A, B, 0., C); // C = T(A*B) = T(B)*T(A) or T(C) = A*B
 	}

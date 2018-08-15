@@ -12,6 +12,7 @@
 // Alfredo Correa, correaa@llnl.gov, Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
 
+#ifndef __THC_ONLY__
 #ifndef SPARSE_CFO_MATRIX_HPP
 #define SPARSE_CFO_MATRIX_HPP
 
@@ -917,5 +918,6 @@ class csr_matrix: public ucsr_matrix<ValType,IndxType,IntType,ValType_alloc,IsRo
 }
 }
 
+#endif
 #endif
 

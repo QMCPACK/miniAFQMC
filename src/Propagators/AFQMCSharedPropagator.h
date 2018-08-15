@@ -46,10 +46,10 @@ class AFQMCSharedPropagator: public AFQMCInfo
 {
   protected:
 
-  using CVector = boost::multi_array<ComplexType,1>;  
-  using CVector_ref = boost::multi_array_ref<ComplexType,1>;  
-  using CMatrix = boost::multi_array<ComplexType,2>;  
-  using CMatrix_ref = boost::multi_array_ref<ComplexType,2>;  
+  using CVector = MArray<ComplexType,1>;  
+  using CVector_ref = MArray_ref<ComplexType,1>;  
+  using CMatrix = MArray<ComplexType,2>;  
+  using CMatrix_ref = MArray_ref<ComplexType,2>;  
   using SHM_Buffer = mpi3_SHMBuffer<ComplexType>;  
 
   public:
@@ -68,11 +68,12 @@ class AFQMCSharedPropagator: public AFQMCInfo
             last_nextra(-1),
             last_task_index(-1),
             old_dt(-123456.789),
-            order(6)
+            order(6),
+            first_call(true)
     {
       transposed_vHS_ = wfn.transposed_vHS();
       transposed_G_ = wfn.transposed_G_for_vbias();
-      if(not transposed_vHS_) local_vHS.resize(extents[NMO][NMO]);
+      if(not transposed_vHS_) local_vHS.reextent({NMO,NMO});
       parse();  
     }
 
@@ -133,6 +134,8 @@ class AFQMCSharedPropagator: public AFQMCInfo
 
     int nback_prop_steps;
 
+    bool first_call;
+
     // type of propagation
     bool free_projection;
     bool hybrid;
@@ -166,7 +169,7 @@ class AFQMCSharedPropagator: public AFQMCInfo
 
     template<class WSet>
     void apply_propagators(WSet& wset, int ni, int tk0, int tkN, int ntask_total_serial,
-                           boost::multi_array_ref<ComplexType,3>& vHS3D);
+                           MArray_ref<ComplexType,3>& vHS3D);
 
     ComplexType apply_bound_vbias(ComplexType v, RealType sqrtdt)
     {

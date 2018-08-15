@@ -10,13 +10,13 @@ namespace afqmc
 
 Propagator getPropagator(TaskGroup_& TG, int NMO, int NAEA, Wavefunction& wfn, RandomGenerator_t* rng)
 {
-  using CVector = boost::multi_array<ComplexType,1>; 
-  using CMatrix = boost::multi_array<ComplexType,2>; 
+  using CVector = MArray<ComplexType,1>; 
+  using CMatrix = MArray<ComplexType,2>; 
 
   RealType vbias_bound=50.0;
 
   // buld mean field expectation value of the Cholesky matrix
-  CVector vMF(extents[wfn.local_number_of_cholesky_vectors()]);
+  CVector vMF({size_t(wfn.local_number_of_cholesky_vectors())});
   std::fill_n(vMF.origin(),vMF.num_elements(),ComplexType(0));
   {
     wfn.vMF(vMF);

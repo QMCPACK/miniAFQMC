@@ -296,8 +296,6 @@ inline Tp MixedDensityMatrix(const MatA& hermA, const MatB& B, MatC&& C, Mat&& T
   }
 
   using ma::T;
-//  using boost::indices;
-//  using range_t = boost::multi_array_types::index_range;
 
   int N0,Nn,sz=B.shape()[1];
   std::tie(N0,Nn) = FairDivideBoundary(comm.rank(),sz,comm.size());
@@ -305,8 +303,8 @@ inline Tp MixedDensityMatrix(const MatA& hermA, const MatB& B, MatC&& C, Mat&& T
   // T(B)*conj(A) 
   if(N0!=Nn)
     ma::product(hermA,
-              B[indices[range_t()][range_t(N0,Nn)]],
-              T1[indices[range_t()][range_t(N0,Nn)]]);  
+                B({0,B.shape()[0]},{N0,Nn}),
+                T1({0,T1.shape()[0]},{N0,Nn}));
 
   comm.barrier();
 
@@ -320,24 +318,18 @@ inline Tp MixedDensityMatrix(const MatA& hermA, const MatB& B, MatC&& C, Mat&& T
   if(compact) {
 
     // C = T(T1) * T(B)
-    //ma::product(T1[indices[range_t(N0,Nn)][range_t()]],
-    //            T(B),
-    //            C[indices[range_t(N0,Nn)][range_t()]]); 
     if(N0!=Nn)
-      ma::product(T(T1[indices[range_t()][range_t(N0,Nn)]]),
+      ma::product(T(T1({0,T1.shape()[0]},{N0,Nn})),
                 T(B),
-                C[indices[range_t(N0,Nn)][range_t()]]); 
+                C({N0,Nn},{0,C.shape()[1]}));
 
   } else {
 
     // T2 = T(T1) * T(B)
-    //ma::product(T1[indices[range_t(N0,Nn)][range_t()]],
-    //            T(B),
-    //            T2[indices[range_t(N0,Nn)][range_t()]]); 
     if(N0!=Nn)
-      ma::product(T(T1[indices[range_t()][range_t(N0,Nn)]]),
+      ma::product(T(T1({0,T1.shape()[0]},{N0,Nn})),
                 T(B),
-                T2[indices[range_t(N0,Nn)][range_t()]]); 
+                T2({N0,Nn},{0,T2.shape()[1]}));
 
     comm.barrier();
     
@@ -347,8 +339,8 @@ inline Tp MixedDensityMatrix(const MatA& hermA, const MatB& B, MatC&& C, Mat&& T
     // C = conj(A) * T2
     if(N0!=Nn)
       ma::product(T(hermA),
-                T2[indices[range_t()][range_t(N0,Nn)]],
-                C[indices[range_t()][range_t(N0,Nn)]]);
+                T2({0,T2.shape()[0]},{N0,Nn}),
+                C({0,C.shape()[0]},{N0,Nn}));
 
   }
 
@@ -385,8 +377,6 @@ inline Tp Overlap(const MatA& hermA, const MatB& B, Mat&& T1, IBuffer& IWORK, co
   assert( B.shape()[1] == T1.shape()[1] );
 
   using ma::T;
-//  using boost::indices;
-//  using range_t = boost::multi_array_types::index_range;
 
   int N0,Nn,sz = B.shape()[1];
   std::tie(N0,Nn) = FairDivideBoundary(comm.rank(),sz,comm.size());
@@ -394,8 +384,8 @@ inline Tp Overlap(const MatA& hermA, const MatB& B, Mat&& T1, IBuffer& IWORK, co
   // T(B)*conj(A) 
   if(N0!=Nn)
     ma::product(hermA,
-              B[indices[range_t()][range_t(N0,Nn)]],
-              T1[indices[range_t()][range_t(N0,Nn)]]);
+              B({0,B.shape()[0]},{N0,Nn}),
+              T1({0,T1.shape()[0]},{N0,Nn}));
 
   comm.barrier();
 

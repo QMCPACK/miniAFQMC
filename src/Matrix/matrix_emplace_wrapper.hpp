@@ -10,6 +10,7 @@
 // Miguel Morales, moralessilva2@llnl.gov, Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
 
+#ifndef __THC_ONLY__
 #ifndef MATRIX_EMPLACE_WRAPPER_HPP
 #define MATRIX_EMPLACE_WRAPPER_HPP
 
@@ -157,5 +158,6 @@ struct matrix_emplace_wrapper {
 
 }
 
+#endif
 #endif
 

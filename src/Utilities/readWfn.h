@@ -28,7 +28,7 @@ void read_wavefunction(std::string filename, int& ndets, std::string& type, WALK
         std::vector<int>& excitations); 
 
 // modify for multideterminant case based on type
-int readWfn( std::string fileName, boost::multi_array<ComplexType,3>& OrbMat, int NMO, int NAEA, int NAEB, int det = 0);
+int readWfn( std::string fileName, MArray<ComplexType,3>& OrbMat, int NMO, int NAEA, int NAEB, int det = 0);
 
 }
 

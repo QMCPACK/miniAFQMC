@@ -21,6 +21,7 @@
 #include <io/hdf_stl.h>
 #include <io/hdf_hyperslab.h>
 #include <io/hdf_ma.h>
+#include <io/hdf_multi.h>
 #endif
 #include <stack>
 #include <bitset>

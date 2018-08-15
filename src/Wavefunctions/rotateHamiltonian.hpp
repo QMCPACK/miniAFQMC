@@ -57,20 +57,20 @@ inline void check_wavefunction_consistency(WALKER_TYPES type, PsiT_Matrix *A, Ps
     }
 }
 
-inline boost::multi_array<SPComplexType,1> rotateHij(WALKER_TYPES walker_type, int NMO, int NAEA, int NAEB, PsiT_Matrix *Alpha, PsiT_Matrix *Beta, const boost::multi_array<ComplexType,2>& H1)
+inline MArray<SPComplexType,1> rotateHij(WALKER_TYPES walker_type, int NMO, int NAEA, int NAEB, PsiT_Matrix *Alpha, PsiT_Matrix *Beta, const MArray<ComplexType,2>& H1)
 {
-  boost::multi_array<SPComplexType,1> N;
+  MArray<SPComplexType,1> N;
   const ComplexType one = ComplexType(1.0);
   const ComplexType zero = ComplexType(0.0);
 
   // 1-body part 
   if(walker_type == CLOSED) {
 
-    N.resize(extents[NAEA*NMO]);
+    N.reextent({NAEA*NMO});
 #if(AFQMC_SP)
-    boost::multi_array<ComplexType,2> N_(extents[NAEA][NMO]);
+    MArray<ComplexType,2> N_({NAEA,NMO});
 #else
-    boost::multi_array_ref<ComplexType,2> N_(N.origin(),extents[NAEA][NMO]);
+    MArray_ref<ComplexType,2> N_(N.origin(),{NAEA,NMO});
 #endif
 
     ma::product(*Alpha,H1,N_);
@@ -81,13 +81,13 @@ inline boost::multi_array<SPComplexType,1> rotateHij(WALKER_TYPES walker_type, i
 
   } else if(walker_type == COLLINEAR) {
 
-    N.resize(extents[(NAEA+NAEB)*NMO]);
+    N.reextent({(NAEA+NAEB)*NMO});
 #if(AFQMC_SP)
-    boost::multi_array<ComplexType,2> NA_(extents[NAEA][NMO]);
-    boost::multi_array<ComplexType,2> NB_(extents[NAEB][NMO]);
+    MArray<ComplexType,2> NA_({NAEA,NMO});
+    MArray<ComplexType,2> NB_({NAEB,NMO});
 #else
-    boost::multi_array_ref<ComplexType,2> NA_(N.origin(),extents[NAEA][NMO]);
-    boost::multi_array_ref<ComplexType,2> NB_(N.origin()+NAEA*NMO,extents[NAEB][NMO]);
+    MArray_ref<ComplexType,2> NA_(N.origin(),{NAEA,NMO});
+    MArray_ref<ComplexType,2> NB_(N.origin()+NAEA*NMO,{NAEB,NMO});
 #endif
 
     ma::product(*Alpha,H1,NA_);
@@ -99,11 +99,11 @@ inline boost::multi_array<SPComplexType,1> rotateHij(WALKER_TYPES walker_type, i
 
   } else if(walker_type == NONCOLLINEAR) {
 
-    N.resize(extents[(NAEA+NAEB)*2*NMO]);
+    N.reextent({(NAEA+NAEB)*2*NMO});
 #if(AFQMC_SP)
-    boost::multi_array<ComplexType,2> N_(extents[NAEA+NAEB][2*NMO]);
+    MArray<ComplexType,2> N_({NAEA+NAEB,2*NMO});
 #else
-    boost::multi_array_ref<ComplexType,2> N_(N.origin(),extents[NAEA+NAEB][2*NMO]);
+    MArray_ref<ComplexType,2> N_(N.origin(),{NAEA+NAEB,2*NMO});
 #endif
 
     ma::product(*Alpha,H1,N_);

@@ -247,8 +247,8 @@ int main(int argc, char **argv)
   WalkerSet WSet(walkTG,AFinfo,&random_th);
   // initialize walkers to trial wave function
   {
-    boost::multi_array<ComplexType,2> A(extents[NMO][NAEA]);
-    boost::multi_array<ComplexType,2> B(extents[NMO][NAEA]);
+    Matrix<ComplexType> A({NMO,NAEA});
+    Matrix<ComplexType> B({NMO,NAEA});
     csr::CSR2MA('H',(*Wfn.getOrbMat())[0],A);
     if(walker_type==COLLINEAR) {
       csr::CSR2MA('H',(*Wfn.getOrbMat())[1],B);

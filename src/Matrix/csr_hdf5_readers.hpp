@@ -9,6 +9,7 @@
 //// File created by: Miguel Morales, moralessilva2@llnl.gov, Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////////////
 
+#ifndef __THC_ONLY__
 #ifndef QMCPLUSPLUS_AFQMC_CSR_HDF5_READERS_HPP
 #define QMCPLUSPLUS_AFQMC_CSR_HDF5_READERS_HPP
 
@@ -741,5 +742,6 @@ inline void write_distributed_CSR_to_HDF(SparseArray2D const& SpM, hdf_archive& 
 
 }
 
+#endif
 #endif
 

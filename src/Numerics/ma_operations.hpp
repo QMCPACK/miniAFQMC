@@ -26,6 +26,7 @@
 #include<vector>
 
 #include "boost/multi_array.hpp"
+#include "multi/array.hpp"
 #include "Utilities/type_conversion.hpp"
 
 namespace ma{
@@ -71,11 +72,11 @@ template<class MultiArray2DA,
                                                 == std::decay<MultiArray2DB>::type::dimensionality)>::type
         >
 MultiArray2DB transpose(MultiArray2DA&& A, MultiArray2DB&& B){
-        using range_t = boost::multi_array_types::index_range;
         assert(A.shape()[0] == B.shape()[1]);
         assert(A.shape()[1] == B.shape()[0]);
         for(int i = 0; i != A.shape()[0]; ++i)
-                B[boost::indices[range_t()][i]] = A[boost::indices[i][range_t()]];
+                B({0,B.shape()[0]},i) = A(i,{0,A.shape()[1]}); 
+                //B(B.extension(0),i) = A(i,A.extension(1)); 
         return std::forward<MultiArray2DB>(B);
 }
 
@@ -361,13 +362,13 @@ template<class MultiArray2D,
 MultiArray2D exp(MultiArray2D const& A) { 
         using Type = typename MultiArray2D::element;
         using RealType = typename qmcplusplus::afqmc::remove_complex<Type>::value_type;
-        using TVec = boost::multi_array<RealType,1>;
-        using TMat = boost::multi_array<Type,2>;
+        using TVec = boost::multi::array<RealType,1>;
+        using TMat = boost::multi::array<Type,2>;
         using eigSys = std::pair<TVec,TMat>; 
         assert(A.shape()[0]==A.shape()[1]);
         size_t N = A.shape()[0];
 
-        MultiArray2D ExpA(boost::extents[N][N]);
+        MultiArray2D ExpA({N,N});
         std::fill_n(ExpA.origin(),N*N,Type(0));
 
         if(is_hermitian(A)) { 
@@ -376,7 +377,7 @@ MultiArray2D exp(MultiArray2D const& A) {
           eigSys V = symEig<TVec,TMat>(A);        
 
           // exp(A) = V*exp(M)*H(Z) 
-          MultiArray2D TA(boost::extents[N][N]);
+          MultiArray2D TA({N,N});
           for(int i=0; i<N; i++)
             for(int j=0; j<N; j++)
               TA[i][j] = V.second[i][j] * std::exp(V.first[j]);
@@ -442,18 +443,18 @@ int main(){
 			14.,16.,36.//,
 		//	9., 6., 1.
 		};
-		boost::multi_array_ref<double, 2> M(m.data(), boost::extents[3][3]);
+		MArray_ref<double, 2> M(m.data(), boost::extents[3][3]);
 		assert(M.num_elements() == m.size());
 		std::vector<double> x = {1.,2.,3.};
-		boost::multi_array_ref<double, 1> X(x.data(), boost::extents[x.size()]);
+		MArray_ref<double, 1> X(x.data(), boost::extents[x.size()]);
 		std::vector<double> y(3);
-		boost::multi_array_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
+		MArray_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
 
 		using ma::T;
 		ma::product(M, X, Y); // Y := M X
 		
 		std::vector<double> mx = {147., 60.,154.};
-		boost::multi_array_ref<double, 1> MX(mx.data(), boost::extents[mx.size()]);
+		MArray_ref<double, 1> MX(mx.data(), boost::extents[mx.size()]);
 		assert( MX == Y );
 	}
 	{
@@ -462,18 +463,18 @@ int main(){
 			4.,10.,12., 1.,
 			14.,16.,36., 20.
 		};
-		boost::multi_array_ref<double, 2> M(m.data(), boost::extents[3][4]);
+		MArray_ref<double, 2> M(m.data(), boost::extents[3][4]);
 		assert(M.num_elements() == m.size());
 		std::vector<double> x = {1.,2.,3., 4.};
-		boost::multi_array_ref<double, 1> X(x.data(), boost::extents[x.size()]);
+		MArray_ref<double, 1> X(x.data(), boost::extents[x.size()]);
 		std::vector<double> y(3);
-		boost::multi_array_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
+		MArray_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
 
 		using ma::T;
 		ma::product(M, X, Y); // Y := M X
 
 		std::vector<double> mx = {155., 64.,234.};
-		boost::multi_array_ref<double, 1> MX(mx.data(), boost::extents[mx.size()]);
+		MArray_ref<double, 1> MX(mx.data(), boost::extents[mx.size()]);
 		assert( MX == Y );
 	}
 	{
@@ -482,18 +483,18 @@ int main(){
 			4.,10.,12., 1.,
 			14.,16.,36., 20.
 		};
-		boost::multi_array_ref<double, 2> M(m.data(), boost::extents[3][4]);
+		MArray_ref<double, 2> M(m.data(), boost::extents[3][4]);
 		assert(M.num_elements() == m.size());
 		std::vector<double> x = {1.,2.,3.};
-		boost::multi_array_ref<double, 1> X(x.data(), boost::extents[x.size()]);
+		MArray_ref<double, 1> X(x.data(), boost::extents[x.size()]);
 		std::vector<double> y(4);
-		boost::multi_array_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
+		MArray_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
 
 		using ma::T;
 		ma::product(T(M), X, Y); // Y := T(M) X
 		
 		std::vector<double> mx = {59., 92., 162., 64.};
-		boost::multi_array_ref<double, 1> MX(mx.data(), boost::extents[mx.size()]);
+		MArray_ref<double, 1> MX(mx.data(), boost::extents[mx.size()]);
 		assert( MX == Y );
 	}
 	{
@@ -502,15 +503,15 @@ int main(){
 			4.,10.,12., 7.,
 			14.,16.,36., 1.
 		};
-		boost::multi_array_ref<double, 2> M(m.data(), boost::extents[3][4]);
+		MArray_ref<double, 2> M(m.data(), boost::extents[3][4]);
 		std::vector<double> x = {1.,2.,3., 4.};
-		boost::multi_array_ref<double, 1> X(x.data(), boost::extents[x.size()]);
+		MArray_ref<double, 1> X(x.data(), boost::extents[x.size()]);
 		std::vector<double> y = {4.,5.,6.};
-		boost::multi_array_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
+		MArray_ref<double, 1> Y(y.data(), boost::extents[y.size()]);
 		ma::product(M, X, Y); // y := M x
 		
 		std::vector<double> y2 = {183., 88.,158.};
-		boost::multi_array_ref<double, 1> Y2(y2.data(), boost::extents[y2.size()]);
+		MArray_ref<double, 1> Y2(y2.data(), boost::extents[y2.size()]);
 		assert( Y == Y2 );
 	}
 
@@ -520,7 +521,7 @@ int main(){
 		2.,5.,8.,
 		1.,8.,9.
 	};
-	boost::multi_array_ref<double, 2> M(m.data(), boost::extents[3][3]);
+	MArray_ref<double, 2> M(m.data(), boost::extents[3][3]);
 	assert( ma::is_hermitian(M) );
 	}{
 	std::vector<double> m = {
@@ -528,7 +529,7 @@ int main(){
 		2.,0.  , 5.,0. ,  8.,-1.,
 		1.,0.  , 8.,1. ,  9.,0.,
 	};
-	boost::multi_array_ref<std::complex<double>, 2> M(reinterpret_cast<std::complex<double>*>(m.data()), boost::extents[3][3]);
+	MArray_ref<std::complex<double>, 2> M(reinterpret_cast<std::complex<double>*>(m.data()), boost::extents[3][3]);
 	assert( ma::is_hermitian(M) );
 	}{
 	std::vector<double> m = {
@@ -536,7 +537,7 @@ int main(){
 		2.,5.,8.,
 		1.,8.,9.
 	};
-	boost::multi_array_ref<double, 2> M(m.data(), boost::extents[3][3]);
+	MArray_ref<double, 2> M(m.data(), boost::extents[3][3]);
 	assert( ma::is_hermitian(M) );
 	}
 	{
@@ -545,18 +546,18 @@ int main(){
 		3.,5.,8., 
 		4.,8.,9.
 	};
-	boost::multi_array_ref<double, 2> A(a.data(), boost::extents[3][3]);
+	MArray_ref<double, 2> A(a.data(), boost::extents[3][3]);
 	assert( A.num_elements() == a.size() );
 	std::vector<double> b = {
 		6.,2.,8.,
 		9.,5.,5.,
 		1.,7.,9.
 	};
-	boost::multi_array_ref<double, 2> B(b.data(), boost::extents[3][3]);
+	MArray_ref<double, 2> B(b.data(), boost::extents[3][3]);
 	assert( B.num_elements() == b.size() );
 
 	std::vector<double> c(9);
-	boost::multi_array_ref<double, 2> C(c.data(), boost::extents[3][3]);
+	MArray_ref<double, 2> C(c.data(), boost::extents[3][3]);
 	assert( C.num_elements() == c.size() );
 	
 	ma::product(A, B, C);
@@ -566,7 +567,7 @@ int main(){
 		71., 87., 121.,
 		105., 111., 153.
 	};
-	boost::multi_array_ref<double, 2> AB(ab.data(), boost::extents[3][3]);
+	MArray_ref<double, 2> AB(ab.data(), boost::extents[3][3]);
 	assert( AB.num_elements() == ab.size() );
 
 	for(int i = 0; i != C.shape()[0]; ++i, cout << '\n')
@@ -585,32 +586,32 @@ int main(){
 	
 	ma::product(T(A), B, C);
 	std::vector<double> atb = {37., 45., 59., 53., 81., 97., 87., 105., 129.};
-	boost::multi_array_ref<double, 2> AtB(atb.data(), boost::extents[3][3]);
+	MArray_ref<double, 2> AtB(atb.data(), boost::extents[3][3]);
 	assert(C == AtB);
 	
 	ma::product(A, T(B), C);
 	std::vector<double> abt = {14., 14., 10., 92., 92., 110., 112., 121., 141.};
-	boost::multi_array_ref<double, 2> ABt(abt.data(), boost::extents[3][3]);
+	MArray_ref<double, 2> ABt(abt.data(), boost::extents[3][3]);
 	assert(C == ABt);
 
 	ma::product(T(A), T(B), C);
 	std::vector<double> atbt = {44., 44., 58., 74., 65., 107., 94., 94., 138.};
-	boost::multi_array_ref<double, 2> AtBt(atbt.data(), boost::extents[3][3]);
+	MArray_ref<double, 2> AtBt(atbt.data(), boost::extents[3][3]);
 	assert(C == AtBt);
 
 	
 	}
 	{
 		std::vector<double> a = {37., 45., 59., 53., 81., 97., 87., 105., 129.};
-		boost::multi_array_ref<double, 2> A(a.data(), boost::extents[3][3]);
+		MArray_ref<double, 2> A(a.data(), boost::extents[3][3]);
 		assert(A.num_elements() == a.size());
-		boost::multi_array<double, 2> B = A;
+		MArray<double, 2> B = A;
 		ma::invert(A);
 
-		boost::multi_array<double, 2> Id(boost::extents[3][3]);
+		MArray<double, 2> Id(boost::extents[3][3]);
 		ma::set_identity(Id);
 
-		boost::multi_array<double, 2> Id2(boost::extents[3][3]);
+		MArray<double, 2> Id2(boost::extents[3][3]);
 		ma::product(A, B, Id2);
 						
 		assert( ma::equal(Id, Id2, 1e-14) );

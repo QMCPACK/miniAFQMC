@@ -15,6 +15,7 @@
 #ifndef  AFQMC_MPI3_SHARED_MA_PROXY_HPP
 #define  AFQMC_MPI3_SHARED_MA_PROXY_HPP 
 
+#include "af_config.h"
 #include "alf/boost/mpi3/shared_communicator.hpp"
 #include "Matrix/mpi3_SHMBuffer.hpp"
 
@@ -24,6 +25,8 @@ namespace qmcplusplus
 namespace afqmc
 {
 
+// MAM: now that multi::array works with shared memory, this class is not necessary
+// Now you only need a simple wrapper to store origin and global_shape
 template<typename T>
 class mpi3_shared_ma_proxy
 {
@@ -34,7 +37,7 @@ class mpi3_shared_ma_proxy
   public:
 
     using value_type = T;
-    using ma_type = boost::multi_array_ref<T,2>;
+    using ma_type = MArray_ref<T,2>;
 
     mpi3_shared_ma_proxy(communicator& comm_,
                          std::array<size_type, 2> s_, 
@@ -77,8 +80,8 @@ class mpi3_shared_ma_proxy
     std::array<size_type, 2> offset() const{return offset_;} 
     std::array<size_type, 2> global_shape() const{return global_shape_;} 
 
-    boost::multi_array_ref<T,2> get() { 
-        return boost::multi_array_ref<T,2>(ptr->data(),extents[shape_[0]][shape_[1]]); 
+    MArray_ref<T,2> get() { 
+        return MArray_ref<T,2>(ptr->data(),{shape_[0],shape_[1]}); 
     }
 
   private:

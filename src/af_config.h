@@ -15,6 +15,12 @@
 #include "Matrix/csr_matrix.hpp"
 #include<boost/multi_array.hpp>
 
+#include "multi/array.hpp"
+#include "multi/array_ref.hpp"
+#include "multi/index_range.hpp"
+#include "multi/ordering.hpp"
+namespace multi = boost::multi;
+
 #include "alf/boost/mpi3/shared_window.hpp"
 
 #define AFQMC_DEBUG 3 
@@ -30,12 +36,54 @@
 
 #define PsiT_IN_SHM
 
+#define USING_BOOST_MULTI
+
 namespace qmcplusplus
 {
 
   enum WALKER_TYPES {UNDEFINED_WALKER_TYPE, CLOSED, COLLINEAR, NONCOLLINEAR};
 
   enum SpinTypes {Alpha,Beta};  
+
+  template<typename T>
+    using shm_allocator = boost::mpi3::intranode::allocator<T>;
+
+  // Matrix types
+  template<typename T, std::size_t N, class Alloc = std::allocator<T>> 
+    using MArray = multi::array<T, N, Alloc>;
+  template<typename T, std::size_t N>
+    using MArray_ref = multi::array_ref<T, N>;
+  template<typename T, std::size_t N>
+    using MArray_cref = multi::array_cref<T, N>;
+  template<typename T, class Alloc = std::allocator<T>> 
+    using Matrix = MArray<T,2,Alloc>; 
+  template<typename T>
+    using Matrix_ref = MArray_ref<T,2>;
+  template<typename T, class Alloc = std::allocator<T>> 
+    using Vector = MArray<T,1,Alloc>; 
+  template<typename T>
+    using Vector_ref = MArray_ref<T,1>;
+
+  template<typename T, std::size_t N, class Alloc = shm_allocator<T>> 
+    using SHM_MArray = multi::array<T, N, Alloc>;
+  template<typename T, class Alloc = shm_allocator<T>>
+    using SHM_Matrix = MArray<T,2,Alloc>;
+  template<typename T, class Alloc = shm_allocator<T>>
+    using SHM_Vector = MArray<T,1,Alloc>;
+
+  // Accelerator structures
+  template<typename T, std::size_t N, class Alloc = shm_allocator<T>>
+    using device_MArray = multi::array<T, N, Alloc>;
+  template<typename T, std::size_t N>
+    using device_MArray_ref = multi::array_ref<T,N>;
+  template<typename T, class Alloc = shm_allocator<T>>
+    using device_Matrix = MArray<T,2,Alloc>;
+  template<typename T>
+    using device_Matrix_ref = MArray_ref<T,2>;
+  template<typename T, class Alloc = shm_allocator<T>>
+    using device_Vector = MArray<T,1,Alloc>;
+  template<typename T>
+    using device_Vector_ref = MArray_ref<T,1>;
 
   // new types
   using SpCType_shm_csr_matrix = ma::sparse::csr_matrix<SPComplexType,int,std::size_t,

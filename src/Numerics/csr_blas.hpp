@@ -21,7 +21,7 @@
 #include <complex>
 #include "Utilities/UtilityFunctions.h"
 #include "Matrix/csr_matrix.hpp"
-#include "boost/multi_array.hpp"
+#include "multi/array.hpp"
 
 #include<type_traits> // enable_if
 
@@ -164,9 +164,9 @@ void CSR2MA(char TA, CSR const& A, MultiArray2D& M)
   using Type = typename MultiArray2D::element;
   assert(TA=='N' || TA=='H' || TA=='T');
   if(TA=='N')
-    M.resize(boost::extents[A.shape()[0]][A.shape()[1]]);
+    M.reextent({A.shape()[0],A.shape()[1]});
   else if(TA=='T' || TA=='H')
-    M.resize(boost::extents[A.shape()[1]][A.shape()[0]]);
+    M.reextent({A.shape()[1],A.shape()[0]});
   std::fill_n(M.origin(),M.num_elements(),Type(0));
   auto pbegin = A.pointers_begin();
   auto pend = A.pointers_end();

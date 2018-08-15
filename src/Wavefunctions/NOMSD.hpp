@@ -47,8 +47,8 @@ namespace afqmc
 class NOMSD: public AFQMCInfo
 {
 
-  using CVector = boost::multi_array<ComplexType,1>;  
-  using CMatrix = boost::multi_array<ComplexType,2>;  
+  using CVector = MArray<ComplexType,1>;  
+  using CMatrix = MArray<ComplexType,2>;  
   using SHM_Buffer = mpi3_SHMBuffer<ComplexType>;  
   using shared_mutex = boost::mpi3::mutex;  
 
@@ -150,10 +150,8 @@ class NOMSD: public AFQMCInfo
           HamOp.vbias(G,std::forward<MatA>(v),a);
         else {
           // HamOp expects either alpha or beta, so must be called twice 
-          HamOp.vbias(G[indices[range_t(0,NMO*NMO)][range_t()]]
-                ,std::forward<MatA>(v),a,0.0);
-          HamOp.vbias(G[indices[range_t(NMO*NMO,2*NMO*NMO)][range_t()]]
-                ,std::forward<MatA>(v),a,1.0);
+          HamOp.vbias(G({0,NMO*NMO},{0,G.shape()[1]}),std::forward<MatA>(v),a,0.0);
+          HamOp.vbias(G({NMO*NMO,2*NMO*NMO},{0,G.shape()[1]}),std::forward<MatA>(v),a,1.0);
         }
       }  
       TG.local_barrier();    
@@ -183,9 +181,9 @@ class NOMSD: public AFQMCInfo
     void Energy(WlkSet& wset) {
       int nw = wset.size();
       if(ovlp.num_elements() != nw)
-        ovlp.resize(extents[nw]);
+        ovlp.reextent({nw});
       if(eloc.shape()[0] != nw || eloc.shape()[1] != 3)
-        eloc.resize(extents[nw][3]);
+        eloc.reextent({nw,3});
       Energy(wset,eloc,ovlp);
       TG.local_barrier();
       if(TG.getLocalTGRank()==0) {
@@ -224,7 +222,7 @@ class NOMSD: public AFQMCInfo
     void MixedDensityMatrix(const WlkSet& wset, MatG&& G, bool compact=true, bool transpose=false) {
       int nw = wset.size();
       if(ovlp.num_elements() != nw)
-        ovlp.resize(extents[nw]);
+        ovlp.reextent({nw});
       MixedDensityMatrix(wset,std::forward<MatG>(G),ovlp,compact,transpose);
     }
 
@@ -241,7 +239,7 @@ class NOMSD: public AFQMCInfo
     void MixedDensityMatrix_for_vbias(const WlkSet& wset, MatG&& G) {
       int nw = wset.size();
       if(ovlp.num_elements() != nw)
-        ovlp.resize(extents[nw]);	
+        ovlp.reextent({nw});	
       MixedDensityMatrix(wset,std::forward<MatG>(G),ovlp,compact_G_for_vbias,transposed_G_for_vbias_);
     }
 
@@ -259,7 +257,7 @@ class NOMSD: public AFQMCInfo
     {
       int nw = wset.size();
       if(ovlp.num_elements() != nw)
-        ovlp.resize(extents[nw]);
+        ovlp.reextent({nw});
       Overlap(wset,ovlp);
       TG.local_barrier();
       if(TG.getLocalTGRank()==0) {
@@ -328,7 +326,7 @@ class NOMSD: public AFQMCInfo
     // excited states
     bool excitedState;
     std::vector<std::pair<int,int>> excitations;
-    boost::multi_array<ComplexType,3> excitedOrbMat; 
+    MArray<ComplexType,3> excitedOrbMat; 
     CMatrix extendedMatAlpha;
     CMatrix extendedMatBeta;
     std::pair<int,int> maxOccupExtendedMat;

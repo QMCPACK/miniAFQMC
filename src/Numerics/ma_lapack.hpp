@@ -20,6 +20,7 @@
 
 #include "Utilities/type_conversion.hpp"
 #include "boost/multi_array.hpp"
+#include "multi/array.hpp"
 #include "Numerics/OhmmsBlas.h"
 #include<cassert>
 
@@ -99,7 +100,7 @@ MultiArray2D geqrf(MultiArray2D&& A, Array1D&& TAU, Buffer&& WORK){
 	//assert(A.strides()[0] > std::max(std::size_t(1), A.shape()[0]));
 	assert(A.strides()[1] == 1);
 	assert(TAU.strides()[0] == 1);
-	assert(TAU.size() >= std::max(std::size_t(1), std::min(A.shape()[0], A.shape()[1])));
+	assert(TAU.size() >= std::max(std::size_t(1), std::size_t(std::min(A.shape()[0], A.shape()[1]))));
 	assert(WORK.capacity() >= std::max(std::size_t(1), A.shape()[0]));
 	
 	int status = -1;
@@ -135,7 +136,7 @@ MultiArray2D gelqf(MultiArray2D&& A, Array1D&& TAU, Buffer&& WORK){
 	assert(A.strides()[1] > 0);
 	assert(A.strides()[1] == 1);
 	assert(TAU.strides()[0] == 1);
-	assert(TAU.size() >= std::max(std::size_t(1), std::min(A.shape()[0], A.shape()[1])));
+	assert(TAU.size() >= std::max(std::size_t(1), td::size_t(std::min(A.shape()[0], A.shape()[1]))));
 	assert(WORK.capacity() >= std::max(std::size_t(1), A.shape()[1]));
 
 	int status = -1;
@@ -157,7 +158,7 @@ int gqr_optimal_workspace_size(MultiArray2D const& A){
 	typename MultiArray2D::element WORK;
 	int status = -1;
 	LAPACK::gqr(
-		A.shape()[1], A.shape()[0], std::max(std::size_t(1), std::min(A.shape()[0], A.shape()[1])), 
+		A.shape()[1], A.shape()[0], std::max(std::size_t(1), std::size_t(std::min(A.shape()[0], A.shape()[1]))), 
                 nullptr, A.strides()[0], nullptr, 
 		&WORK, -1, 
 		status
@@ -170,12 +171,12 @@ template<class MultiArray2D, class Array1D, class Buffer>
 MultiArray2D gqr(MultiArray2D&& A, Array1D&& TAU, Buffer&& WORK){
 	assert(A.strides()[1] == 1);
 	assert(TAU.strides()[0] == 1);
-	assert(TAU.size() >= std::max(std::size_t(1), std::min(A.shape()[0], A.shape()[1])));
+	assert(TAU.size() >= std::max(std::size_t(1), std::size_t(std::min(A.shape()[0], A.shape()[1]))));
 	assert(WORK.capacity() >= std::max(std::size_t(1), A.shape()[0]));
 
 	int status = -1;
 	LAPACK::gqr(
-		A.shape()[1], A.shape()[0], std::max(std::size_t(1), std::min(A.shape()[0], A.shape()[1])), 
+		A.shape()[1], A.shape()[0], std::max(std::size_t(1), std::size_t(std::min(A.shape()[0], A.shape()[1]))), 
 		A.origin(), A.strides()[0], TAU.data(), 
 		WORK.data(), WORK.capacity(), 
 		status
@@ -192,7 +193,7 @@ int glq_optimal_workspace_size(MultiArray2D const& A){
 	typename MultiArray2D::element WORK;
 	int status = -1;
 	LAPACK::glq(
-		A.shape()[1], A.shape()[0], std::max(std::size_t(1), std::min(A.shape()[0], A.shape()[1])), 
+		A.shape()[1], A.shape()[0], std::max(std::size_t(1), std::size_t(std::min(A.shape()[0], A.shape()[1]))), 
                 nullptr, A.strides()[0], nullptr, 
 		&WORK, -1, 
 		status
@@ -205,12 +206,12 @@ template<class MultiArray2D, class Array1D, class Buffer>
 MultiArray2D glq(MultiArray2D&& A, Array1D&& TAU, Buffer&& WORK){
 	assert(A.strides()[1] == 1);
 	assert(TAU.strides()[0] == 1);
-	assert(TAU.size() >= std::max(std::size_t(1), std::min(A.shape()[0], A.shape()[1])));
+	assert(TAU.size() >= std::max(std::size_t(1), std::size_t(std::min(A.shape()[0], A.shape()[1]))));
 	assert(WORK.capacity() >= std::max(std::size_t(1), A.shape()[1]));
 
 	int status = -1;
 	LAPACK::glq(
-		A.shape()[1], A.shape()[0], std::max(std::size_t(1), std::min(A.shape()[0], A.shape()[1])), 
+		A.shape()[1], A.shape()[0], std::max(std::size_t(1), std::size_t(std::min(A.shape()[0], A.shape()[1]))), 
 		A.origin(), A.strides()[0], TAU.data(), 
 		WORK.data(), WORK.capacity(), 
 		status
@@ -244,9 +245,9 @@ std::pair<MultiArray1D,MultiArray2D> symEig(MultiArray2D const& A) {
         int N = A.shape()[0];
         int LDA = A.strides()[0];
         
-            MultiArray1D eigVal(boost::extents[N]);
-            MultiArray2D eigVec(boost::extents[N][N]);
-            MultiArray2D A_(boost::extents[N][N]);
+            MultiArray1D eigVal({N});
+            MultiArray2D eigVec({N,N});
+            MultiArray2D A_({N,N});
             for(int i=0; i<N; i++)
               for(int j=0; j<N; j++) 
                 A_[i][j] = conj(A[i][j]);                
@@ -307,7 +308,7 @@ int main(){
 			1.,2.,
 			3.,4.,
 		};
-		boost::multi_array_ref<double, 2> A(a.data(), boost::extents[2][2]);
+		MArray_ref<double, 2> A(a.data(), boost::extents[2][2]);
 		std::vector<int> p(std::min(A.shape()[0], A.shape()[1]));
 		ma::getrf(A, p);
 		for(int i = 0; i != A.shape()[0]; ++i, std::cout << '\n')

@@ -9,7 +9,7 @@
 #include "Utilities/SimpleParser.h"
 
 #include "Utilities/readWfn.h"
-#include "boost/multi_array.hpp"
+#include "multi/array.hpp"
 #include "Matrix/csr_matrix.hpp"
 #include "Matrix/csr_matrix_construct.hpp"
 
@@ -285,7 +285,7 @@ void read_wavefunction(std::string filename, int& ndets, std::string& type, WALK
 
     if(wfn_type == 0) {
 
-      boost::multi_array<ComplexType,2> OrbMat(extents[NMO][NAEA]);
+      MArray<ComplexType,2> OrbMat({NMO,NAEA});
       for(int i=0,q=0; i<ndets; i++) {
         if(comm.rank()==0) {
           in>>tag >>q;
@@ -297,13 +297,13 @@ void read_wavefunction(std::string filename, int& ndets, std::string& type, WALK
                                         OrbMat,1e-8,'H',comm));
         if(walker_type==COLLINEAR)
           PsiT.emplace_back(csr::shm::construct_csr_matrix_single_input<PsiT_Matrix>(
-                                        OrbMat[indices[range_t()][range_t(0,NAEB)]],
+                                        OrbMat({0,OrbMat.shape()[0]}, {0,NAEB}),
                                         1e-8,'H',comm));
       }  
 
     } else if(wfn_type == 1) {
 
-      boost::multi_array<ComplexType,2> OrbMat(extents[NMO][NAEA]);
+      MArray<ComplexType,2> OrbMat({NMO,NAEA});
       for(int i=0,q=0; i<ndets; i++) {
         if(comm.rank()==0) {
           in>>tag >>q;
@@ -313,16 +313,16 @@ void read_wavefunction(std::string filename, int& ndets, std::string& type, WALK
         }
         PsiT.emplace_back(csr::shm::construct_csr_matrix_single_input<PsiT_Matrix>(
                                         OrbMat,1e-8,'H',comm));
-        if(comm.rank()==0)  read_mat(in,OrbMat[indices[range_t()][range_t(0,NAEB)]],
+        if(comm.rank()==0)  read_mat(in,OrbMat({0,OrbMat.shape()[0]}, {0,NAEB}),
                 Cstyle,fullMOMat,NMO,NAEB);
         PsiT.emplace_back(csr::shm::construct_csr_matrix_single_input<PsiT_Matrix>(
-                                        OrbMat[indices[range_t()][range_t(0,NAEB)]],
+                                        OrbMat({0,OrbMat.shape()[0]}, {0,NAEB}),
                                         1e-8,'H',comm));
       }
 
     } else if(wfn_type == 2) {
 
-      boost::multi_array<ComplexType,2> OrbMat(extents[2*NMO][NAEA]);
+      MArray<ComplexType,2> OrbMat({2*NMO,NAEA});
       for(int i=0,q=0; i<ndets; i++) {
         if(comm.rank()==0) {
           in>>tag >>q;
@@ -332,10 +332,10 @@ void read_wavefunction(std::string filename, int& ndets, std::string& type, WALK
         }
         PsiT.emplace_back(csr::shm::construct_csr_matrix_single_input<PsiT_Matrix>(
                                         OrbMat,1e-8,'H',comm));
-        if(comm.rank()==0)  read_mat(in,OrbMat[indices[range_t()][range_t(0,NAEB)]],
+        if(comm.rank()==0)  read_mat(in,OrbMat({0,OrbMat.shape()[0]}, {0,NAEB}),
                                         Cstyle,fullMOMat,NMO,NAEB);
         PsiT.emplace_back(csr::shm::construct_csr_matrix_single_input<PsiT_Matrix>(
-                                        OrbMat[indices[range_t()][range_t(0,NAEB)]],
+                                        OrbMat({0,OrbMat.shape()[0]}, {0,NAEB}),
                                         1e-8,'H',comm));
       }
 
@@ -349,7 +349,7 @@ void read_wavefunction(std::string filename, int& ndets, std::string& type, WALK
 }
 
 // modify for multideterminant case based on type
-int readWfn( std::string fileName, boost::multi_array<ComplexType,3>& OrbMat, int NMO, int NAEA, int NAEB, int det)
+int readWfn( std::string fileName, MArray<ComplexType,3>& OrbMat, int NMO, int NAEA, int NAEB, int det)
 {
   std::ifstream in;
   in.open(fileName.c_str());
@@ -384,20 +384,19 @@ int readWfn( std::string fileName, boost::multi_array<ComplexType,3>& OrbMat, in
 
   if (wfn_type == 0 ) {
 
-     OrbMat.resize(extents[1][NMO][NAEA]);
+     OrbMat.reextent({1,NMO,NAEA});
      read_mat(in,OrbMat[0],Cstyle,fullMOMat,NMO,NAEA);
 
   } else if(wfn_type == 1) {
 
-    OrbMat.resize(extents[2][NMO][NAEA]);
+    OrbMat.reextent({2,NMO,NAEA});
     read_mat(in,OrbMat[0],Cstyle,fullMOMat,NMO,NAEA);
     read_mat(in,OrbMat[1],Cstyle,fullMOMat,NMO,NAEB);
 
   } else if(wfn_type == 2) {
 
-    OrbMat.resize(extents[1][2*NMO][NAEA+NAEB]);
-    read_mat(in,OrbMat[0][indices[range_t()][range_t(0,NAEA)]],Cstyle,fullMOMat,2*NMO,NAEA);
-    read_mat(in,OrbMat[0][indices[range_t()][range_t(NAEA,NAEA+NAEB)]],Cstyle,fullMOMat,2*NMO,NAEB);
+    OrbMat.reextent({1,2*NMO,NAEA+NAEB});
+    read_mat(in,OrbMat[0],Cstyle,fullMOMat,2*NMO,NAEA);
 
   } //type 
 

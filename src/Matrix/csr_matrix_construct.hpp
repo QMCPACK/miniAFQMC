@@ -10,6 +10,7 @@
 // Miguel Morales, moralessilva2@llnl.gov, Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
 
+#ifndef __THC_ONLY__
 #ifndef SPARSE_CSR_MATRIX_CONSTRUCT_HPP 
 #define SPARSE_CSR_MATRIX_CONSTRUCT_HPP 
 
@@ -25,14 +26,13 @@
 #include<algorithm>
 #include<mutex>
 
-#include "Configuration.h"
+#include "af_config.h"
 #include "Utilities/UtilityFunctions.h"
 #include "Utilities/Utils.hpp"
 #include "alf/boost/mpi3/shared_communicator.hpp"
 #include "alf/boost/mpi3/shared_window.hpp"
 #include "alf/boost/mpi3/shm/mutex.hpp"
 #include "Matrix/csr_matrix.hpp"
-#include "boost/multi_array.hpp"
 
 namespace csr
 {
@@ -41,7 +41,7 @@ namespace shm
 {
 
 /*
- * Constructs a csr_matrix from the elements of the multi_array M applying a truncation.
+ * Constructs a csr_matrix from the elements of the MultiArray2D M applying a truncation.
  * The input matrix is only meaningful in the core with rank 0
  */ 
 template<class CSR,
@@ -292,6 +292,7 @@ CSR construct_distributed_csr_matrix_from_distributed_containers(Container & Q, 
 
 //FIX FIX FIX: This routine is wrong then the number of nodes is > than the number of nodes in a TG.
   using std::get;
+  using qmcplusplus::Matrix;
   using Type = typename Container::value_type;
   if(nr==0 || nc==0)
     return CSR({nr,nc},{0,0},0,typename CSR::alloc_type(TG.Node()));
@@ -354,13 +355,13 @@ CSR construct_distributed_csr_matrix_from_distributed_containers(Container & Q, 
   long nterms_final = bounds[node_number+1]-bounds[node_number];
   // nterms_node_before_loadbalance: # of terms in local node before final exchange 
   // bounds[node_number+1]-bounds[node_number]: # of terms after load balance
-  boost::multi_array<long,2> counts_per_core(boost::extents[nnodes_per_TG][ncores]);
+  Matrix<long> counts_per_core({nnodes_per_TG,ncores});
   std::fill_n(counts_per_core.origin(),ncores*nnodes_per_TG,long(0));
   counts_per_core[node_number][coreid] = nterms_in_local_core;
   eq_node_group.all_reduce_n(counts_per_core.origin(),ncores*nnodes_per_TG,std::plus<>());
 
   // calculate how many terms each core is potentially sending 
-  boost::multi_array<long,2> nplus(boost::extents[nnodes_per_TG][ncores]);
+  Matrix<long> nplus({nnodes_per_TG,ncores});
   std::fill_n(nplus.origin(),ncores*nnodes_per_TG,long(0));
   auto tgrank = eq_node_group.rank();
   long deltaN=0;
@@ -382,8 +383,8 @@ CSR construct_distributed_csr_matrix_from_distributed_containers(Container & Q, 
   std::vector<long> nminus(nnodes_per_TG);
   for(int i=0; i<nnodes_per_TG; i++) { 
     long dn =  (bounds[i+1]-bounds[i]) -
-                std::accumulate(counts_per_core[i].origin(),
-                                counts_per_core[i].origin()+ncores,long(0)); 
+                std::accumulate(counts_per_core[i].begin(),
+                                counts_per_core[i].begin()+ncores,long(0)); 
     if(dn > 0) 
       nminus[i] = long(dn);
   }
@@ -495,4 +496,5 @@ typename CSR::template matrix_view<integer> local_balanced_partition(CSR& M, tas
 
 }
 
+#endif
 #endif

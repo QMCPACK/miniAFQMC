@@ -13,6 +13,7 @@
 //    Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
 
+#ifndef __THC_ONLY__
 #ifndef QMCPLUSPLUS_AFQMC_HAMILTONIANOPERATIONS_SPARSETENSOR_HPP
 #define QMCPLUSPLUS_AFQMC_HAMILTONIANOPERATIONS_SPARSETENSOR_HPP
 
@@ -59,12 +60,12 @@ class SparseTensor
                                 boost::mpi3::intranode::allocator<SPValueType>,
                                 boost::mpi3::intranode::is_root>;
   using Vshm_csr_matrix_view = typename Vshm_csr_matrix::template matrix_view<int>; 
-  using CVector = boost::multi_array<ComplexType,1>;  
-  using CMatrix = boost::multi_array<ComplexType,2>;  
-  using SpT1Vector = boost::multi_array<SpT1,1>;  
-  using T1Vector = boost::multi_array<T1,1>;  
-  using T1Matrix = boost::multi_array<T1,2>;  
-  using SpVector = boost::multi_array<SPComplexType,1>;  
+  using CVector = MArray<ComplexType,1>;  
+  using CMatrix = MArray<ComplexType,2>;  
+  using SpT1Vector = MArray<SpT1,1>;  
+  using T1Vector = MArray<T1,1>;  
+  using T1Matrix = MArray<T1,2>;  
+  using SpVector = MArray<SPComplexType,1>;  
   using this_t = SparseTensor<T1,T2>;
 
   public:
@@ -112,10 +113,10 @@ class SparseTensor
       int NMO = hij.shape()[0];  
       // in non-collinear case with SO, keep SO matrix here and add it
       // for now, stay collinear
-      CMatrix H1(extents[NMO][NMO]);
+      CMatrix H1({NMO,NMO});
 
       // add sum_n vMF*Spvn, vMF has local contribution only!
-      boost::multi_array_ref<ComplexType,1> H1D(H1.origin(),extents[NMO*NMO]);
+      MArray_ref<ComplexType,1> H1D(H1.origin(),{NMO*NMO});
       std::fill_n(H1D.origin(),H1D.num_elements(),ComplexType(0));
       vHS(vMF, H1D);  
       TG.TG().all_reduce_in_place_n(H1D.origin(),H1D.num_elements(),std::plus<>());
@@ -162,9 +163,9 @@ class SparseTensor
       assert(k >= 0 && k < haj.size());  
       assert(k >= 0 && k < Vakbl_view.size());  
       if(Gcloc.num_elements() < Gc.shape()[1] * Vakbl_view[k].shape()[0])
-        Gcloc.resize(extents[Vakbl_view[k].shape()[0]*Gc.shape()[1]]);
-      boost::multi_array_ref<SPComplexType,2> buff(Gcloc.data(),
-                        extents[Vakbl_view[k].shape()[0]][Gc.shape()[1]]);
+        Gcloc.reextent({Vakbl_view[k].shape()[0]*Gc.shape()[1]});
+      MArray_ref<SPComplexType,2> buff(Gcloc.data(),
+                        {Vakbl_view[k].shape()[0],Gc.shape()[1]});
       shm::calculate_energy(std::forward<Mat>(E),Gc,buff,haj[k],Vakbl_view[k],addH1);
       // testing how to do this right now, make clean design later
       // when you write the FastMSD class 
@@ -173,15 +174,15 @@ class SparseTensor
         if(haj.size()>1)
           APP_ABORT("Error: separateEJab && haj.size()>1 not yet allowed. \n");
         if(Gcloc.num_elements() < SpvnT.shape()[0] * Gc.shape()[1])
-          Gcloc.resize(extents[SpvnT.shape()[0]*Gc.shape()[1]]);
+          Gcloc.reextent({SpvnT.shape()[0]*Gc.shape()[1]});
         RealType scl = (walker_type==CLOSED?4.0:1.0); 
         // SpvnT*G
-        boost::multi_array_ref<T2,2> v_(Gcloc.origin()+
+        MArray_ref<T2,2> v_(Gcloc.origin()+
                                             SpvnT_view.local_origin()[0]*Gc.shape()[1],
-                                        extents[SpvnT_view.shape()[0]][Gc.shape()[1]]);
+                                        {SpvnT_view.shape()[0],Gc.shape()[1]});
         ma::product(SpvnT_view, Gc, v_); 
         for(int wi=0; wi<Gc.shape()[1]; wi++)
-          E[wi][2] = 0.5*scl*ma::dot(v_[indices[range_t()][wi]],v_[indices[range_t()][wi]]); 
+          E[wi][2] = 0.5*scl*ma::dot(v_({0,v_.shape()[0]},wi),v_({0,v_.shape()[0]},wi));
       }
       if(addH1) 
         for(int i=0; i<E.shape()[0]; i++)
@@ -199,8 +200,8 @@ class SparseTensor
       using Type = typename std::decay<MatB>::type::element;
 
       // Spvn*X 
-      boost::multi_array_ref<Type,1> v_(v.origin() + Spvn_view.local_origin()[0], 
-                                        extents[Spvn_view.shape()[0]]);
+      MArray_ref<Type,1> v_(v.origin() + Spvn_view.local_origin()[0], 
+                                        {Spvn_view.shape()[0]});
       ma::product(SPValueType(a),Spvn_view,X,SPValueType(c),v_);
     }
 
@@ -215,8 +216,8 @@ class SparseTensor
       using Type = typename std::decay<MatB>::type::element;
 
       // Spvn*X 
-      boost::multi_array_ref<Type,2> v_(v[Spvn_view.local_origin()[0]].origin(), 
-                                        extents[Spvn_view.shape()[0]][v.shape()[1]]);
+      MArray_ref<Type,2> v_(v[Spvn_view.local_origin()[0]].origin(), 
+                                        {Spvn_view.shape()[0],v.shape()[1]});
       ma::product(SPValueType(a),Spvn_view,X,SPValueType(c),v_);
     }
 
@@ -231,8 +232,8 @@ class SparseTensor
       using Type = typename std::decay<MatB>::type::element ;
 
       // SpvnT*G
-      boost::multi_array_ref<Type,1> v_(v.origin() + SpvnT_view.local_origin()[0], 
-                                        extents[SpvnT_view.shape()[0]]);
+      MArray_ref<Type,1> v_(v.origin() + SpvnT_view.local_origin()[0], 
+                                        {SpvnT_view.shape()[0]});
       if(walker_type==CLOSED) a*=2.0;
       ma::product(SpT2(a), SpvnT_view, G, SpT2(c), v_);
     }
@@ -248,8 +249,8 @@ class SparseTensor
       using Type = typename std::decay<MatB>::type::element ;
 
       // SpvnT*G
-      boost::multi_array_ref<Type,2> v_(v[SpvnT_view.local_origin()[0]].origin(), 
-                                        extents[SpvnT_view.shape()[0]][v.shape()[1]]);
+      MArray_ref<Type,2> v_(v[SpvnT_view.local_origin()[0]].origin(), 
+                                        {SpvnT_view.shape()[0],v.shape()[1]});
       if(walker_type==CLOSED) a*=2.0;
       ma::product(SpT2(a), SpvnT_view, G, SpT2(c), v_);
     }
@@ -310,4 +311,5 @@ class SparseTensor
 
 }
 
+#endif
 #endif

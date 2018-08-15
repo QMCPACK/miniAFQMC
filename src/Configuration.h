@@ -27,7 +27,6 @@
 #include <complex>
 #include <Utilities/OhmmsInfo.h>
 #include <Message/Communicate.h>
-#include "boost/multi_array.hpp"
 
 #define byRows   999
 #define byCols   111
@@ -54,10 +53,6 @@
 
 namespace qmcplusplus
 {
-
-  using boost::extents;
-  using boost::indices;
-  using range_t = boost::multi_array_types::index_range;
 
   typedef OHMMS_INDEXTYPE                 IndexType;
   typedef OHMMS_INDEXTYPE                 OrbitalType;

@@ -91,8 +91,6 @@ inline void apply_expM( const MatA& V, MatB& S, MatC& T1, MatC& T2, communicator
   assert( S.shape()[0] == T2.shape()[0] );
   assert( S.shape()[1] == T2.shape()[1] );
 
-  using boost::indices;
-  using range_t = boost::multi_array_types::index_range;
   using ComplexType = typename std::decay<MatB>::type::element;
 
   const ComplexType zero(0.);
@@ -106,15 +104,18 @@ inline void apply_expM( const MatA& V, MatB& S, MatC& T1, MatC& T2, communicator
   assert( M0 <= Mn );  
   assert( M0 >= 0);
 
-  T1[indices[range_t(M0,Mn)][range_t()]] = S[indices[range_t(M0,Mn)][range_t()]];
+  T1({M0,Mn},{0,T1.shape()[1]}) = S({M0,Mn},{0,S.shape()[1]});
   comm.barrier();  
   for(int n=1; n<=order; n++) {
     const ComplexType fact = im*static_cast<ComplexType>(1.0/static_cast<double>(n));
-    ma::product(fact,V[indices[range_t(M0,Mn)][range_t()]],*pT1,zero,(*pT2)[indices[range_t(M0,Mn)][range_t()]]);
+    ma::product(fact,V({M0,Mn},{V.shape()[1]}),*pT1,zero,(*pT2)({M0,Mn},{0,pT2->shape()[1]}));
     // overload += ???
-    for(int i=M0; i<Mn; i++)
+    for(int i=M0; i<Mn; i++){
+     auto Si = S[i];
+     auto const& pT2i = (*pT2)[i];
      for(int j=0, je=S.shape()[1]; j<je; j++)
-      S[i][j] += (*pT2)[i][j];
+      Si[j] += pT2i[j];
+    }
     comm.barrier();  
     std::swap(pT1,pT2);
   }

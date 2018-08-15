@@ -54,10 +54,9 @@ namespace afqmc
     auto nwalk = wset.size();
     int nr=Gsize,nc=nwalk;
     if(transposed_G_for_E_) std::swap(nr,nc);
-    boost::multi_array_ref<ComplexType,2> G(shmbuff_for_E->data(),extents[nr][nc]);
-    boost::multi_array_ref<ComplexType,1> ov_(shmbuff_for_E->data()+Gsize*nwalk,
-                                              extents[nwalk]);
-    if(eloc2.shape()[0] != nwalk || eloc2.shape()[1] != 3) eloc2.resize(extents[nwalk][3]); 
+    MArray_ref<ComplexType,2> G(shmbuff_for_E->data(),{nr,nc});
+    MArray_ref<ComplexType,1> ov_(shmbuff_for_E->data()+Gsize*nwalk,{nwalk});
+    if(eloc2.shape()[0] != nwalk || eloc2.shape()[1] != 3) eloc2.reextent({nwalk,3}); 
 
     std::fill_n(Ov.origin(),nwalk,zero);
     std::fill_n(E.origin(),3*nwalk,zero);
@@ -123,16 +122,13 @@ namespace afqmc
     int nr=Gsize,nc=nwalk;
     if(transposed_G_for_E_) std::swap(nr,nc);
     int displ=0;
-    boost::multi_array_ref<ComplexType,2> Gwork(shmbuff_for_E->data(),
-                                                extents[nr][nc]);
+    MArray_ref<ComplexType,2> Gwork(shmbuff_for_E->data(),{nr,nc});
       displ += Gsize*nwalk;
-    boost::multi_array_ref<ComplexType,2> Grecv(shmbuff_for_E->data()+displ,
-                                                extents[nr][nc]);
+    MArray_ref<ComplexType,2> Grecv(shmbuff_for_E->data()+displ,{nr,nc});
       displ += Gsize*nwalk;
-    boost::multi_array_ref<ComplexType,1> overlaps(shmbuff_for_E->data()+displ,
-                                                   extents[nwalk]);
+    MArray_ref<ComplexType,1> overlaps(shmbuff_for_E->data()+displ,{nwalk});
     if(eloc2.shape()[0] != nnodes*nwalk || eloc2.shape()[1] != 3) 
-        eloc2.resize(extents[nnodes*nwalk][3]);
+        eloc2.reextent({nnodes*nwalk,3});
     auto elocal = eloc2[node_number*nwalk];
     int nak0,nak1;
     std::tie(nak0,nak1) = FairDivideBoundary(TG.getLocalTGRank(),Gsize*nwalk,TG.getNCoresPerTG());
@@ -175,7 +171,7 @@ namespace afqmc
 
       // calculate your contribution of the local enery to the set of walkers in Gwork
       int q = (k+node_number)%nnodes;
-      HamOp.energy(eloc2[indices[range_t(q*nwalk,(q+1)*nwalk)][range_t()]],
+      HamOp.energy(eloc2({q*nwalk,(q+1)*nwalk},{0,eloc2.shape()[1]}),  //[indices[range_t(q*nwalk,(q+1)*nwalk)][range_t()]],
                    Gwork,0,TG.TG_local().root() && k==0);
       TG.local_barrier();
 
@@ -235,23 +231,19 @@ namespace afqmc
     int nr=Gsize,nc=nwalk;
     if(transposed_G_for_E_) std::swap(nr,nc);
     int displ=0;
-    boost::multi_array_ref<ComplexType,2> SMwork(shmbuff_for_E->data(),
-                                                extents[nwalk][Gsize]);
+    MArray_ref<ComplexType,2> SMwork(shmbuff_for_E->data(),{nwalk,Gsize});
       displ += Gsize*nwalk;
-    boost::multi_array_ref<ComplexType,2> SMrecv(shmbuff_for_E->data()+displ,
-                                                extents[nwalk][Gsize]);
+    MArray_ref<ComplexType,2> SMrecv(shmbuff_for_E->data()+displ,{nwalk,Gsize});
       displ += Gsize*nwalk;
-    boost::multi_array_ref<ComplexType,2> Gwork(shmbuff_for_E->data()+displ,
-                                                extents[nr][nc]);
+    MArray_ref<ComplexType,2> Gwork(shmbuff_for_E->data()+displ,{nr,nc});
       displ += Gsize*nwalk;
-    boost::multi_array_ref<ComplexType,1> overlaps(shmbuff_for_E->data()+displ,
-                                                   extents[nwalk]);
+    MArray_ref<ComplexType,1> overlaps(shmbuff_for_E->data()+displ,{nwalk});
     // used for temporary storage in ndet loop for local calculation
     if(eloc3.shape()[0] != nwalk || eloc3.shape()[1] != 3) 
-        eloc3.resize(extents[nwalk][3]);
+        eloc3.reextent({nwalk,3});
     // used for temporary storage of numerator in energy expression for all walkers in TG
     if(eloc2.shape()[0] != nnodes*nwalk || eloc2.shape()[1] != 3) 
-        eloc2.resize(extents[nnodes*nwalk][3]);
+        eloc2.reextent({nnodes*nwalk,3});
     // matrix view to local segment of eloc2, for wasy access later
     // split SM evenly for communication
     int nak0,nak1;
@@ -315,7 +307,7 @@ namespace afqmc
 
     TG.TG().all_reduce_in_place_n(eloc2.origin(),3*nnodes*nwalk,std::plus<>());
     TG.local_barrier();    
-    auto elocal = eloc2[indices[range_t(node_number*nwalk,(node_number+1)*nwalk)][range_t()]];
+    auto elocal = eloc2({node_number*nwalk,(node_number+1)*nwalk},{0,eloc2.shape()[1]}); //[indices[range_t(node_number*nwalk,(node_number+1)*nwalk)][range_t()]];
     for(int i=0; i<nwalk; i++) {
       E[i][0] = elocal[i][0]/Ov[i];
       E[i][1] = elocal[i][1]/Ov[i];
@@ -352,15 +344,15 @@ namespace afqmc
         std::fill_n(G[i].origin(),G.shape()[1],ComplexType(0.0));
     TG.local_barrier();
     if(localGbuff.size() < Gsize)
-      localGbuff.resize(extents[Gsize]);
+      localGbuff.reextent({Gsize});
     if(walker_type != COLLINEAR) {
 
       auto Gdims = dm_dims(false,Alpha);
-      boost::multi_array_ref<ComplexType,2> G2D_(localGbuff.origin(),
-                                                 extents[Gdims.first][Gdims.second]);
-      boost::multi_array_ref<ComplexType,1> G1D_(localGbuff.origin(),extents[Gsize]);
+      MArray_ref<ComplexType,2> G2D_(localGbuff.origin(),
+                                                 {Gdims.first,Gdims.second});
+      MArray_ref<ComplexType,1> G1D_(localGbuff.origin(),{Gsize});
       // notice interchange of dimensions
-      boost::const_multi_array_ref<ComplexType,3> A(SM.origin(),extents[nw][Gdims.second][Gdims.first]);
+      MArray_cref<ComplexType,3> A(SM.origin(),{nw,Gdims.second,Gdims.first});
 
       for(int iw=0; iw<nw; ++iw) {
         if(iw%TG.TG_local().size() != TG.TG_local().rank()) continue;
@@ -370,47 +362,47 @@ namespace afqmc
         if(transposed_G_for_E_) 
           G[iw] = G1D_; 
         else
-          G[indices[range_t()][iw]] = G1D_; 
+          G({0,G.shape()[0]},iw) = G1D_; 
         Ov[iw] = ov; 
       }
 
     } else {
 
       // store overlaps locally to be able to split alpha/beta pairs
-      if(ovlp2.shape()[0] < 2*nw) ovlp2.resize(extents[2*nw]);
+      if(ovlp2.shape()[0] < 2*nw) ovlp2.reextent({2*nw});
       std::fill_n(ovlp2.origin(),2*nw,ComplexType(0.0));
       auto GAdims = dm_dims(false,Alpha);
       auto GBdims = dm_dims(false,Beta);
-      boost::multi_array_ref<ComplexType,2> GA2D_(localGbuff.origin(),
-                                   extents[GAdims.first][GAdims.second]);
-      boost::multi_array_ref<ComplexType,2> GB2D_(localGbuff.origin()+GAdims.first*GAdims.second,
-                                   extents[GBdims.first][GBdims.second]);
-      boost::multi_array_ref<ComplexType,1> GA1D_(localGbuff.origin(),
-                                   extents[GAdims.first*GAdims.second]);
-      boost::multi_array_ref<ComplexType,1> GB1D_(localGbuff.origin()+GAdims.first*GAdims.second,
-                                   extents[GBdims.first*GBdims.second]);
+      MArray_ref<ComplexType,2> GA2D_(localGbuff.origin(),
+                                   {GAdims.first,GAdims.second});
+      MArray_ref<ComplexType,2> GB2D_(localGbuff.origin()+GAdims.first*GAdims.second,
+                                   {GBdims.first,GBdims.second});
+      MArray_ref<ComplexType,1> GA1D_(localGbuff.origin(),
+                                   {GAdims.first*GAdims.second});
+      MArray_ref<ComplexType,1> GB1D_(localGbuff.origin()+GAdims.first*GAdims.second,
+                                   {GBdims.first*GBdims.second});
 
       for(int iw=0; iw<2*nw; ++iw) {
         if(iw%TG.TG_local().size() != TG.TG_local().rank()) continue;
         
         if(iw%2==0) {
           // notice interchange of dimensions
-          boost::const_multi_array_ref<ComplexType,2> M(SM[iw/2].origin(),
-                                                        extents[GAdims.second][GAdims.first]);
+          MArray_cref<ComplexType,2> M(SM[iw/2].origin(),
+                                                        {GAdims.second,GAdims.first});
           ovlp2[iw] = SDetOp.MixedDensityMatrix(OrbMats[2*nd],M,GA2D_,true);
           if(transposed_G_for_E_) 
-            G[indices[iw/2][range_t(0,GAdims.first*GAdims.second)]] = GA1D_;
+            G[iw/2]({0,GAdims.first*GAdims.second}) = GA1D_;
           else
-            G[indices[range_t(0,GAdims.first*GAdims.second)][iw/2]] = GA1D_;
+            G({0,GAdims.first*GAdims.second},iw/2) = GA1D_;
         } else {
           // notice interchange of dimensions
-          boost::const_multi_array_ref<ComplexType,2> M(SM[iw/2].origin()+GAdims.first*GAdims.second,
-                                                        extents[GBdims.second][GBdims.first]);
+          MArray_cref<ComplexType,2> M(SM[iw/2].origin()+GAdims.first*GAdims.second,
+                                                        {GBdims.second,GBdims.first});
           ovlp2[iw] = SDetOp.MixedDensityMatrix(OrbMats[2*nd+1],M,GB2D_,true);
           if(transposed_G_for_E_) 
-            G[indices[iw/2][range_t(GAdims.first*GAdims.second,G.shape()[1])]] = GB1D_;
+            G[iw/2]({GAdims.first*GAdims.second,G.shape()[1]}) = GB1D_;
           else
-            G[indices[range_t(GAdims.first*GAdims.second,G.shape()[0])][iw/2]] = GB1D_;
+            G({GAdims.first*GAdims.second,G.shape()[0]},iw/2) = GB1D_;
         }
       }
       // CHECK: I don't need all_reduce here, but the current version of mpi3 
@@ -450,13 +442,13 @@ namespace afqmc
     TG.local_barrier();
     auto Gsize = size_t(dm_size(false));
     if(localGbuff.size() < Gsize)
-      localGbuff.resize(extents[Gsize]);
+      localGbuff.reextent({Gsize});
     if(walker_type != COLLINEAR) {
 
       auto Gdims = dm_dims(false,Alpha);
-      boost::multi_array_ref<ComplexType,2> G2D_(localGbuff.origin(),
-                                                 extents[Gdims.first][Gdims.second]);
-      boost::multi_array_ref<ComplexType,1> G1D_(localGbuff.origin(),extents[Gsize]);
+      MArray_ref<ComplexType,2> G2D_(localGbuff.origin(),
+                                                 {Gdims.first,Gdims.second});
+      MArray_ref<ComplexType,1> G1D_(localGbuff.origin(),{Gsize});
 
       for(int iw=0; iw<nw; ++iw) {
         if(iw%TG.TG_local().size() != TG.TG_local().rank()) continue;
@@ -466,25 +458,25 @@ namespace afqmc
         if(transposed_G_for_E_) 
           G[iw] = G1D_; 
         else
-          G[indices[range_t()][iw]] = G1D_; 
+          G({0,G.shape()[0]},iw) = G1D_; 
         Ov[iw] = ov; 
       }
 
     } else {
 
       // store overlaps locally to be able to split alpha/beta pairs
-      if(ovlp2.shape()[0] < 2*nw) ovlp2.resize(extents[2*nw]);
+      if(ovlp2.shape()[0] < 2*nw) ovlp2.reextent({2*nw});
       std::fill_n(ovlp2.origin(),2*nw,ComplexType(0.0));
       auto GAdims = dm_dims(false,Alpha);
       auto GBdims = dm_dims(false,Beta);
-      boost::multi_array_ref<ComplexType,2> GA2D_(localGbuff.origin(),
-                                   extents[GAdims.first][GAdims.second]);
-      boost::multi_array_ref<ComplexType,2> GB2D_(localGbuff.origin()+GAdims.first*GAdims.second,
-                                   extents[GBdims.first][GBdims.second]);
-      boost::multi_array_ref<ComplexType,1> GA1D_(localGbuff.origin(),
-                                   extents[GAdims.first*GAdims.second]);
-      boost::multi_array_ref<ComplexType,1> GB1D_(localGbuff.origin()+GAdims.first*GAdims.second,
-                                   extents[GBdims.first*GBdims.second]);
+      MArray_ref<ComplexType,2> GA2D_(localGbuff.origin(),
+                                   {GAdims.first,GAdims.second});
+      MArray_ref<ComplexType,2> GB2D_(localGbuff.origin()+GAdims.first*GAdims.second,
+                                   {GBdims.first,GBdims.second});
+      MArray_ref<ComplexType,1> GA1D_(localGbuff.origin(),
+                                   {GAdims.first*GAdims.second});
+      MArray_ref<ComplexType,1> GB1D_(localGbuff.origin()+GAdims.first*GAdims.second,
+                                   {GBdims.first*GBdims.second});
 
       for(int iw=0; iw<2*nw; ++iw) {
         if(iw%TG.TG_local().size() != TG.TG_local().rank()) continue;
@@ -493,16 +485,16 @@ namespace afqmc
           ovlp2[iw] = SDetOp.MixedDensityMatrix(OrbMats[2*nd],wset[iw/2].SlaterMatrix(Alpha),
                                                    GA2D_,true);
           if(transposed_G_for_E_) 
-            G[indices[iw/2][range_t(0,GAdims.first*GAdims.second)]] = GA1D_;
+            G[iw/2]({0,GAdims.first*GAdims.second}) = GA1D_;
           else  
-            G[indices[range_t(0,GAdims.first*GAdims.second)][iw/2]] = GA1D_;
+            G({0,GAdims.first*GAdims.second},iw/2) = GA1D_;
         } else {
           ovlp2[iw] = SDetOp.MixedDensityMatrix(OrbMats[2*nd+1],wset[iw/2].SlaterMatrix(Beta),
                                                    GB2D_,true);
           if(transposed_G_for_E_) 
-            G[indices[iw/2][range_t(GAdims.first*GAdims.second,G.shape()[1])]] = GB1D_;
+            G[iw/2]({0,GAdims.first*GAdims.second}) = GB1D_;
           else  
-            G[indices[range_t(GAdims.first*GAdims.second,G.shape()[0])][iw/2]] = GB1D_;
+            G({GAdims.first*GAdims.second,G.shape()[0]},iw/2) = GB1D_;
         }
       }
       // CHECK: I don't need all_reduce here, but the current version of mpi3 
@@ -543,13 +535,13 @@ namespace afqmc
     TG.local_barrier();
     auto Gsize = size_t(dm_size(not compact));
     if(localGbuff.size() < Gsize)
-      localGbuff.resize(extents[Gsize]);
+      localGbuff.reextent({Gsize});
     if(walker_type != COLLINEAR) {
 
       auto Gdims = dm_dims(not compact,Alpha);
-      boost::multi_array_ref<ComplexType,2> G2D_(localGbuff.origin(),
-                                                 extents[Gdims.first][Gdims.second]);
-      boost::multi_array_ref<ComplexType,1> G1D_(localGbuff.origin(),extents[Gsize]);
+      MArray_ref<ComplexType,2> G2D_(localGbuff.origin(),
+                                                 {Gdims.first,Gdims.second});
+      MArray_ref<ComplexType,1> G1D_(localGbuff.origin(),{Gsize});
 
       const int ntasks_percore = (nw*ndet)/TG.getNCoresPerTG();
       const int ntasks_total_serial = ntasks_percore*TG.getNCoresPerTG();
@@ -574,7 +566,7 @@ namespace afqmc
           ma::axpy(ov,G1D_,G[iw]);   
         } else {
           std::lock_guard<boost::mpi3::mutex> guard(*mutex);
-          ma::axpy(ov,G1D_,G[indices[range_t()][iw]]);   
+          ma::axpy(ov,G1D_,G({0,G.shape()[0]},iw)); 
         }
         Ov[iw] += ov; 
       }
@@ -604,9 +596,9 @@ namespace afqmc
         if(last_task_index < 0 || last_task_index > nextra) 
           APP_ABORT("Error: Problems in NOMSD::Overlap(WSet,Ov)");
         {
-          boost::multi_array_ref<ComplexType,2> G2D_2(shmbuff_for_G->data(),
-                                                 extents[Gdims.first][Gdims.second]);
-          boost::multi_array_ref<ComplexType,1> G1D_2(shmbuff_for_G->data(),extents[Gsize]);
+          MArray_ref<ComplexType,2> G2D_2(shmbuff_for_G->data(),
+                                                 {Gdims.first,Gdims.second});
+          MArray_ref<ComplexType,1> G1D_2(shmbuff_for_G->data(),{Gsize});
           int iw = (last_task_index+ntasks_total_serial)/ndet;
           int nd = (last_task_index+ntasks_total_serial)%ndet;
           ComplexType ov = SDetOp.MixedDensityMatrix(OrbMats[nd],wset[iw].SlaterMatrix(Alpha),
@@ -620,7 +612,7 @@ namespace afqmc
               ma::axpy(ov,G1D_2,G[iw]);
             } else {
               std::lock_guard<boost::mpi3::mutex> guard(*mutex);
-              ma::axpy(ov,G1D_2,G[indices[range_t()][iw]]);
+              ma::axpy(ov,G1D_2,G({0,G.shape()[0]},iw));
             }
             Ov[iw] += ov; 
           }
@@ -631,14 +623,14 @@ namespace afqmc
 
       auto GAdims = dm_dims(not compact,Alpha);
       auto GBdims = dm_dims(not compact,Beta);
-      boost::multi_array_ref<ComplexType,2> GA2D_(localGbuff.origin(),
-                                   extents[GAdims.first][GAdims.second]);
-      boost::multi_array_ref<ComplexType,2> GB2D_(localGbuff.origin()+GAdims.first*GAdims.second,
-                                   extents[GBdims.first][GBdims.second]);
-      boost::multi_array_ref<ComplexType,1> GA1D_(localGbuff.origin(),
-                                   extents[GAdims.first*GAdims.second]);
-      boost::multi_array_ref<ComplexType,1> GB1D_(localGbuff.origin()+GAdims.first*GAdims.second,
-                                   extents[GBdims.first*GBdims.second]);
+      MArray_ref<ComplexType,2> GA2D_(localGbuff.origin(),
+                                   {GAdims.first,GAdims.second});
+      MArray_ref<ComplexType,2> GB2D_(localGbuff.origin()+GAdims.first*GAdims.second,
+                                   {GBdims.first,GBdims.second});
+      MArray_ref<ComplexType,1> GA1D_(localGbuff.origin(),
+                                   {GAdims.first*GAdims.second});
+      MArray_ref<ComplexType,1> GB1D_(localGbuff.origin()+GAdims.first*GAdims.second,
+                                   {GBdims.first*GBdims.second});
 
       const int ntasks_percore = (nw*ndet)/TG.getNCoresPerTG();
       const int ntasks_total_serial = ntasks_percore*TG.getNCoresPerTG();
@@ -659,12 +651,12 @@ namespace afqmc
         ov_ *= std::conj(ci[nd]);
         if(transpose) {
           std::lock_guard<boost::mpi3::mutex> guard(*mutex);
-          ma::axpy(ov_,GA1D_,G[indices[iw][range_t(0,GAdims.first*GAdims.second)]]);
-          ma::axpy(ov_,GB1D_,G[indices[iw][range_t(GAdims.first*GAdims.second,G.shape()[1])]]);
+          ma::axpy(ov_,GA1D_,G[iw]({0,GAdims.first*GAdims.second}));
+          ma::axpy(ov_,GB1D_,G[iw]({GAdims.first*GAdims.second,G.shape()[1]}));
         } else {
           std::lock_guard<boost::mpi3::mutex> guard(*mutex);
-          ma::axpy(ov_,GA1D_,G[indices[range_t(0,GAdims.first*GAdims.second)][iw]]);
-          ma::axpy(ov_,GB1D_,G[indices[range_t(GAdims.first*GAdims.second,G.shape()[0])][iw]]);
+          ma::axpy(ov_,GA1D_,G({0,GAdims.first*GAdims.second},iw));
+          ma::axpy(ov_,GB1D_,G({GAdims.first*GAdims.second,G.shape()[0]},iw));
         }
         Ov[iw] += ov_;
       }
@@ -695,14 +687,14 @@ namespace afqmc
         if(last_task_index < 0 || last_task_index > nextra)
           APP_ABORT("Error: Problems in NOMSD::Overlap(WSet,Ov)");
         {
-          boost::multi_array_ref<ComplexType,2> GA2D_2(shmbuff_for_G->data(),
-                               extents[GAdims.first][GAdims.second]);
-          boost::multi_array_ref<ComplexType,2> GB2D_2(shmbuff_for_G->data()+
-                               GAdims.first*GAdims.second,extents[GBdims.first][GBdims.second]);
-          boost::multi_array_ref<ComplexType,1> GA1D_2(shmbuff_for_G->data(),
-                               extents[GAdims.first*GAdims.second]);
-          boost::multi_array_ref<ComplexType,1> GB1D_2(shmbuff_for_G->data()+
-                               GAdims.first*GAdims.second,extents[GBdims.first*GBdims.second]);
+          MArray_ref<ComplexType,2> GA2D_2(shmbuff_for_G->data(),
+                               {GAdims.first,GAdims.second});
+          MArray_ref<ComplexType,2> GB2D_2(shmbuff_for_G->data()+
+                               GAdims.first*GAdims.second,{GBdims.first,GBdims.second});
+          MArray_ref<ComplexType,1> GA1D_2(shmbuff_for_G->data(),
+                               {GAdims.first*GAdims.second});
+          MArray_ref<ComplexType,1> GB1D_2(shmbuff_for_G->data()+
+                               GAdims.first*GAdims.second,{GBdims.first*GBdims.second});
           int task = (last_task_index+ntasks_total_serial);
           int iw = task/ndet;
           int nd = task%ndet;
@@ -714,12 +706,12 @@ namespace afqmc
           if(local_group_comm.root()) {
             if(transpose) {
               std::lock_guard<boost::mpi3::mutex> guard(*mutex);
-              ma::axpy(ov_,GA1D_2,G[indices[iw][range_t(0,GAdims.first*GAdims.second)]]);
-              ma::axpy(ov_,GB1D_2,G[indices[iw][range_t(GAdims.first*GAdims.second,G.shape()[1])]]);
+              ma::axpy(ov_,GA1D_2,G[iw]({0,GAdims.first*GAdims.second}));
+              ma::axpy(ov_,GB1D_2,G[iw]({GAdims.first*GAdims.second,G.shape()[1]}));
             } else {
               std::lock_guard<boost::mpi3::mutex> guard(*mutex);
-              ma::axpy(ov_,GA1D_2,G[indices[range_t(0,GAdims.first*GAdims.second)][iw]]);
-              ma::axpy(ov_,GB1D_2,G[indices[range_t(GAdims.first*GAdims.second,G.shape()[0])][iw]]);
+              ma::axpy(ov_,GA1D_2,G({0,GAdims.first*GAdims.second},iw));
+              ma::axpy(ov_,GB1D_2,G({GAdims.first*GAdims.second,G.shape()[0]},iw));
             }
             Ov[iw] += ov_;
           }
@@ -935,14 +927,17 @@ namespace afqmc
   template<class Mat>
   void NOMSD::OrthogonalizeExcited(Mat&& A, SpinTypes spin)
   {
+    APP_ABORT(" Error: OrthogonalizeExcited not implemented.\n");
+/*
+    std::size_t nr = extendedMatAlpha.shape()[0];
     if(walker_type == NONCOLLINEAR)  
       APP_ABORT(" Error: OrthogonalizeExcited not implemented with NONCOLLINEAR.\n");
     if(spin==Alpha) {
       if(extendedMatAlpha.shape()[0] != NMO || extendedMatAlpha.shape()[1] != maxOccupExtendedMat.first)
-        extendedMatAlpha.resize(extents[NMO][maxOccupExtendedMat.first]);
-      extendedMatAlpha[indices[range_t()][range_t(0,NAEA)]] = A;
-      extendedMatAlpha[indices[range_t()][range_t(NAEA+1,maxOccupExtendedMat.first)]] =
-                excitedOrbMat[0][indices[range_t()][range_t(NAEA+1,maxOccupExtendedMat.first)]]; 
+        extendedMatAlpha.reextent({NMO,maxOccupExtendedMat.first});
+      extendedMatAlpha({0,nr},{0,NAEA}) = A;
+      extendedMatAlpha({0,nr},{NAEA+1,maxOccupExtendedMat.first}) =
+                excitedOrbMat[0]({0,excitedOrbMat[0].shape()[0]},{NAEA+1,maxOccupExtendedMat.first}); 
       // move i->a, copy trial orb i  
       for(auto& i:excitations) 
         if(i.first < NMO && i.second < NMO ) {
@@ -956,7 +951,7 @@ namespace afqmc
           A[indices[range_t()][i.first]] = extendedMatAlpha[indices[range_t()][i.second]];
     } else {
       if(extendedMatBeta.shape()[0] != NMO || extendedMatBeta.shape()[1] != maxOccupExtendedMat.second)
-        extendedMatBeta.resize(extents[NMO][maxOccupExtendedMat.second]);
+        extendedMatBeta.reextent({NMO,maxOccupExtendedMat.second});
       extendedMatBeta[indices[range_t()][range_t(0,NAEB)]] = A;
       extendedMatBeta[indices[range_t()][range_t(NAEB+1,maxOccupExtendedMat.second)]] = 
                 excitedOrbMat[1][indices[range_t()][range_t(NAEB+1,maxOccupExtendedMat.second)]];
@@ -972,6 +967,7 @@ namespace afqmc
         if(i.first >= NMO && i.second >= NMO ) 
           A[indices[range_t()][i.first]] = extendedMatBeta[indices[range_t()][i.second]];
     }
+*/
   }  
 
   /*
@@ -984,37 +980,37 @@ namespace afqmc
 
     int ndets = ci.size(); 
     ComplexType ovlp=0.0;
-    boost::multi_array<ComplexType,2> PsiT,PsiTB;
+    MArray<ComplexType,2> PsiT,PsiTB;
  
     using std::conj;
     if(ndets == 1) {
-      boost::multi_array<ComplexType,2> G;
+      MArray<ComplexType,2> G;
       size_t Gsize = dm_size(false);
       if(walker_type != COLLINEAR) {
         auto Gdims = dm_dims(false,Alpha);
-        G.resize(extents[Gdims.first][Gdims.second]);
+        G.reextent({Gdims.first,Gdims.second});
         csr::CSR2MA('H',OrbMats[0],PsiT); 
         ComplexType ov = SDetOp.MixedDensityMatrix(OrbMats[0],PsiT,G,true);
       } else {
-        G.resize(extents[NAEA+NAEB][NMO]);
+        G.reextent({NAEA+NAEB,NMO});
         csr::CSR2MA('H',OrbMats[0],PsiT);
         ComplexType ov = SDetOp.MixedDensityMatrix(OrbMats[0],PsiT,
-                                       G[indices[range_t(0,NAEA)][range_t()]],true);
+                                       G({0,NAEA},{0,G.shape()[1]}),true);  
         csr::CSR2MA('H',OrbMats[1],PsiT);
         ov *= SDetOp.MixedDensityMatrix(OrbMats[1],PsiT,
-                                       G[indices[range_t(NAEA,NAEA+NAEB)][range_t()]],true);
+                                       G({NAEA,NAEA+NAEB},{0,G.shape()[1]}), true); 
       }    
-      boost::multi_array_ref<ComplexType,1> G1D(G.origin(),extents[G.num_elements()]);
+      MArray_ref<ComplexType,1> G1D(G.origin(),{G.num_elements()});
       HamOp.vbias(G1D,std::forward<Vec>(v));
     } else {
       size_t Gsize = dm_size(true);
       auto Gdims = dm_dims(true,Alpha);
-      boost::multi_array<ComplexType,1> G1D(extents[Gsize]);
+      MArray<ComplexType,1> G1D({Gsize});
       std::fill_n(G1D.origin(),G1D.num_elements(),ComplexType(0));
       ComplexType ov(0);  
       if(walker_type != COLLINEAR) {
-        boost::multi_array<ComplexType,2> G_(extents[Gdims.first][Gdims.second]);
-        boost::multi_array_ref<ComplexType,1> G1D_(G_.origin(),extents[Gdims.first*Gdims.second]);
+        MArray<ComplexType,2> G_({Gdims.first,Gdims.second});
+        MArray_ref<ComplexType,1> G1D_(G_.origin(),{Gdims.first*Gdims.second});
         int n0,n1;
         std::tie(n0,n1) = FairDivideBoundary(TG.getGlobalRank(),ndets*(ndets+1)/2,
                                              TG.getGlobalSize());
@@ -1035,8 +1031,8 @@ namespace afqmc
           }
         }
       } else {
-        boost::multi_array<ComplexType,2> G_(extents[2*NMO][NMO]);
-        boost::multi_array_ref<ComplexType,1> G1D_(G_.origin(),extents[2*NMO*NMO]);
+        MArray<ComplexType,2> G_({2*NMO,NMO});
+        MArray_ref<ComplexType,1> G1D_(G_.origin(),{2*NMO*NMO});
         int n0,n1;
         std::tie(n0,n1) = FairDivideBoundary(TG.getGlobalRank(),ndets*(ndets+1)/2,
                                              TG.getGlobalSize());
@@ -1051,9 +1047,9 @@ namespace afqmc
               csr::CSR2MA('H',OrbMats[2*p+1],PsiTB);
             }
             ComplexType ov_ = SDetOp.MixedDensityMatrix(OrbMats[2*q],PsiT,
-                                G_[indices[range_t(0,NMO)][range_t()]],false);
+                                G_({0,NMO},{0,G_.shape()[1]}),false);
             ov_ *= SDetOp.MixedDensityMatrix(OrbMats[2*q+1],PsiTB,
-                                G_[indices[range_t(NMO,2*NMO)][range_t()]],false);
+                                G_({NMO,2*NMO},{0,G_.shape()[1]}),false);
             ov += real(conj(ci[q])*ci[p]*ov_);
             for(int i=0; i<G1D.num_elements(); i++)
               G1D[i] += real(conj(ci[q])*ci[p]*ov_*G1D_[i]);
@@ -1063,10 +1059,10 @@ namespace afqmc
       TG.Global().all_reduce_in_place_n(G1D.origin(),G1D.num_elements(),std::plus<>());  
       ComplexType ov_ = TG.Global().all_reduce_value(ov,std::plus<>());  
       ma::scal(ComplexType(1.0,0.0)/ov_,G1D);
-      HamOp.vbias(G1D[indices[range_t(0,Gdims.first*Gdims.second)]],
+      HamOp.vbias(G1D({0,Gdims.first*Gdims.second}),  //[indices[range_t(0,Gdims.first*Gdims.second)]],
                   std::forward<Vec>(v));
       if(walker_type==COLLINEAR)
-        HamOp.vbias(G1D[indices[range_t(NMO*NMO,2*NMO*NMO)]],
+        HamOp.vbias(G1D({NMO*NMO,2*NMO*NMO}),  //[indices[range_t(NMO*NMO,2*NMO*NMO)]],
                   std::forward<Vec>(v),1.0,1.0);
     }
     // since v is not in shared memory, we need to reduce

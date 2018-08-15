@@ -107,7 +107,7 @@ void halfRotateCholeskyMatrix(WALKER_TYPES type, task_group& TG, int k0, int kN,
   if(type==NONCOLLINEAR)
     APP_ABORT(" GHF not yet implemented. \n");
 
-  boost::multi_array<SPComplexType,1> vec(extents[nvec]);
+  MArray<SPComplexType,1> vec({nvec});
   if(reserve_to_fit_) {
     std::vector<std::size_t> sz_per_row( Qdim ); 
     int cnt=0;
@@ -257,7 +257,7 @@ SpCType_shm_csr_matrix halfRotateCholeskyMatrixForBias(WALKER_TYPES type, task_g
   if(type==NONCOLLINEAR)
     APP_ABORT(" GHF not yet implemented. \n");
 
-  boost::multi_array<SPComplexType,1> vec(extents[nvec]);
+  MArray<SPComplexType,1> vec({nvec});
   std::vector<std::size_t> sz_per_row( nvec ); 
   std::size_t cnt=0;
   for(int a=0; a<NAEA; a++) {
@@ -401,7 +401,7 @@ void halfRotateCholeskyMatrix(WALKER_TYPES type, task_group& TG, int k0, int kN,
       if( cnt < ak0 ) continue;
       if( cnt >= ak1 ) break;  
       if(transpose) {
-        auto vec = Q[indices[range_t()][cnt]];
+        auto vec = Q({0,Q.shape()[0]},cnt);  
         for(auto& v:vec) v=SPComplexType(0,0); 
         auto Aa = (*Alpha)[a];
         for(int ip = 0; ip<Aa.num_non_zero_elements(); ++ip) {
@@ -436,7 +436,7 @@ void halfRotateCholeskyMatrix(WALKER_TYPES type, task_group& TG, int k0, int kN,
         if( cnt < ak0 ) continue;
         if( cnt >= ak1 ) break;
         if(transpose) {
-          auto vec = Q[indices[range_t()][cnt]];
+          auto vec = Q({0,Q.shape()[0]},cnt);  
           for(auto& v:vec) v=SPComplexType(0,0);
           auto Aa = (*Beta)[a];
           for(int ip = 0; ip<Aa.num_non_zero_elements(); ++ip) {
