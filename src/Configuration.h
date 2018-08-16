@@ -20,6 +20,7 @@
 #ifndef QMCPLUSPLUS_TRAITS_H
 #define QMCPLUSPLUS_TRAITS_H
 
+#include <iostream>
 #include <config.h>
 #include <string>
 #include <vector>
