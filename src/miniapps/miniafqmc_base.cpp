@@ -145,6 +145,10 @@ int main(int argc, char **argv)
     }
   }
 
+  if (verbose) {
+    outputManager.setVerbosity(Verbosity::HIGH);
+  }
+
   Random.init(0, 1, iseed);
   int ip = 0;
   PrimeNumberSet<uint32_t> myPrimes;

@@ -119,8 +119,8 @@ ENDIF()
   ####################################
   SET(UTILITIES
     Utilities/RandomGenerator.cpp 
-    Utilities/OhmmsInform.cpp 
-    Utilities/OhmmsInfo.cpp 
+    Utilities/InfoStream.cpp
+    Utilities/OutputManager.cpp
     Utilities/NewTimer.cpp
     io/hdf_archive.cpp
     ${GITREV_TMP}
