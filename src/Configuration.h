@@ -28,6 +28,8 @@
 #include <complex>
 #include <Message/Communicate.h>
 
+#include <Kokkos_Core.hpp>
+
 #define byRows   999
 #define byCols   111
 
@@ -77,14 +79,16 @@ namespace qmcplusplus
   enum WALKER_TYPES {UNDEFINED_WALKER_TYPE, CLOSED, COLLINEAR, NONCOLLINEAR};
 
   // [nwalk][2][NMO][NAEA]
-  typedef boost::multi_array<ValueType,4> WalkerContainer;
+  // typedef boost::multi_array<ValueType,4> WalkerContainer;
+  typedef Kokkos::View<ValueType****> WalkerContainer;
 
   typedef boost::multi_array<IndexType,1> IndexVector;
   typedef boost::multi_array<RealType,1> RealVector;
   typedef boost::multi_array<SPRealType,1> SPRealVector;
   typedef boost::multi_array<ValueType,1> ValueVector;
   typedef boost::multi_array<SPValueType,1> SPValueVector;
-  typedef boost::multi_array<ComplexType,1> ComplexVector;
+  // typedef boost::multi_array<ComplexType,1> ComplexVector;
+  typedef Kokkos::View<ComplexType*> ComplexVector;
   typedef boost::multi_array<SPComplexType,1> SPComplexVector;
 
   typedef boost::multi_array<IndexType,2> IndexMatrix;  
@@ -92,7 +96,8 @@ namespace qmcplusplus
   typedef boost::multi_array<SPRealType,2> SPRealMatrix;  
   typedef boost::multi_array<ValueType,2> ValueMatrix;  
   typedef boost::multi_array<SPValueType,2> SPValueMatrix;  
-  typedef boost::multi_array<ComplexType,2> ComplexMatrix;  
+  // typedef boost::multi_array<ComplexType,2> ComplexMatrix;
+  typedef Kokkos::View<ComplexType**, Kokkos::LayoutRight> ComplexMatrix;
   typedef boost::multi_array<SPComplexType,2> SPComplexMatrix;  
 
 inline std::ostream &app_log() { return std::cout; }

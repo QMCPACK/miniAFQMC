@@ -1,0 +1,144 @@
+////////////////////////////////////////////////////////////////////////
+// This file is distributed under the University of Illinois/NCSA Open Source
+// License.  See LICENSE file in top directory for details.
+//
+// Copyright (c) 2016 Jeongnim Kim and QMCPACK developers.
+//
+// File developed by:
+// Miguel A. Morales, moralessilva2@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+// Alfredo Correa, correaa@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+//
+// File created by:
+// Miguel A. Morales, moralessilva2@llnl.gov 
+//    Lawrence Livermore National Laboratory 
+////////////////////////////////////////////////////////////////////////////////
+
+/** @file mixed_density_matrix.hpp
+ *  @brief Mixed Density Matrix
+ */
+
+#ifndef  AFQMC_DENSITY_MATRIX_HPP 
+#define  AFQMC_DENSITY_MATRIX_HPP 
+
+#include "Numerics/ma_operations.hpp"
+
+namespace qmcplusplus
+{
+
+namespace base 
+{
+
+/**
+ * Calculates the 1-body mixed density matrix:
+ *
+ *   \f$ \left< A | c+i cj | B \right> / \left<A|B\right> = A^\dagger ( B^T * A^\dagger )^{-1}  B^T \f$
+ *
+ *   If compact == True, returns [NEL x M] matrix:
+ *
+ *   \f$ \left< A | c+i cj | B \right> / \left<A|B\right> = ( B^T * A^\dagger )^{-1} B^T \f$
+ *
+ * Parameters:
+ *  - conjA = conj(A)
+ *  - B
+ *  - C = < A | c+i cj | B > / <A|B>
+ *  - T1: [ NEL x NEL ] work matrix   
+ *  - T2: (only used if compact = False) [ NEL x M ] work matrix   
+ *  - IWORK: [ N ] integer biffer for invert. Dimensions must be at least NEL. 
+ *  - WORK: [ >=NEL ] Work space for invert. Dimensions must be at least NEL.   
+ *  - compact (default = True)
+ *  returns:
+ *  - <A|B> = det[ T(B) * conj(A) ]  
+ */
+// Serial Implementation
+template< class Tp,
+          class MatA,
+          class MatB,
+          class MatC,
+          class Mat,
+          class IBuffer,
+          class TBuffer 
+        >
+inline Tp MixedDensityMatrix(const MatA& conjA, const MatB& B, MatC&& C, Mat&& T1, Mat&& T2, IBuffer& IWORK, TBuffer& WORK, bool compact=true)
+{
+  // check dimensions are consistent
+  assert( conjA.dimension_0() == B.dimension_0() );
+  assert( conjA.dimension_1() == T1.dimension_1() );
+  assert( B.dimension_1() == T1.dimension_0() );
+  assert( T1.dimension_1() == B.dimension_1() );
+  assert( T2.dimension_0() == T1.dimension_0() );
+  if(compact) {
+    assert( C.dimension_0() == T1.dimension_0() );
+    assert( C.dimension_1() == B.dimension_0() );
+  } else {
+    assert( T2.dimension_1() == B.dimension_0() );
+    assert( C.dimension_0() == conjA.dimension_0() );
+    assert( C.dimension_1() == T2.dimension_1() );
+  }
+
+  using ma::T;
+
+  // T(B)*conj(A) 
+  ma::product(T(B),conjA,std::forward<Mat>(T1));  
+
+  // T1 = T1^(-1)
+  Tp ovlp = static_cast<Tp>(ma::invert(std::forward<Mat>(T1),IWORK,WORK));
+
+  if(compact) {
+
+    // C = T1 * T(B)
+    ma::product(T1,T(B),std::forward<MatC>(C)); 
+
+  } else {
+
+    // T2 = T1 * T(B)
+    ma::product(std::forward<Mat>(T1),T(B),std::forward<Mat>(T2)); 
+
+    // C = conj(A) * T2
+    ma::product(conjA,std::forward<Mat>(T2),std::forward<MatC>(C));
+
+  }
+
+  return ovlp;
+}
+
+
+/*
+ * Returns the overlap of 2 Slater determinants:  <A|B> = det[ T(B) * conj(A) ]  
+ * Parameters:
+ *  - conjA = conj(A)
+ *  - B
+ *  - IWORK: [ M ] integer work matrix   
+ *  - T1: [ NEL x NEL ] work matrix   
+ *  returns:
+ *  - <A|B> = det[ T(B) * conj(A) ]  
+ */
+// Serial Implementation
+template< class Tp,
+          class MatA,
+          class MatB,
+          class Mat,
+          class IBuffer
+        >
+inline Tp Overlap(const MatA& conjA, const MatB& B, Mat&& T1, IBuffer& IWORK)
+{
+  // check dimensions are consistent
+  assert( conjA.dimension_0() == B.dimension_0() );
+  assert( conjA.dimension_1() == T1.dimension_1() );
+  assert( B.dimension_1() == T1.dimension_0() );
+  assert( T1.dimension_1() == B.dimension_1() );
+
+  using ma::T;
+
+  // T(B)*conj(A) 
+  ma::product(T(B),conjA,std::forward<Mat>(T1));  
+
+  return static_cast<Tp>(ma::determinant(std::forward<Mat>(T1),IWORK));
+}
+
+} // namespace base
+
+} // namespace qmcplusplus 
+
+#endif
