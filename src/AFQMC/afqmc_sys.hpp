@@ -180,11 +180,13 @@ struct afqmc_sys: public AFQMCInfo
             W[i][1][r][c] = TMat_NM[c][r];
 */
 
+// No QR right now
         // LQ on the direct matrix
         ma::gelqf(W[i][0],TAU,WORK);
         ma::glq(W[i][0],TAU,WORK);
         ma::gelqf(W[i][1],TAU,WORK);
         ma::glq(W[i][1],TAU,WORK);
+
 
       }
     }

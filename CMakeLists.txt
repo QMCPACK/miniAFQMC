@@ -473,7 +473,7 @@ ENDIF(ENABLE_GCOV)
 #ENDIF()
 # once C++11 is needed
 IF(CXX11_NEEDED)
-  SET(CXX11_FLAG "-std=c++14")
+  SET(CXX11_FLAG "-std=c++14 -stdlib=libc++")
   #check if the CXX compiler supports -std=c++11 option
   include(CheckCXXCompilerFlag)
   CHECK_CXX_COMPILER_FLAG(${CXX11_FLAG} CXX_COMPILER_SUPPORT_CXX11)
@@ -505,6 +505,8 @@ IF(CXX11_NEEDED)
     ENDIF()
   ENDIF()
 ENDIF(CXX11_NEEDED)
+
+SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__NO_QR__")
 
 # AFQMC requires MKL sparse for good performance (roughly a factor of 2x)
 IF (BUILD_AFQMC AND NOT MKL_FOUND)
