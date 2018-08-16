@@ -193,7 +193,7 @@ template<class MultiArray2D> struct hermitian_tag{
 	static auto const dimensionality = std::decay<MultiArray2D>::type::dimensionality;
 	hermitian_tag(hermitian_tag const&) = delete;
 	hermitian_tag(hermitian_tag&&) = default;
-	static const char tag = 'H';
+	static const char tag = 'C';
 };
 
 template<class MultiArray2D> hermitian_tag<MultiArray2D> hermitian(MultiArray2D&& arg){
@@ -203,7 +203,7 @@ template<class MultiArray2D> hermitian_tag<MultiArray2D> hermitian(MultiArray2D&
 template<class MultiArray2D>
 MultiArray2D arg(hermitian_tag<MultiArray2D> const& nt){return nt.arg1;}
 
-template<class MultiArray2D> struct op_tag<hermitian_tag<MultiArray2D>> : std::integral_constant<char, 'H'>{};
+template<class MultiArray2D> struct op_tag<hermitian_tag<MultiArray2D>> : std::integral_constant<char, 'C'>{};
 
 template<class MultiArray2D>
 MultiArray2D arg(hermitian_tag<MultiArray2D>& ht){return ht.arg1;}
@@ -288,6 +288,40 @@ T determinant(MultiArray2D&& m, MultiArray1D&& pivot){
 		}
 	}
 	return detvalue;
+}
+
+template<class MultiArray2D,
+         typename = typename std::enable_if_t<MultiArray2D::dimensionality == 2>
+        >
+MultiArray2D exp(MultiArray2D const& A) {
+        using Type = typename MultiArray2D::element;
+        using RealType = double; //typename qmcplusplus::afqmc::remove_complex<Type>::value_type;
+        using TVec = boost::multi_array<RealType,1>;
+        using TMat = boost::multi_array<Type,2>;
+        using eigSys = std::pair<TVec,TMat>;
+        assert(A.shape()[0]==A.shape()[1]);
+        size_t N = A.shape()[0];
+
+        MultiArray2D ExpA(boost::extents[N][N]);
+        std::fill_n(ExpA.origin(),N*N,Type(0));
+
+        if(is_hermitian(A)) {
+
+          // A = V*M*H(Z)
+          eigSys V = symEig<TVec,TMat>(A);
+
+          // exp(A) = V*exp(M)*H(Z) 
+          MultiArray2D TA(boost::extents[N][N]);
+          for(int i=0; i<N; i++)
+            for(int j=0; j<N; j++)
+              TA[i][j] = V.second[i][j] * std::exp(V.first[j]);
+          product(TA,H(V.second),ExpA);
+
+        } else {
+          throw std::runtime_error("exp(A) not implemented for non-symmetric A");
+        }
+
+        return ExpA;
 }
 
 template<class MultiArray2D>

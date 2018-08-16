@@ -38,11 +38,8 @@
 
 #include "AFQMC/afqmc_sys.hpp"
 #include "Matrix/initialize_serial.hpp"
-#include "AFQMC/rotate.hpp"
+#include "AFQMC/THCOps.hpp"
 #include "AFQMC/mixed_density_matrix.hpp"
-#include "AFQMC/energy.hpp"
-#include "AFQMC/vHS.hpp"
-#include "AFQMC/vbias.hpp"
 
 using namespace std;
 using namespace qmcplusplus;
@@ -102,13 +99,11 @@ int main(int argc, char **argv)
   int nsubsteps=10; 
   int nwalk=16;
   int northo = 10;
-  const double dt = 0.01;  // 1-body propagators are assumed to be generated with a timestep = 0.01
+  const double dt = 0.005;  // 1-body propagators are assumed to be generated with a timestep = 0.01
 
   bool verbose = false;
   int iseed   = 11;
   std::string init_file = "afqmc.h5";
-
-  bool transposed_Spvn = true;
 
   ComplexType one(1.),zero(0.),half(0.5);
   ComplexType cone(1.),czero(0.);
@@ -134,9 +129,6 @@ int main(int argc, char **argv)
     case 'o': // the number of sub steps for drift/diffusion
       northo = atoi(optarg);
       break;
-    case 't':
-      transposed_Spvn = (std::string(optarg) != "no");
-      break;
     case 'f':
       init_file = std::string(optarg);
       break;    
@@ -157,13 +149,7 @@ int main(int argc, char **argv)
 
   // Important Data Structures
   base::afqmc_sys AFQMCSys;   // Main AFQMC object. Control access to several apgorithmic functions. 
-  ComplexSpMat Spvn;      // (Symmetric) Factorized Hamiltonian, e.g. <ij|kl> = sum_n Spvn(ik,n) * Spvn(jl,n)
-  ComplexSpMat SpvnT;   // Transposed half-transformed Factorized Hamiltonian, SpvnT(n,ak) = sum_i conj(Wfn(a,i)) * Spvn(ik,n) 
-  ComplexMatrix haj;    // 1-Body Hamiltonian Matrix
-  ComplexSpMat Vakbl;   // 2-Body Hamiltonian Matrix: (Half-Rotated) 2-electron integrals 
   ComplexMatrix Propg1;   // propagator for 1-body hamiltonian 
-
-//  index_gen indices;
 
   hdf_archive dump;
   if(!dump.open(init_file,H5F_ACC_RDONLY)) 
@@ -173,21 +159,12 @@ int main(int argc, char **argv)
   std::cout<<"                 Initializing from HDF5                    \n"; 
   std::cout<<"***********************************************************\n";
 
-  if(!afqmc::Initialize(dump,dt,AFQMCSys,Propg1,Spvn,haj,Vakbl)) {
-    std::cerr<<" Error initalizing data structures from hdf5 file: " <<init_file <<std::endl;
-    exit(1);
-  }
-
-  if(transposed_Spvn) base::halfrotate_cholesky(AFQMCSys.trialwfn_alpha,
-                                                 AFQMCSys.trialwfn_beta,   
-                                                 Spvn,
-                                                 SpvnT   
-                                                );
+  afqmc::THCOps THC(afqmc::Initialize(dump,dt,AFQMCSys,Propg1)); 
 
   RealType Eshift = 0;
   int NMO = AFQMCSys.NMO;              // number of molecular orbitals
   int NAEA = AFQMCSys.NAEA;            // number of up electrons
-  int nchol = Spvn.cols();            // number of cholesky vectors  
+  int nchol = THC.number_of_cholesky_vectors();            // number of cholesky vectors  
   int NIK = 2*NMO*NMO;                // dimensions of linearized green function
   int NAK = 2*NAEA*NMO;               // dimensions of linearized "compacted" green function
 
@@ -205,17 +182,12 @@ int main(int argc, char **argv)
            <<"    nwalk: " <<nwalk <<"\n"
            <<"    northo: " <<northo <<"\n"
            <<"    verbose: " <<std::boolalpha <<verbose <<"\n"
-           <<"    # Chol Vectors: " <<nchol <<"\n"
-           <<"    transposed Spvn: " <<transposed_Spvn <<"\n"
-           <<"    Chol. Matrix Sparsity: " <<Spvn.size()/double(nchol*NMO*NMO) <<"\n"
-           <<"    Hamiltonian Sparsity: " <<Vakbl.size()/double(NAEA*NAEA*NMO*NMO*4.0) <<std::endl;
+           <<"    # Chol Vectors: " <<nchol <<std::endl;
 
   ComplexMatrix vbias(extents[nchol][nwalk]);     // bias potential
-  ComplexMatrix vHS(extents[NMO*NMO][nwalk]);        // Hubbard-Stratonovich potential
-  ComplexMatrix G(extents[NIK][nwalk]);           // density matrix
-  ComplexMatrix Gc(extents[NAK][nwalk]);           // compact density matrix for energy evaluation
+  ComplexMatrix vHS(extents[nwalk][NMO*NMO]);        // Hubbard-Stratonovich potential
+  ComplexMatrix Gc(extents[nwalk][NAK]);           // compact density matrix for energy evaluation
   ComplexMatrix X(extents[nchol][nwalk]);         // X(n,nw) = rand(n,nw) ( + vbias(n,nw)) 
-
   ComplexVector hybridW(extents[nwalk]);         // stores weight factors
   ComplexVector eloc(extents[nwalk]);         // stores local energies
 
@@ -236,8 +208,8 @@ int main(int argc, char **argv)
     W_data[n][1] = ComplexType(1.);
 
   // initialize overlaps and energy
-  AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc,true);
-  RealType Eav = AFQMCSys.calculate_energy(W_data,Gc,haj,Vakbl);
+  AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc);
+  RealType Eav = THC.energy(W_data,Gc);
   
   std::cout<<"\n";
   std::cout<<"***********************************************************\n";
@@ -253,28 +225,14 @@ int main(int argc, char **argv)
       // propagate walker forward 
       
       // 1. calculate density matrix and bias potential 
-      
-      if(transposed_Spvn) {
 
-        Timers[Timer_DMc]->start();
-        AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc,true);
-        Timers[Timer_DMc]->stop();
+      Timers[Timer_DMc]->start();
+      AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc);
+      Timers[Timer_DMc]->stop();
 
-        Timers[Timer_vbias]->start();
-        base::get_vbias(SpvnT,Gc,vbias,true);  
-        Timers[Timer_vbias]->stop();
-  
-      } else {
-
-        Timers[Timer_DM]->start();
-        AFQMCSys.calculate_mixed_density_matrix(W,W_data,G,false); 
-        Timers[Timer_DM]->stop();
-
-        Timers[Timer_vbias]->start();
-        base::get_vbias(Spvn,G,vbias,false);
-        Timers[Timer_vbias]->stop();
-
-      } 
+      Timers[Timer_vbias]->start();
+      THC.vbias(Gc,vbias);  
+      Timers[Timer_vbias]->stop();
 
       // 2. calculate X and weight
       //  X(chol,nw) = rand + i*vbias(chol,nw)
@@ -289,9 +247,8 @@ int main(int argc, char **argv)
       Timers[Timer_X]->stop();
 
       // 3. calculate vHS
-      // vHS(i,k,nw) = sum_n Spvn(i,k,n) * X(n,nw) 
       Timers[Timer_vHS]->start();
-      base::get_vHS(Spvn,X,vHS);      
+      THC.vHS(X,vHS);      
       Timers[Timer_vHS]->stop();
 
       // 4. propagate walker
@@ -335,12 +292,12 @@ int main(int argc, char **argv)
         AFQMCSys.calculate_overlaps(W,W_data);
         Timers[Timer_ovlp]->stop();
       }
-       
+
     }
 
     Timers[Timer_eloc]->start();
     AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc,true);
-    Eav = AFQMCSys.calculate_energy(W_data,Gc,haj,Vakbl);
+    Eav = THC.energy(W_data,Gc);
     std::cout<<step <<"   " <<Eav <<"\n";
     Timers[Timer_eloc]->stop();
 

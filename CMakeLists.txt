@@ -473,7 +473,7 @@ ENDIF(ENABLE_GCOV)
 #ENDIF()
 # once C++11 is needed
 IF(CXX11_NEEDED)
-  SET(CXX11_FLAG "-std=c++11")
+  SET(CXX11_FLAG "-std=c++14")
   #check if the CXX compiler supports -std=c++11 option
   include(CheckCXXCompilerFlag)
   CHECK_CXX_COMPILER_FLAG(${CXX11_FLAG} CXX_COMPILER_SUPPORT_CXX11)

@@ -81,6 +81,8 @@
 
 #define dsyevr dsyevr_
 #define zheevr zheevr_
+#define ssyevr ssyevr_
+#define cheevr cheevr_
 #define zhegvx zhegvx_
 #define zgeqrf zgeqrf_
 #define zungqr zungqr_
@@ -282,6 +284,14 @@ void dggev(char *JOBVL, char *JOBVR, int *N, double *A, int *LDA, double *B,
 void sggev(char *JOBVL, char *JOBVR, int *N, float *A, int *LDA, float *B,
            int *LDB, float *ALPHAR, float *ALPHAI, float *BETA, float *VL,
            int *LDVL, float *VR, int *LDVR, float *WORK, int *LWORK, int *INFO);
+
+  void ssyevr (char &JOBZ, char &RANGE, char &UPLO, int &N, float *A, int &LDA, float &VL, float &VU, int &IL,
+             int &IU, float &ABSTOL, int &M, float *W, float* Z, int &LDZ, int* ISUPPZ, float *WORK,
+             int &LWORK, int* IWORK, int &LIWORK, int &INFO);
+
+  void cheevr (char &JOBZ, char &RANGE, char &UPLO, int &N, std::complex<float> *A, int &LDA, float &VL, float &VU,
+             int &IL, int &IU, float &ABSTOL, int &M, float *W, std::complex<float>* Z, int &LDZ, int* ISUPPZ,
+             std::complex<float> *WORK, int &LWORK, float* RWORK, int &LRWORK, int* IWORK, int &LIWORK, int &INFO);
 
 void dsyevr(char &JOBZ, char &RANGE, char &UPLO, int &N, double *A, int &LDA,
             double &VL, double &VU, int &IL, int &IU, double &ABSTOL, int &M,

@@ -25,7 +25,6 @@
 #include <vector>
 #include <map>
 #include <complex>
-#include <Utilities/OhmmsInfo.h>
 #include <Message/Communicate.h>
 
 #define byRows   999
@@ -51,8 +50,6 @@
 
 #include<boost/multi_array.hpp>
 
-#include "Matrix/SparseMatrix.hpp"
-
 namespace qmcplusplus
 {
 
@@ -76,15 +73,7 @@ namespace qmcplusplus
   typedef std::complex<RealType>         ComplexType;
   typedef std::complex<SPRealType>       SPComplexType;
 
-
-/*
-  typedef SMDenseVector<IndexType>     IndexSMVector;
-  typedef SMDenseVector<RealType>      RealSMVector;
-  typedef SMDenseVector<ValueType>     ValueSMVector;
-  typedef SMDenseVector<SPValueType>   SPValueSMVector;
-  typedef SMDenseVector<ComplexType>   ComplexSMVector;
-  typedef SMDenseVector<SPComplexType>   SPComplexSMVector;
-*/
+  enum WALKER_TYPES {UNDEFINED_WALKER_TYPE, CLOSED, COLLINEAR, NONCOLLINEAR};
 
   // [nwalk][2][NMO][NAEA]
   typedef boost::multi_array<ValueType,4> WalkerContainer;
@@ -105,35 +94,19 @@ namespace qmcplusplus
   typedef boost::multi_array<ComplexType,2> ComplexMatrix;  
   typedef boost::multi_array<SPComplexType,2> SPComplexMatrix;  
 
-  typedef SparseMatrix<IndexType>     IndexSpMat;
-  typedef SparseMatrix<RealType>      RealSpMat;
-  typedef SparseMatrix<ValueType>     ValueSpMat;
-  typedef SparseMatrix<SPValueType>   SPValueSpMat;
-  typedef SparseMatrix<ComplexType>   ComplexSpMat;
-/*
-  typedef SMSparseMatrix<IndexType>     IndexSMSpMat;
-  typedef SMSparseMatrix<RealType>      RealSMSpMat;
-  typedef SMSparseMatrix<ValueType>     ValueSMSpMat;
-  typedef SMSparseMatrix<SPValueType>   SPValueSMSpMat;
-  typedef SMSparseMatrix<ComplexType>   ComplexSMSpMat;
-  typedef SMSparseMatrix<SPComplexType>   SPComplexSMSpMat;
-*/
-
-inline std::ostream &app_log() { return OhmmsInfo::Log->getStream(); }
+inline std::ostream &app_log() { return std::cout; }
 
 inline std::ostream &app_error()
 {
-  OhmmsInfo::Log->getStream() << "ERROR ";
-  return OhmmsInfo::Error->getStream();
+  return std::cerr; 
 }
 
 inline std::ostream &app_warning()
 {
-  OhmmsInfo::Log->getStream() << "WARNING ";
-  return OhmmsInfo::Warn->getStream();
+  return std::cout; 
 }
 
-inline std::ostream &app_debug() { return OhmmsInfo::Debug->getStream(); }
+inline std::ostream &app_debug() { return std::cout; } 
 }
 
 namespace std{

@@ -327,6 +327,46 @@ struct BLAS
     return res;
   }
 
+  template<typename T>
+  inline static
+  T dot(int n, const T* restrict a, int incx, const T* restrict b, int incy)
+  {
+    T res=T(0);
+    for(int i=0, ia=0, ib=0; i<n; ++i, ia+=incx, ib+=incy)
+      res += a[ia]*b[ib];
+    return res;
+  }
+
+  template<typename T>
+  inline static
+  std::complex<T> dot(int n, const std::complex<T>* restrict a, int incx, const T* restrict b, int incy)
+  {
+    std::complex<T> res=T(0);
+    for(int i=0, ia=0, ib=0; i<n; ++i, ia+=incx, ib+=incy)
+      res += a[ia]*b[ib];
+    return res;
+  }
+
+  template<typename T>
+  inline static
+  std::complex<T> dot(int n, const T* restrict a, int incx, const std::complex<T>* restrict b, int incy)
+  {
+    std::complex<T> res=T(0);
+    for(int i=0, ia=0, ib=0; i<n; ++i, ia+=incx, ib+=incy)
+      res += a[ia]*b[ib];
+    return res;
+  }
+
+  template<typename T>
+  inline static
+  std::complex<T> dot(int n, const std::complex<T>* restrict a, int incx, const std::complex<T>* restrict b, int incy)
+  {
+    std::complex<T> res=T(0);
+    for(int i=0, ia=0, ib=0; i<n; ++i, ia+=incx, ib+=incy)
+      res += a[ia]*b[ib];
+    return res;
+  }
+
   template <typename T>
   inline static void copy(int n, const T *restrict a, T *restrict b)
   {
@@ -449,6 +489,48 @@ struct LAPACK
   {
     sggev(jobvl, jobvr, n, a, lda, b, ldb, alphar, alphai, beta, vl, ldvl, vr,
           ldvr, work, lwork, info);
+  }
+
+  inline static
+  void hevr (char &JOBZ, char &RANGE, char &UPLO, int &N, float *A, int &LDA,
+             float &VL, float &VU,int &IL, int &IU, float &ABSTOL, int &M, float *W,
+             float* Z, int &LDZ, int* ISUPPZ, float *WORK,
+             int &LWORK, float* RWORK, int &LRWORK, int* IWORK, int &LIWORK, int &INFO)
+  {
+    if(WORK) WORK[0]=0;
+    ssyevr (JOBZ,RANGE,UPLO,N,A,LDA,VL,VU,IL,IU,ABSTOL,M,W,Z,LDZ,ISUPPZ,
+            RWORK,LRWORK,IWORK,LIWORK,INFO);
+  }
+
+  inline static
+  void hevr (char &JOBZ, char &RANGE, char &UPLO, int &N, double *A, int &LDA,
+             double &VL, double &VU,int &IL, int &IU, double &ABSTOL, int &M, double *W,
+             double* Z, int &LDZ, int* ISUPPZ, double *WORK,
+             int &LWORK, double* RWORK, int &LRWORK, int* IWORK, int &LIWORK, int &INFO)
+  {
+    if(WORK) WORK[0]=0;
+    dsyevr (JOBZ,RANGE,UPLO,N,A,LDA,VL,VU,IL,IU,ABSTOL,M,W,Z,LDZ,ISUPPZ,
+            RWORK,LRWORK,IWORK,LIWORK,INFO);
+  }
+
+  inline static
+  void hevr (char &JOBZ, char &RANGE, char &UPLO, int &N, std::complex<float> *A, int &LDA,
+             float &VL, float &VU,int &IL, int &IU, float &ABSTOL, int &M, float *W,
+             std::complex<float>* Z, int &LDZ, int* ISUPPZ,std::complex<float> *WORK,
+             int &LWORK, float* RWORK, int &LRWORK, int* IWORK, int &LIWORK, int &INFO)
+  {
+    cheevr (JOBZ,RANGE,UPLO,N,A,LDA,VL,VU,IL,IU,ABSTOL,M,W,Z,LDZ,ISUPPZ,WORK,LWORK,
+            RWORK,LRWORK,IWORK,LIWORK,INFO);
+  }
+
+  inline static
+  void hevr (char &JOBZ, char &RANGE, char &UPLO, int &N, std::complex<double> *A, int &LDA,
+             double &VL, double &VU,int &IL, int &IU, double &ABSTOL, int &M, double *W,
+             std::complex<double>* Z, int &LDZ, int* ISUPPZ,std::complex<double> *WORK,
+             int &LWORK, double* RWORK, int &LRWORK, int* IWORK, int &LIWORK, int &INFO)
+  {
+    zheevr (JOBZ,RANGE,UPLO,N,A,LDA,VL,VU,IL,IU,ABSTOL,M,W,Z,LDZ,ISUPPZ,WORK,LWORK,
+            RWORK,LRWORK,IWORK,LIWORK,INFO);
   }
 
   void static getrf(

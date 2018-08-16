@@ -26,9 +26,8 @@
 #include "Numerics/ma_lapack.hpp"
 #include "Numerics/ma_operations.hpp"
 #include "AFQMC/AFQMCInfo.hpp"
-#include "AFQMC/energy.hpp"
-#include "AFQMC/vHS.hpp"
 #include "AFQMC/mixed_density_matrix.hpp"
+#include "AFQMC/apply_expM.hpp"
 
 namespace qmcplusplus
 {
@@ -58,6 +57,11 @@ struct afqmc_sys: public AFQMCInfo
     ComplexMatrix trialwfn_alpha;
     ComplexMatrix trialwfn_beta;
 
+    // bad design, but simple for now
+    ComplexMatrix rotMuv;
+    ComplexMatrix rotPiu;
+    ComplexMatrix rotcPua;
+
     void setup(int nmo_, int na) {
       NMO = nmo_;
       NAEA = NAEB = na;
@@ -66,7 +70,6 @@ struct afqmc_sys: public AFQMCInfo
       TMat_MN.resize(extents[NMO][NAEA]);
       TMat_NN.resize(extents[NAEA][NAEA]);
       TMat_MM.resize(extents[NMO][NMO]); 
-      TMat_MM2.resize(extents[NMO][NMO]); 
 
       // reserve enough space in lapack's work array
       // Make sure it is large enough for:
@@ -115,23 +118,6 @@ struct afqmc_sys: public AFQMCInfo
       }
     }
 
-    template<class SpMat,
-             class Mat
-            >
-    RealType calculate_energy(Mat& W_data, const Mat& G, const Mat& haj, const SpMat& V) 
-    {
-      assert(G.shape()[0] == 2*NAEA*NMO);
-      if(G.shape()[1] != Gcloc.shape()[1])
-        Gcloc.resize(extents[2*NMO*NAEA][G.shape()[1]]);  
-      base::calculate_energy(W_data,G,Gcloc,haj,V);
-      RealType eav = 0., wgt=0.;
-      for(int n=0, nw=G.shape()[1]; n<nw; n++) {
-        wgt += W_data[n][1].real();
-        eav += W_data[n][0].real()*W_data[n][1].real();
-      }
-      return eav/wgt;
-    }
-
     template<class WSet, class Mat>
     void calculate_overlaps(const WSet& W, Mat& W_data)
     {
@@ -149,23 +135,20 @@ struct afqmc_sys: public AFQMCInfo
             >
     void propagate(WSet& W, const MatA& Propg, const MatB& vHS)
     {
-      assert(vHS.shape()[0] == NMO*NMO);  
+      assert(vHS.shape()[1] == NMO*NMO);  
       using Type = typename std::decay<MatB>::type::element;
-      boost::const_multi_array_ref<Type,3> V(vHS.data(), extents[NMO][NMO][vHS.shape()[1]]);
+      boost::const_multi_array_ref<Type,3> V(vHS.data(), extents[vHS.shape()[0]][NMO][NMO]);
       // re-interpretting matrices to avoid new temporary space  
       boost::multi_array_ref<Type,2> T1(TMat_NM.data(), extents[NMO][NAEA]);
-      boost::multi_array_ref<Type,2> T2(TMat_MM2.data(), extents[NMO][NAEA]);
+      boost::multi_array_ref<Type,2> T2(TMat_MM.data(), extents[NMO][NAEA]);
       for(int nw=0, nwalk=W.shape()[0]; nw<nwalk; nw++) {
 
-        // need deep-copy, since stride()[1] == nw otherwise
-        TMat_MM = V[ indices[range_t(0,NMO)][range_t(0,NMO)][nw] ];
-
         ma::product(Propg,W[nw][0],TMat_MN);
-        base::apply_expM(TMat_MM,TMat_MN,T1,T2,6);
+        base::apply_expM(V[nw],TMat_MN,T1,T2,6);
         ma::product(Propg,TMat_MN,W[nw][0]);
 
         ma::product(Propg,W[nw][1],TMat_MN);
-        base::apply_expM(TMat_MM,TMat_MN,T1,T2,6);
+        base::apply_expM(V[nw],TMat_MN,T1,T2,6);
         ma::product(Propg,TMat_MN,W[nw][1]);
 
       }
@@ -223,7 +206,6 @@ struct afqmc_sys: public AFQMCInfo
     ComplexMatrix TMat_NM;
     ComplexMatrix TMat_MN;
     ComplexMatrix TMat_MM;
-    ComplexMatrix TMat_MM2;
 
     //! storage for contraction of 2-electron integrals with density matrix
     ComplexMatrix Gcloc;

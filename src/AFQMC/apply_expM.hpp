@@ -33,29 +33,6 @@ namespace base
 {
 
 /**
- * Calculates the H-S potential: 
- * \f$ vHS = Spvn * X  \f$
- *
- * \f$    vHS(ik,w) = \sum_n Spvn(ik,n) * X(n,w) \f$
- *
- * Serial Implementation
- */
-template< class SpMat,
-	  class MatA,	
-	  class MatB	
-        >
-inline void get_vHS(const SpMat& Spvn, const MatA& X, MatB&& v)
-{
-  // check dimensions are consistent
-  assert( Spvn.cols() == X.shape()[0] );
-  assert( Spvn.rows() == v.shape()[0] );
-  assert( X.shape()[1] == v.shape()[1] );
-
-  // Spvn*X 
-  ma::product(Spvn,X,std::forward<MatB>(v));  
-}
-
-/**
  * Calculate \f$S = \exp(V)*S \f$ using a Taylor expansion of exp(V)
  */ 
 template< class MatA,
