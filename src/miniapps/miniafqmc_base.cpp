@@ -96,7 +96,8 @@ int main(int argc, char **argv)
   int nsubsteps=10; 
   int nwalk=16;
   int northo = 10;
-  const double dt = 0.005;  // 1-body propagators are assumed to be generated with a timestep = 0.01
+  const double dt = 0.005;  
+  const double sqrtdt = std::sqrt(dt);  
 
   bool verbose = false;
   int iseed   = 11;
@@ -229,7 +230,7 @@ int main(int argc, char **argv)
       Timers[Timer_DM]->stop();
 
       Timers[Timer_vbias]->start();
-      THC.vbias(Gc,vbias);  
+      THC.vbias(Gc,vbias,sqrtdt);  
       Timers[Timer_vbias]->stop();
 
       // 2. calculate X and weight
@@ -246,13 +247,13 @@ int main(int argc, char **argv)
 
       // 3. calculate vHS
       Timers[Timer_vHS]->start();
-      THC.vHS(X,vHS);      
+      THC.vHS(X,vHS,sqrtdt);      
       Timers[Timer_vHS]->stop();
 
       // 4. propagate walker
       // W(new) = Propg1 * exp(vHS) * Propg1 * W(old)
       Timers[Timer_Propg]->start();
-//      AFQMCSys.propagate(W,Propg1,vHS);
+      AFQMCSys.propagate(W,Propg1,vHS);
       Timers[Timer_Propg]->stop();
 
       // 5. update overlaps

@@ -197,7 +197,7 @@ inline THCOps Initialize(hdf_archive& dump, const double dt, base::afqmc_sys& sy
     APP_ABORT("");
   }
   for(int i=0; i<NMO; i++) {
-   H1[i][i] += Propg1[i][i];
+   H1[i][i] = -0.5*dt*(H1[i][i] + Propg1[i][i]);
    for(int j=i+1; j<NMO; j++) {
      using std::conj;
      H1[i][j] += Propg1[i][j];

@@ -155,7 +155,6 @@ class THCOps
         boost::multi_array_ref<ComplexType,1> haj1D(haj.origin(),extents[haj.num_elements()]);
         ma::product(ComplexType(1.0),G,haj1D,ComplexType(0.0),E[indices[range_t()][0]]);
         for(int i=0; i<nwalk; i++) {
-std::cout<<" E0, E1: " <<E0 <<" " <<E[i][0] <<std::endl;
           E[i][0] += E0;
           Eav+=E[i][0];
         }
@@ -169,7 +168,7 @@ std::cout<<" E0, E1: " <<E0 <<" " <<E[i][0] <<std::endl;
           E[wi][2] = 0.5*ma::dot(Guu,Tuu);
           auto Mptr = rotMuv.origin();  
           auto Gptr = Guv.origin();  
-          for(size_t k=0; k<nv; ++k, ++Gptr, ++Mptr)
+          for(size_t k=0, kend=nu*nv; k<kend; ++k, ++Gptr, ++Mptr)
             (*Gptr) *= (*Mptr); 
           ma::product(Guv,rotcPua,Qub);
           // using this for now, which should not be much worse
@@ -182,37 +181,32 @@ std::cout<<" E0, E1: " <<E0 <<" " <<E[i][0] <<std::endl;
           { // Alpha
             boost::const_multi_array_ref<ComplexType,2> Gw(G[wi].origin(),extents[NAEA][nmo_]);
             boost::const_multi_array_ref<ComplexType,1> G1DA(Gw.origin(),extents[Gw.num_elements()]);
+            std::fill_n(Guu.origin(),Guu.num_elements(),SpC(0.0));
             Guv_Guu(Gw,Guv,Guu,T1,false);
-            // move calculation of Guv/Guu here to avoid storing 2 copies of Guv for alpha/beta
-            ma::product(rotMuv,Guu,Tuu);
-            E[wi][2] = 0.5*ma::dot(Guu,Tuu);
             auto Mptr = rotMuv.origin();
             auto Gptr = Guv.origin();
-            for(size_t k=0; k<nv; ++k, ++Gptr, ++Mptr)
+            for(size_t k=0, kend=nu*nv; k<kend; ++k, ++Gptr, ++Mptr)
               (*Gptr) *= (*Mptr);
             ma::product(Guv,rotcPua[indices[range_t()][range_t(0,NAEA)]],Qub);
             // using this for now, which should not be much worse
             ma::product(T(Qub),T(rotPiu),Rbk);
             E[wi][1] = -0.5*ma::dot(R1D,G1DA);
-std::cout<<" alpha EJ, EXX: " <<E[wi][2] <<" " <<E[wi][1] <<std::endl;
           }
           {  // beta
             boost::const_multi_array_ref<ComplexType,2> Gw(G[wi].origin()+NAEA*NMO,extents[NAEB][nmo_]);
             boost::const_multi_array_ref<ComplexType,1> G1DB(Gw.origin(),extents[Gw.num_elements()]);
             Guv_Guu(Gw,Guv,Guu,T1,true);
-            // move calculation of Guv/Guu here to avoid storing 2 copies of Guv for alpha/beta
             ma::product(rotMuv,Guu,Tuu);
-            E[wi][2] += 0.5*ma::dot(Guu,Tuu);
+            E[wi][2] = 0.5*ma::dot(Guu,Tuu);
             auto Mptr = rotMuv.origin();
             auto Gptr = Guv.origin();
-            for(size_t k=0; k<nv; ++k, ++Gptr, ++Mptr)
+            for(size_t k=0, kend=nu*nv; k<kend; ++k, ++Gptr, ++Mptr)
               (*Gptr) *= (*Mptr);
             ma::product(Guv,rotcPua[indices[range_t()][range_t(NAEA,NAEA+NAEB)]],Qub);
             // using this for now, which should not be much worse
             ma::product(T(Qub),T(rotPiu),Rbk);
             E[wi][1] -= 0.5*ma::dot(R1D,G1DB);
           }
-std::cout<<" EJ, EXX: " <<E[wi][2] <<" " <<E[wi][1] <<std::endl;
           Eav += (E[wi][1]+E[wi][2]);
         }
       }    
@@ -385,7 +379,7 @@ std::cout<<" EJ, EXX: " <<E[wi][2] <<" " <<E[wi][1] <<std::endl;
         ma::product(scl, rotcPua[indices[range_t()][range_t(0,NAEA)]], 
                   T1, zero, Guv);
       for(int v=0; v<nv; ++v) 
-        Guu[v] = Guv[v][v];  
+        Guu[v] += Guv[v][v];  
     }
 
   protected:
