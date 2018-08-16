@@ -155,6 +155,7 @@ class THCOps
         boost::multi_array_ref<ComplexType,1> haj1D(haj.origin(),extents[haj.num_elements()]);
         ma::product(ComplexType(1.0),G,haj1D,ComplexType(0.0),E[indices[range_t()][0]]);
         for(int i=0; i<nwalk; i++) {
+std::cout<<" E0, E1: " <<E0 <<" " <<E[i][0] <<std::endl;
           E[i][0] += E0;
           Eav+=E[i][0];
         }
@@ -180,7 +181,7 @@ class THCOps
         for(int wi=0; wi<nwalk; wi++) {
           { // Alpha
             boost::const_multi_array_ref<ComplexType,2> Gw(G[wi].origin(),extents[NAEA][nmo_]);
-            boost::const_multi_array_ref<ComplexType,1> G1DA(G[wi].origin(),extents[Gw.num_elements()]);
+            boost::const_multi_array_ref<ComplexType,1> G1DA(Gw.origin(),extents[Gw.num_elements()]);
             Guv_Guu(Gw,Guv,Guu,T1,false);
             // move calculation of Guv/Guu here to avoid storing 2 copies of Guv for alpha/beta
             ma::product(rotMuv,Guu,Tuu);
@@ -193,10 +194,11 @@ class THCOps
             // using this for now, which should not be much worse
             ma::product(T(Qub),T(rotPiu),Rbk);
             E[wi][1] = -0.5*ma::dot(R1D,G1DA);
+std::cout<<" alpha EJ, EXX: " <<E[wi][2] <<" " <<E[wi][1] <<std::endl;
           }
           {  // beta
             boost::const_multi_array_ref<ComplexType,2> Gw(G[wi].origin()+NAEA*NMO,extents[NAEB][nmo_]);
-            boost::const_multi_array_ref<ComplexType,1> G1DB(G[wi].origin(),extents[Gw.num_elements()]);
+            boost::const_multi_array_ref<ComplexType,1> G1DB(Gw.origin(),extents[Gw.num_elements()]);
             Guv_Guu(Gw,Guv,Guu,T1,true);
             // move calculation of Guv/Guu here to avoid storing 2 copies of Guv for alpha/beta
             ma::product(rotMuv,Guu,Tuu);
@@ -210,6 +212,7 @@ class THCOps
             ma::product(T(Qub),T(rotPiu),Rbk);
             E[wi][1] -= 0.5*ma::dot(R1D,G1DB);
           }
+std::cout<<" EJ, EXX: " <<E[wi][2] <<" " <<E[wi][1] <<std::endl;
           Eav += (E[wi][1]+E[wi][2]);
         }
       }    
@@ -362,8 +365,8 @@ class THCOps
       ComplexType zero(0.0,0.0);
 
       assert(Guu.shape()[0] == nv);
-      assert(Guv.shape()[1] == nu);
-      assert(Guv.shape()[2] == nv);
+      assert(Guv.shape()[0] == nu);
+      assert(Guv.shape()[1] == nv);
 
       // sync first
       int nel_ = G.shape()[0]; 

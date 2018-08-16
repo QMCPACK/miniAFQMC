@@ -41,13 +41,11 @@
 #include "AFQMC/THCOps.hpp"
 #include "AFQMC/mixed_density_matrix.hpp"
 
-using namespace std;
 using namespace qmcplusplus;
 
 enum MiniQMCTimers
 {
   Timer_Total,
-  Timer_DMc,
   Timer_DM,
   Timer_vbias,
   Timer_vHS,
@@ -61,7 +59,6 @@ enum MiniQMCTimers
 
 TimerNameList_t<MiniQMCTimers> MiniQMCTimerNames = {
     {Timer_Total, "Total"},
-    {Timer_DMc, "compact Mixed Density Matrix"},
     {Timer_DM, "Mixed Density Matrix"},
     {Timer_vbias, "Bias Potential"},
     {Timer_vHS, "H-S Potential"},
@@ -165,7 +162,6 @@ int main(int argc, char **argv)
   int NMO = AFQMCSys.NMO;              // number of molecular orbitals
   int NAEA = AFQMCSys.NAEA;            // number of up electrons
   int nchol = THC.number_of_cholesky_vectors();            // number of cholesky vectors  
-  int NIK = 2*NMO*NMO;                // dimensions of linearized green function
   int NAK = 2*NAEA*NMO;               // dimensions of linearized "compacted" green function
 
   std::cout<<"\n";
@@ -210,11 +206,13 @@ int main(int argc, char **argv)
   // initialize overlaps and energy
   AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc);
   RealType Eav = THC.energy(W_data,Gc);
+
   
   std::cout<<"\n";
   std::cout<<"***********************************************************\n";
   std::cout<<"                     Beginning Steps                       \n";   
   std::cout<<"***********************************************************\n\n";
+  std::cout<<"# Initial Energy: " <<Eav <<std::endl <<std::endl; 
   std::cout<<"# Step   Energy   \n";
 
   Timers[Timer_Total]->start();
@@ -226,9 +224,9 @@ int main(int argc, char **argv)
       
       // 1. calculate density matrix and bias potential 
 
-      Timers[Timer_DMc]->start();
+      Timers[Timer_DM]->start();
       AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc);
-      Timers[Timer_DMc]->stop();
+      Timers[Timer_DM]->stop();
 
       Timers[Timer_vbias]->start();
       THC.vbias(Gc,vbias);  
@@ -254,7 +252,7 @@ int main(int argc, char **argv)
       // 4. propagate walker
       // W(new) = Propg1 * exp(vHS) * Propg1 * W(old)
       Timers[Timer_Propg]->start();
-      AFQMCSys.propagate(W,Propg1,vHS);
+//      AFQMCSys.propagate(W,Propg1,vHS);
       Timers[Timer_Propg]->stop();
 
       // 5. update overlaps
@@ -296,7 +294,7 @@ int main(int argc, char **argv)
     }
 
     Timers[Timer_eloc]->start();
-    AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc,true);
+    AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc);
     Eav = THC.energy(W_data,Gc);
     std::cout<<step <<"   " <<Eav <<"\n";
     Timers[Timer_eloc]->stop();

@@ -95,6 +95,7 @@ struct afqmc_sys: public AFQMCInfo
 
     } 
 
+    // THC expects G[nwalk][ak]
     template< class WSet, 
               class Mat 
             >
@@ -102,19 +103,18 @@ struct afqmc_sys: public AFQMCInfo
     {
       int nwalk = W.shape()[0];
       assert(G.num_elements() >= 2*NAEA*NMO*nwalk);
+      assert(G.shape()[0] == nwalk);
+      assert(G.shape()[1] >= 2*NAEA*NMO);
       assert(W_data.shape()[0] >= nwalk);
       assert(W_data.shape()[1] >= 4);
       int N_ = compact?NAEA:NMO;
-      boost::multi_array_ref<ComplexType,2> DM(TMat_MM.data(), extents[N_][NMO]); 
-      boost::multi_array_ref<ComplexType,4> G_4D(G.data(), extents[2][N_][NMO][nwalk]); 
+      boost::multi_array_ref<ComplexType,4> G_4D(G.data(), extents[nwalk][2][N_][NMO]); 
       for(int n=0; n<nwalk; n++) {
         W_data[n][2] = base::MixedDensityMatrix<ComplexType>(trialwfn_alpha,W[n][0],
-                       DM,TMat_NN,TMat_NM,IWORK,WORK,compact);
-        G_4D[ indices[0][range_t(0,N_)][range_t(0,NMO)][n] ] = DM;
+                       G_4D[n][0],TMat_NN,TMat_NM,IWORK,WORK,compact);
 
         W_data[n][3] = base::MixedDensityMatrix<ComplexType>(trialwfn_beta,W[n][1],
-                       DM,TMat_NN,TMat_NM,IWORK,WORK,compact);
-        G_4D[ indices[1][range_t(0,N_)][range_t(0,NMO)][n] ] = DM;
+                       G_4D[n][1],TMat_NN,TMat_NM,IWORK,WORK,compact);
       }
     }
 
