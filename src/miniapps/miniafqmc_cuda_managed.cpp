@@ -41,6 +41,14 @@
 #include "AFQMC/THCOps.hpp"
 #include "AFQMC/mixed_density_matrix.hpp"
 
+#include "multi/array.hpp"
+#include "multi/array_ref.hpp"
+
+#include <cuda_runtime.h>
+#include "cublas_v2.h"
+
+#include "Numerics/detail/cuda_pointers.hpp"
+
 using namespace qmcplusplus;
 
 enum MiniQMCTimers
@@ -135,6 +143,49 @@ int main(int argc, char **argv)
     }
   }
 
+  cublasHandle_t cublas_handle;
+  cublasCreate (& cublas_handle );           //  initialize  CUBLAS  context
+
+  using Type = std::complex<double>;
+  int M=100;
+  int K=100;
+  int N=100;
+
+  boost::multi::array<Type,2,cuda_um_allocator<Type>> A( {M,K}, &cublas_handle);
+  boost::multi::array<Type,2,cuda_um_allocator<Type>> B( {K,N}, &cublas_handle);
+  boost::multi::array<Type,2,cuda_um_allocator<Type>> C( {M,N}, &cublas_handle);
+
+  boost::multi::array<Type,2> A_( {M,K} );
+  boost::multi::array<Type,2> B_( {K,N} );
+  boost::multi::array<Type,2> C_( {M,N} );
+
+  std::fill_n(get(A.origin()),M*K,Type(1));
+  std::fill_n(get(B.origin()),K*N,Type(1));
+  std::fill_n(get(C.origin()),M*N,Type(0));
+
+  std::cout<<" Running on cpu " <<std::endl;
+  ma::product(A_,B_,C_);
+
+  double sum(0.0);
+  for(int i=0; i<M; i++)
+   for(int j=0; j<N; j++)
+    sum += std::abs(C[i][j]);
+  std::cout<<" sum(C): " <<sum  <<std::endl;
+
+  std::fill_n(get(A.origin()),M*K,Type(1));
+  std::fill_n(get(B.origin()),K*N,Type(1));
+  std::fill_n(get(C.origin()),M*N,Type(0));
+
+  std::cout<<" Running on gpu " <<std::endl;
+  ma::product(A,B,C);
+
+  sum=0.0;
+  for(int i=0; i<M; i++)
+   for(int j=0; j<N; j++)
+    sum += std::abs(C_[i][j]);
+  std::cout<<" sum(C): " <<sum  <<std::endl;
+
+/*
   Random.init(0, 1, iseed);
   int ip = 0;
   PrimeNumberSet<uint32_t> myPrimes;
@@ -146,7 +197,7 @@ int main(int argc, char **argv)
   setup_timers(Timers, MiniQMCTimerNames, timer_level_coarse);
 
   // Important Data Structures
-  base::afqmc_sys AFQMCSys;   // Main AFQMC object. Control access to several apgorithmic functions. 
+  afqmc::afqmc_sys AFQMCSys;   // Main AFQMC object. Control access to several apgorithmic functions. 
   ComplexMatrix Propg1;   // propagator for 1-body hamiltonian 
 
   hdf_archive dump;
@@ -157,7 +208,11 @@ int main(int argc, char **argv)
   std::cout<<"                 Initializing from HDF5                    \n"; 
   std::cout<<"***********************************************************\n";
 
-  afqmc::THCOps THC(afqmc::Initialize(dump,dt,AFQMCSys,Propg1)); 
+  // since I don't have cuda allocators yet, hacking things for now
+  std::vector<ComplexType*> Cptrs;
+  std::vector<SPComplexType*> SpCptrs;
+
+  afqmc::gpu_um::THCOps  THC(afqmc::gpu_um::Initialize(dump,dt,AFQMCSys,Propg1,Cptrs,SpCptrs));;
 
   RealType Eshift = 0;
   int NMO = AFQMCSys.NMO;              // number of molecular orbitals
@@ -181,6 +236,8 @@ int main(int argc, char **argv)
            <<"    verbose: " <<std::boolalpha <<verbose <<"\n"
            <<"    # Chol Vectors: " <<nchol <<std::endl;
 
+
+  
   ComplexMatrix vbias(extents[nchol][nwalk]);     // bias potential
   ComplexMatrix vHS(extents[nwalk][NMO*NMO]);        // Hubbard-Stratonovich potential
   ComplexMatrix Gc(extents[nwalk][NAK]);           // compact density matrix for energy evaluation
@@ -204,16 +261,18 @@ int main(int argc, char **argv)
   for(int n=0; n<nwalk; n++) 
     W_data[n][1] = ComplexType(1.);
 
+
   // initialize overlaps and energy
   AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc);
   RealType Eav = THC.energy(W_data,Gc);
-  
+
   std::cout<<"\n";
   std::cout<<"***********************************************************\n";
   std::cout<<"                     Beginning Steps                       \n";   
   std::cout<<"***********************************************************\n\n";
   std::cout<<"# Initial Energy: " <<Eav <<std::endl <<std::endl; 
   std::cout<<"# Step   Energy   \n";
+
 
   Timers[Timer_Total]->start();
   for(int step = 0, step_tot=0; step < nsteps; step++) {
@@ -309,7 +368,73 @@ int main(int argc, char **argv)
   std::cout<<"                   Finished Calculation                    \n";   
   std::cout<<"***********************************************************\n\n";
 
+*/
+  
   TimerManager.print();
 
   return 0;
 }
+
+
+/*
+  using Type = std::complex<double>;
+  int M=100;
+  int K=100;
+  int N=100;
+  Type *A_f, *B_f, *C_f, *D_f;
+  cudaMallocManaged ((void**)&A_f,M*K*sizeof(Type),cudaMemAttachGlobal);
+  cudaMallocManaged ((void**)&B_f,K*N*sizeof(Type),cudaMemAttachGlobal);
+  cudaMallocManaged ((void**)&C_f,M*N*sizeof(Type),cudaMemAttachGlobal);
+  cuda_um_ptr<Type> A_ptr{A_f,&cublas_handle};
+  cuda_um_ptr<Type> B_ptr{B_f,&cublas_handle};
+  cuda_um_ptr<Type> C_ptr{C_f,&cublas_handle};
+  cuda_um_ptr<Type> D_ptr{D_f,&cublas_handle};
+
+  boost::multi::array_ref<Type,2,cuda_um_ptr<Type>> A(A_ptr, {M,K} );
+  boost::multi::array_ref<Type,2,cuda_um_ptr<Type>> B(B_ptr, {K,N} );
+  boost::multi::array_ref<Type,2,cuda_um_ptr<Type>> C(C_ptr, {M,N} );
+  boost::multi::array_ref<Type,2,cuda_um_ptr<Type>> D(D_ptr, {K,N} );
+
+  boost::multi::array_ref<Type,2> A_(A_f, {M,K} );
+  boost::multi::array_ref<Type,2> B_(B_f, {K,N} );
+  boost::multi::array_ref<Type,2> C_(C_f, {M,N} );
+
+  std::fill_n(A_f,M*K,Type(1));
+  std::fill_n(B_f,K*N,Type(1));
+  std::fill_n(C_f,M*N,Type(0));
+
+  std::cout<<" Running on cpu " <<std::endl;
+  ma::product(A_,B_,C_);
+
+  double sum(0.0);
+  for(int i=0; i<M; i++)
+   for(int j=0; j<N; j++)
+    sum += std::abs(C_[i][j]);
+  std::cout<<" sum(C): " <<sum  <<std::endl;
+
+  std::fill_n(C_f,M*N,Type(0));
+
+  std::cout<<" Running on gpu " <<std::endl;
+  ma::product(A,B,C);
+
+  sum=0.0;
+  for(int i=0; i<M; i++)
+   for(int j=0; j<N; j++)
+    sum += std::abs(C_[i][j]);
+  std::cout<<" sum(C): " <<sum  <<std::endl;
+
+  std::fill_n(C_f,M*N,double(0));
+
+  std::cout<<" Running problem " <<std::endl;
+  ma::product(A,D,C);
+
+  sum=0.0;
+  for(int i=0; i<M; i++)
+   for(int j=0; j<N; j++)
+    sum += std::abs(C_[i][j]);
+  std::cout<<" sum(C): " <<std::abs(sum)  <<std::endl;
+
+  cudaFree(A_f);                                       // free   memory
+  cudaFree(B_f);                                       // free   memory
+  cudaFree(C_f);                                       // free   memory
+*/

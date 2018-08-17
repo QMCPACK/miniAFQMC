@@ -22,10 +22,12 @@
 #ifndef MA_BLAS_HPP
 #define MA_BLAS_HPP
 
-#include "Numerics/OhmmsBlas.h"
 #include<utility> //std::enable_if
 #include<cassert>
 #include<iostream>
+
+#include "Numerics/OhmmsBlas.h"
+#include "Numerics/detail/blas.hpp"
 
 namespace ma{
 
@@ -85,6 +87,22 @@ MultiArray1DY gemv(MultiArray2DA const& A, MultiArray1DX const& x, MultiArray1DY
 //	gemm<'T', 'N'>(1., A, B, 0., C); // C = T(A*T(B)) = B*T(A) or T(C) = A*T(B)
 //	gemm<'N', 'T'>(1., A, B, 0., C); // C =  T(T(A)*B) = T(B)*A or T(C) = T(A)*B
 
+
+/*
+namespace detail{
+template<class... As> 
+decltype(auto) gemm(char Atrans, char Btrans, int M, int N, int K,
+                    double alpha, const double *A, As&&... as) {
+  BLAS::gemm(Atrans,Btrans,M,N,K,alpha,A,std::forward<As>(as)...);
+}
+template<class... As>
+decltype(auto) gemm(char Atrans, char Btrans, int M, int N, int K,
+                    std::complex<double> alpha, const std::complex<double> *A, As&&... as) {
+  BLAS::gemm(Atrans,Btrans,M,N,K,alpha,A,std::forward<As>(as)...);
+}
+}
+*/
+
 template<char TA, char TB, class T, class MultiArray2DA, class MultiArray2DB, class MultiArray2DC, 
 	typename = typename std::enable_if< MultiArray2DA::dimensionality == 2 and MultiArray2DB::dimensionality == 2 and std::decay<MultiArray2DC>::type::dimensionality == 2>::type
 >
@@ -121,13 +139,17 @@ MultiArray2DC gemm(T alpha, MultiArray2DA const& a, MultiArray2DB const& b, T be
 		K = a.shape()[0];
 		assert(a.shape()[0] == b.shape()[0] and c.shape()[0] == b.shape()[1] and c.shape()[1] == a.shape()[1]);
 	}
-	BLAS::gemm(
+        using BLAS_CPU::gemm;
+        using BLAS_GPU::gemm;
+        auto corg(c.origin());
+        gemm(
 		TA, TB, 
 		M, N, K, alpha, 
 		a.origin(), a.strides()[0], 
 		b.origin(), b.strides()[0],
 		beta, 
-		c.origin(), c.strides()[0]
+		corg, c.strides()[0]
+		//c.origin(), c.strides()[0]
 	);
 	return std::forward<MultiArray2DC>(c);
 }
