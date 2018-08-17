@@ -9,8 +9,8 @@
 //// File created by: Miguel Morales, moralessilva2@llnl.gov, Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////////////
 
-#ifndef QMCPLUSPLUS_HDF_MA_INTERFACE_H
-#define QMCPLUSPLUS_HDF_MA_INTERFACE_H
+#ifndef QMCPLUSPLUS_HDF_MULTI_INTERFACE_H
+#define QMCPLUSPLUS_HDF_MULTI_INTERFACE_H
 #include <vector>
 #include <sstream>
 #include <bitset>
