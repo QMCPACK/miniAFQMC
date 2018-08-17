@@ -80,7 +80,7 @@ namespace qmcplusplus
 
   // [nwalk][2][NMO][NAEA]
   // typedef boost::multi_array<ValueType,4> WalkerContainer;
-  typedef Kokkos::View<ValueType****> WalkerContainer;
+  typedef Kokkos::View<ValueType****, Kokkos::LayoutRight> WalkerContainer;
 
   typedef boost::multi_array<IndexType,1> IndexVector;
   typedef boost::multi_array<RealType,1> RealVector;
