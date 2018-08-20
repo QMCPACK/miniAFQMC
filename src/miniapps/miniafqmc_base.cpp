@@ -38,6 +38,7 @@
 
 #include "AFQMC/afqmc_sys.hpp"
 #include "Matrix/initialize_serial.hpp"
+#include "Matrix/peek.hpp"
 #include "AFQMC/THCOps.hpp"
 #include "AFQMC/mixed_density_matrix.hpp"
 
@@ -92,6 +93,9 @@ int main(int argc, char **argv)
   exit(1);
 #endif
 
+  using Alloc = std::allocator<ComplexType>;
+  using THCOps = afqmc::THCOps<Alloc>;
+
   int nsteps=10;
   int nsubsteps=10; 
   int nwalk=16;
@@ -145,10 +149,6 @@ int main(int argc, char **argv)
   TimerList_t Timers;
   setup_timers(Timers, MiniQMCTimerNames, timer_level_coarse);
 
-  // Important Data Structures
-  base::afqmc_sys AFQMCSys;   // Main AFQMC object. Control access to several apgorithmic functions. 
-  ComplexMatrix Propg1;   // propagator for 1-body hamiltonian 
-
   hdf_archive dump;
   if(!dump.open(init_file,H5F_ACC_RDONLY)) 
     APP_ABORT("Error: problems opening hdf5 file. \n");
@@ -157,11 +157,19 @@ int main(int argc, char **argv)
   std::cout<<"                 Initializing from HDF5                    \n"; 
   std::cout<<"***********************************************************\n";
 
-  afqmc::THCOps THC(afqmc::Initialize(dump,dt,AFQMCSys,Propg1)); 
+  int NMO;
+  int NAEA;
+  int NAEB;
+  
+  std::tie(NMO,NAEA,NAEB) = afqmc::peek(dump);
+
+  // Important Data Structures
+  base::afqmc_sys<Alloc> AFQMCSys(NMO,NAEA);   // Main AFQMC object. Control access to several apgorithmic functions. 
+  ComplexMatrix<Alloc> Propg1({NMO,NMO});   // propagator for 1-body hamiltonian
+
+  THCOps THC(afqmc::Initialize<THCOps>(dump,dt,AFQMCSys,Propg1)); 
 
   RealType Eshift = 0;
-  int NMO = AFQMCSys.NMO;              // number of molecular orbitals
-  int NAEA = AFQMCSys.NAEA;            // number of up electrons
   int nchol = THC.number_of_cholesky_vectors();            // number of cholesky vectors  
   int NAK = 2*NAEA*NMO;               // dimensions of linearized "compacted" green function
 
@@ -181,16 +189,16 @@ int main(int argc, char **argv)
            <<"    verbose: " <<std::boolalpha <<verbose <<"\n"
            <<"    # Chol Vectors: " <<nchol <<std::endl;
 
-  ComplexMatrix vbias(extents[nchol][nwalk]);     // bias potential
-  ComplexMatrix vHS(extents[nwalk][NMO*NMO]);        // Hubbard-Stratonovich potential
-  ComplexMatrix Gc(extents[nwalk][NAK]);           // compact density matrix for energy evaluation
-  ComplexMatrix X(extents[nchol][nwalk]);         // X(n,nw) = rand(n,nw) ( + vbias(n,nw)) 
-  ComplexVector hybridW(extents[nwalk]);         // stores weight factors
-  ComplexVector eloc(extents[nwalk]);         // stores local energies
+  ComplexMatrix<Alloc> vbias( {nchol,nwalk} );     // bias potential
+  ComplexMatrix<Alloc> vHS( {nwalk,NMO*NMO} );        // Hubbard-Stratonovich potential
+  ComplexMatrix<Alloc> Gc( {nwalk,NAK} );           // compact density matrix for energy evaluation
+  ComplexMatrix<Alloc> X( {nchol,nwalk} );         // X(n,nw) = rand(n,nw) ( + vbias(n,nw)) 
+  ComplexVector<Alloc> hybridW( {nwalk} );         // stores weight factors
+  ComplexVector<Alloc> eloc( {nwalk} );         // stores local energies
 
-  WalkerContainer W(extents[nwalk][2][NMO][NAEA]);
+  WalkerContainer<Alloc> W( {nwalk,2,NMO,NAEA} );
   // 0: eloc, 1: weight, 2: ovlp_up, 3: ovlp_down, 4: w_eloc, 5: old_w_eloc, 6: old_ovlp_alpha, 7: old_ovlp_beta
-  ComplexMatrix W_data(extents[nwalk][8]);  
+  ComplexMatrix<Alloc> W_data( {nwalk,8} );  
   // initialize walkers to trial wave function
   for(int n=0; n<nwalk; n++) 
     for(int nm=0; nm<NMO; nm++) 

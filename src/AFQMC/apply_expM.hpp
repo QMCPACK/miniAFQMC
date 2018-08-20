@@ -23,7 +23,6 @@
 #define  AFQMC_VHS_HPP 
 
 #include "Numerics/ma_operations.hpp"
-#include "Numerics/OhmmsBlas.h"
 #include<iostream>
 
 namespace qmcplusplus
@@ -50,6 +49,7 @@ inline void apply_expM( const MatA& V, MatB&& S, MatC&& T1, MatC&& T2, int order
 
   using ComplexType = typename std::decay<MatB>::type::element; 
   ComplexType zero(0.);
+  ComplexType one(1.);
   MatC& rT1 = T1;
   MatC& rT2 = T2;
 
@@ -57,11 +57,13 @@ inline void apply_expM( const MatA& V, MatB&& S, MatC&& T1, MatC&& T2, int order
   for(int n=1; n<=order; n++) {
     ComplexType fact = ComplexType(0.0,1.0)*static_cast<ComplexType>(1.0/static_cast<double>(n));
     ma::product(fact,V,rT1,zero,rT2);
-    // overload += ???
     // S += (*pT2); 
+    ma::axpy(one,rT2,S);
+/*
     for(int i=0, ie=S.shape()[0]; i<ie; i++)
      for(int j=0, je=S.shape()[1]; j<je; j++)
       S[i][j] += rT2[i][j];
+*/
     std::swap(rT1,rT2);
   }
 

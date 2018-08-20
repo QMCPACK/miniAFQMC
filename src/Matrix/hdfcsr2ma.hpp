@@ -31,13 +31,17 @@ namespace afqmc
 {
 
 template<class MultiArray2D, 
-         typename = typename std::enable_if<std::decay<MultiArray2D>::type::dimensionality == 2>::type
+         class Alloc = std::allocator<ComplexType>,
+         typename value_type = std::complex<double>,
+         typename index_type = int,
+         typename int_type = int,
+         typename = typename std::enable_if_t<MultiArray2D::dimensionality == 2>
         >
-inline MultiArray2D hdfcsr2ma(hdf_archive& dump, int nr, int nc) 
+inline MultiArray2D hdfcsr2ma(hdf_archive& dump, int nr, int nc, Alloc alloc = Alloc{}) 
 {
-  using value_type = std::complex<double>; 
-  using index_type = int; 
-  using int_type = int; 
+  using element = value_type; //typename MultiArray2D::value_type;
+  using element_alloc = typename Alloc::template rebind<element>::other; 
+  using detail::get;
 
   // Need to read:
   // - dims: nrow,ncols, nnz
@@ -60,8 +64,9 @@ inline MultiArray2D hdfcsr2ma(hdf_archive& dump, int nr, int nc)
   if(nc != nrows || nr != ncols)
     APP_ABORT("Problems with matrix dimensions in hdfcsr2ma. \n"); 
 
-  MultiArray2D A(extents[nr][nc]);
-  std::fill_n(A.origin(),A.num_elements(),value_type(0));
+  element_alloc alloc_(alloc);
+  MultiArray2D A({nr,nc}, alloc_);
+  std::fill_n(get(A.origin()),A.num_elements(),element(0.0));
 
   std::vector<int_type> nnz_per_row(nrows);
   std::vector<int_type> ptrb;
@@ -89,7 +94,7 @@ inline MultiArray2D hdfcsr2ma(hdf_archive& dump, int nr, int nc)
   for(index_type i = 0; i<static_cast<index_type>(nrows); i++) {
       size_type nt = static_cast<size_type>(ptre[i]-ptrb[i]);
       for( size_type nn=0; nn<nt; ++nn, ++cnt)
-          A[jdata[cnt]][i] = data[cnt];  
+          A[jdata[cnt]][i] = static_cast<element>(data[cnt]);  
   }
 
   return A;

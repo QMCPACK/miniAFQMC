@@ -49,15 +49,12 @@
 #define DEBUG_PSIBUFFER(who, msg)
 #endif
 
-#include<boost/multi_array.hpp>
+#include<multi/array.hpp>
 
 namespace qmcplusplus
 {
 
   //using boost::multi_array_types::index_gen;
-  using boost::extents;
-  using boost::indices;
-  typedef boost::multi_array_types::index_range range_t;
 
   typedef OHMMS_INDEXTYPE                 IndexType;
   typedef OHMMS_INDEXTYPE                 OrbitalType;
@@ -77,23 +74,31 @@ namespace qmcplusplus
   enum WALKER_TYPES {UNDEFINED_WALKER_TYPE, CLOSED, COLLINEAR, NONCOLLINEAR};
 
   // [nwalk][2][NMO][NAEA]
-  typedef boost::multi_array<ValueType,4> WalkerContainer;
+  template< class Alloc = std::allocator<ComplexType> >
+  using WalkerContainer =  boost::multi::array<ComplexType,4,Alloc>;
 
-  typedef boost::multi_array<IndexType,1> IndexVector;
-  typedef boost::multi_array<RealType,1> RealVector;
-  typedef boost::multi_array<SPRealType,1> SPRealVector;
-  typedef boost::multi_array<ValueType,1> ValueVector;
-  typedef boost::multi_array<SPValueType,1> SPValueVector;
-  typedef boost::multi_array<ComplexType,1> ComplexVector;
-  typedef boost::multi_array<SPComplexType,1> SPComplexVector;
+  template< class Alloc = std::allocator<int> >
+  using IntegerVector =  boost::multi::array<int,1,Alloc>;
+  template< class Alloc = std::allocator<ComplexType> >
+  using ComplexVector =  boost::multi::array<ComplexType,1,Alloc>;
+  template< class Alloc = std::allocator<SPComplexType> >
+  using SPComplexVector =  boost::multi::array<SPComplexType,1,Alloc>;
 
-  typedef boost::multi_array<IndexType,2> IndexMatrix;  
-  typedef boost::multi_array<RealType,2> RealMatrix;  
-  typedef boost::multi_array<SPRealType,2> SPRealMatrix;  
-  typedef boost::multi_array<ValueType,2> ValueMatrix;  
-  typedef boost::multi_array<SPValueType,2> SPValueMatrix;  
-  typedef boost::multi_array<ComplexType,2> ComplexMatrix;  
-  typedef boost::multi_array<SPComplexType,2> SPComplexMatrix;  
+  template< class Alloc = std::allocator<ComplexType> >
+  using ComplexMatrix =  boost::multi::array<ComplexType,2,Alloc>;
+  template< class Alloc = std::allocator<SPComplexType> >
+  using SPComplexMatrix =  boost::multi::array<SPComplexType,2,Alloc>;
+
+namespace detail {
+  inline static int* get(int* ptr) { return ptr; }
+  inline static unsigned int* get(unsigned int* ptr) { return ptr; }
+  inline static long* get(long* ptr) { return ptr; }
+  inline static unsigned long* get(unsigned long* ptr) { return ptr; }
+  inline static float* get(float* ptr) { return ptr; }
+  inline static double* get(double* ptr) { return ptr; }
+  inline static std::complex<float>* get(std::complex<float>* ptr) { return ptr; }
+  inline static std::complex<double>* get(std::complex<double>* ptr) { return ptr; }
+}
 
 inline std::ostream &app_log() { return std::cout; }
 

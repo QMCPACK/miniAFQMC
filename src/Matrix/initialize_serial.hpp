@@ -25,8 +25,8 @@
 #include "io/hdf_archive.h"
 
 #include "AFQMC/afqmc_sys.hpp"
-#include "AFQMC/THCOps.hpp"
 #include "Matrix/hdfcsr2ma.hpp"
+#include "Numerics/ma_blas.hpp"
 
 namespace qmcplusplus
 {
@@ -34,20 +34,20 @@ namespace qmcplusplus
 namespace afqmc
 {
 
-template<class Mat>
-inline THCOps Initialize(hdf_archive& dump, const double dt, base::afqmc_sys& sys, Mat& Propg1) 
+template<class THCOps,
+         class af_sys = base::afqmc_sys<std::allocator<ComplexType>>
+            >
+inline THCOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, ComplexMatrix<typename af_sys::Alloc>& Propg1)
 {
+  // the allocator of af_sys must be consistent with Alloc, otherwise LA operations will not work 
+  using Alloc = typename af_sys::Alloc;
+  using SpCAlloc = typename Alloc::template rebind<SPComplexType>::other;
+  Alloc& alloc(sys.allocator_); 
+  SpCAlloc spc_alloc(alloc); 
+
   int NMO, NAEA, NAEB;
 
   std::cout<<"  Serial hdf5 read. \n";
-
-  ComplexMatrix rotMuv;   // Muv in half-rotated basis   
-  ComplexMatrix rotPiu;   // Interpolating orbitals in half-rotated basis 
-  ComplexMatrix rotcPua;  // (half-rotated) Interpolating orbitals in half-rotated basis   
-  ComplexMatrix Luv;      // Cholesky decomposition of Muv 
-  ComplexMatrix Piu;      // Interpolating orbitals 
-  ComplexMatrix cPua;     // (half-rotated) Interpolating orbitals 
-  ComplexMatrix haj;      // rotated 1-Body Hamiltonian Matrix
 
   // fix later for multidet case
   std::vector<int> dims(10);
@@ -99,12 +99,12 @@ inline THCOps Initialize(hdf_archive& dump, const double dt, base::afqmc_sys& sy
   nmu = size_t(dims[5]);
   rotnmu = size_t(dims[6]);
 
-  rotMuv.resize(extents[rotnmu][rotnmu]);
-  rotPiu.resize(extents[NMO][rotnmu]);
-  rotcPua.resize(extents[rotnmu][NAEA+NAEB]);
-  Luv.resize(extents[nmu][nmu]);
-  Piu.resize(extents[NMO][nmu]);
-  cPua.resize(extents[nmu][NAEA+NAEB]);
+  SPComplexMatrix<SpCAlloc> rotMuv( {rotnmu,rotnmu},spc_alloc );   // Muv in half-rotated basis   
+  SPComplexMatrix<SpCAlloc> rotPiu( {NMO,rotnmu},spc_alloc );   // Interpolating orbitals in half-rotated basis 
+  SPComplexMatrix<SpCAlloc> rotcPua( {rotnmu,NAEA+NAEB},spc_alloc ); // (half-rotated) Interpolating orbitals in half-rotated basis   
+  SPComplexMatrix<SpCAlloc> Luv( {nmu,nmu},spc_alloc );      // Cholesky decomposition of Muv 
+  SPComplexMatrix<SpCAlloc> Piu( {NMO,nmu},spc_alloc );      // Interpolating orbitals 
+  SPComplexMatrix<SpCAlloc> cPua( {nmu,NAEA+NAEB},spc_alloc );     // (half-rotated) Interpolating orbitals 
 
   // read Half transformed first
   /***************************************/
@@ -137,76 +137,86 @@ inline THCOps Initialize(hdf_archive& dump, const double dt, base::afqmc_sys& sy
   dump.pop();
 
   // set values in sys
-  sys.setup(NMO,NAEA);
   {
-    sys.trialwfn_alpha.resize(extents[NMO][NAEA]);
-    sys.trialwfn_beta.resize(extents[NMO][NAEA]);
     if(!dump.push(std::string("PsiT_0"),false)) {
       app_error()<<" Error in WavefunctionFactory: Group PsiT not found. \n";
       APP_ABORT("");
     }
-    sys.trialwfn_alpha = hdfcsr2ma<ComplexMatrix>(dump,NMO,NAEA);
+// FIX FIX FIX problems with GPU memory
+    sys.trialwfn_alpha = hdfcsr2ma<ComplexMatrix<Alloc>,Alloc>(dump,NMO,NAEA,alloc);
     dump.pop();
     if(walker_type == 2) {
       if(!dump.push(std::string("PsiT_1"),false)) {
         app_error()<<" Error in WavefunctionFactory: Group PsiT not found. \n";
         APP_ABORT("");
       }
-      sys.trialwfn_beta = hdfcsr2ma<ComplexMatrix>(dump,NMO,NAEA);
+// FIX FIX FIX problems with GPU memory
+      sys.trialwfn_beta = hdfcsr2ma<ComplexMatrix<Alloc>,Alloc>(dump,NMO,NAEA,alloc);
       dump.pop();
     } else 
       sys.trialwfn_beta = sys.trialwfn_alpha;
   }
 
+  /***************************************/
   if(!dump.push("HamiltonianOperations",false)) {
     app_error()<<" Error in initialize: Group HamiltonianOperations not found. \n";
     APP_ABORT("");
   }
+  /***************************************/
   if(!dump.push("THCOps",false)) {
     app_error()<<" Error in initialize: Group THCOps not found. \n";
     APP_ABORT("");
   }
+  /***************************************/
 
-  ComplexMatrix& PsiT_Alpha = sys.trialwfn_alpha;
-  ComplexMatrix& PsiT_Beta = sys.trialwfn_beta;
   // half-rotated Pia
   // simple
   using ma::H;
   using ma::T;
   // cPua = H(Piu) * conj(A)
-  ma::product(H(Piu),PsiT_Alpha,cPua[indices[range_t()][range_t(0,NAEA)]]);
-  ma::product(H(rotPiu),PsiT_Alpha,rotcPua[indices[range_t()][range_t(0,NAEA)]]);
-  ma::product(H(Piu),PsiT_Beta,cPua[indices[range_t()][range_t(NAEA,NAEA+NAEB)]]);
-  ma::product(H(rotPiu),PsiT_Beta,rotcPua[indices[range_t()][range_t(NAEA,NAEA+NAEB)]]);
+  ma::product(H(Piu),sys.trialwfn_alpha,cPua( cPua.extension(0), {0,NAEA} ));
+  ma::product(H(rotPiu),sys.trialwfn_alpha,rotcPua( rotcPua.extension(0), {0,NAEA} )); 
+  ma::product(H(Piu),sys.trialwfn_beta,cPua( cPua.extension(0), {NAEA,NAEA+NAEB} ));
+  ma::product(H(rotPiu),sys.trialwfn_beta,rotcPua( rotcPua.extension(0), {NAEA,NAEA+NAEB} ));
 
-  // build the propagator
-  Propg1.resize(extents[NMO][NMO]);
-  ComplexMatrix H1(extents[NMO][NMO]);
+  // build the propagator (on the CPU)
+  ComplexMatrix<std::allocator<ComplexType>> H1( {NMO,NMO} );
+  ComplexMatrix<std::allocator<ComplexType>> v0( {NMO,NMO} );
+  /***************************************/
   if(!dump.read(H1,"H1")) {
     app_error()<<" Error in initialize: Problems reading dataset. \n";
     APP_ABORT("");
   }
+  /***************************************/
   // rotated 1 body hamiltonians
-  haj.resize(extents[NAEA+NAEB][NMO]);
-  ma::product(T(PsiT_Alpha),H1,haj[indices[range_t(0,NAEA)][range_t()]]);
-  ma::product(T(PsiT_Beta),H1,haj[indices[range_t(NAEA,NAEA+NAEB)][range_t()]]);
+  ComplexMatrix<Alloc> haj( {NAEA+NAEB,NMO}, alloc );      // rotated 1-Body Hamiltonian Matrix
+  ma::product(T(sys.trialwfn_alpha),H1,haj( {0, NAEA}, haj.extension(1)));
+  ma::product(T(sys.trialwfn_beta),H1,haj( {NAEA, NAEA+NAEB}, haj.extension(1))); 
 
   // read v0 in Propg1 temporarily
-  if(!dump.read(Propg1,"v0")) {
+  /***************************************/
+  if(!dump.read(v0,"v0")) {
     app_error()<<" Error in initialize: Problems reading dataset. \n";
     APP_ABORT("");
   }
+  /***************************************/
+
+  // This step must be done on the CPU right now
+  // this will not work with GPU memory!!! Need to call a routine!
   for(int i=0; i<NMO; i++) {
-   H1[i][i] = -0.5*dt*(H1[i][i] + Propg1[i][i]);
+   H1[i][i] = -0.5*dt*(H1[i][i] + v0[i][i]);
    for(int j=i+1; j<NMO; j++) {
      using std::conj;
-     H1[i][j] += Propg1[i][j];
-     H1[j][i] += Propg1[j][i];
+     H1[i][j] += v0[i][j];
+     H1[j][i] += v0[j][i];
      H1[i][j] = -0.5*dt*(0.5*(H1[i][j]+conj(H1[j][i])));
      H1[j][i] = conj(H1[i][j]);
    }
   }
-  Propg1 = ma::exp(H1);
+  v0 = ma::exp(H1);
+  Propg1.reextent( {NMO,NMO} );
+  // need specialized copy routine
+  Propg1 = v0;
 
   return THCOps(NMO,NAEA,NAEA,COLLINEAR,std::move(haj),std::move(rotMuv),
                 std::move(rotPiu),std::move(rotcPua),std::move(Luv),std::move(Piu),

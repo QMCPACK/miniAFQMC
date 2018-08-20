@@ -37,7 +37,7 @@ struct AFQMCInfo
   public:
 
   /// default constructor
-  AFQMCInfo():name("miniAFQMC"),NMO(-1),NAEA(-1),NAEB(-1),MS2(0)
+  AFQMCInfo(int nm, int na, int nb):name("miniAFQMC"),NMO(nm),NAEA(na),NAEB(nb),MS2(0)
   {}
 
   /// destructor

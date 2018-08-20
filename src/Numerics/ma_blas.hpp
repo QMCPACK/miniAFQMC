@@ -49,6 +49,18 @@ MultiArray1D scal(T a, MultiArray1D&& x){
 	return std::forward<MultiArray1D>(x);
 }
 
+template<class T, 
+        class MultiArray2D, 
+        typename = typename std::enable_if<std::decay<MultiArray2D>::type::dimensionality == 2>::type,
+        typename = void // TODO change to use dispatch 
+    >
+MultiArray2D scal(T a, MultiArray2D&& x){
+	assert( x.strides()[0] == x.shape()[1] ); // only on contiguous arrays 
+	assert( x.strides()[1] == 1 );            // only on contiguous arrays 
+        BLAS::scal(x.num_elements(), a, x.origin(), 1);
+        return std::forward<MultiArray2D>(x);
+}
+
 template<class T, class MultiArray1D>
 auto operator*=(MultiArray1D&& x, T a) -> decltype(scal(a, std::forward<MultiArray1D>(x))){
 	return scal(a, std::forward<MultiArray1D>(x));
@@ -61,6 +73,20 @@ MultiArray1DB axpy(T x, MultiArray1DA const& a, MultiArray1DB&& b){
 	assert( a.shape()[0] == b.shape()[0] );
 	BLAS::axpy(a.shape()[0], x, a.origin(), a.strides()[0], b.origin(), b.strides()[0]);
 	return std::forward<MultiArray1DB>(b);
+}
+
+template<class T, class MultiArray2DA, class MultiArray2DB,
+        typename = typename std::enable_if<std::decay<MultiArray2DA>::type::dimensionality == 2 and std::decay<MultiArray2DB>::type::dimensionality == 2>::type,
+        typename = void // TODO change to use dispatch 
+>
+MultiArray2DB axpy(T x, MultiArray2DA const& a, MultiArray2DB&& b){
+        assert( a.num_elements() == b.num_elements() );
+	assert( a.strides()[0] == a.shape()[1] ); // only on contiguous arrays 
+	assert( a.strides()[1] == 1 );            // only on contiguous arrays 
+	assert( b.strides()[0] == b.shape()[1] ); // only on contiguous arrays 
+	assert( b.strides()[1] == 1 );            // only on contiguous arrays 
+        BLAS::axpy(a.num_elements(), x, a.origin(), 1, b.origin(), 1);
+        return std::forward<MultiArray2DB>(b);
 }
 
 template<char IN, class T, class MultiArray2DA, class MultiArray1DX, class MultiArray1DY,
@@ -87,21 +113,6 @@ MultiArray1DY gemv(MultiArray2DA const& A, MultiArray1DX const& x, MultiArray1DY
 //	gemm<'T', 'N'>(1., A, B, 0., C); // C = T(A*T(B)) = B*T(A) or T(C) = A*T(B)
 //	gemm<'N', 'T'>(1., A, B, 0., C); // C =  T(T(A)*B) = T(B)*A or T(C) = T(A)*B
 
-
-/*
-namespace detail{
-template<class... As> 
-decltype(auto) gemm(char Atrans, char Btrans, int M, int N, int K,
-                    double alpha, const double *A, As&&... as) {
-  BLAS::gemm(Atrans,Btrans,M,N,K,alpha,A,std::forward<As>(as)...);
-}
-template<class... As>
-decltype(auto) gemm(char Atrans, char Btrans, int M, int N, int K,
-                    std::complex<double> alpha, const std::complex<double> *A, As&&... as) {
-  BLAS::gemm(Atrans,Btrans,M,N,K,alpha,A,std::forward<As>(as)...);
-}
-}
-*/
 
 template<char TA, char TB, class T, class MultiArray2DA, class MultiArray2DB, class MultiArray2DC, 
 	typename = typename std::enable_if< MultiArray2DA::dimensionality == 2 and MultiArray2DB::dimensionality == 2 and std::decay<MultiArray2DC>::type::dimensionality == 2>::type
@@ -141,14 +152,13 @@ MultiArray2DC gemm(T alpha, MultiArray2DA const& a, MultiArray2DB const& b, T be
 	}
         using BLAS_CPU::gemm;
         using BLAS_GPU::gemm;
-        auto corg(c.origin());
         gemm(
 		TA, TB, 
 		M, N, K, alpha, 
 		a.origin(), a.strides()[0], 
 		b.origin(), b.strides()[0],
 		beta, 
-		corg, c.strides()[0]
+		c.origin(), c.strides()[0]
 		//c.origin(), c.strides()[0]
 	);
 	return std::forward<MultiArray2DC>(c);

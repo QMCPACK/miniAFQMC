@@ -13,8 +13,8 @@
 //    Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef QMCPLUSPLUS_AFQMC_HAMILTONIANOPERATIONS_THCOPS_GPU_UM_HPP
-#define QMCPLUSPLUS_AFQMC_HAMILTONIANOPERATIONS_THCOPS_GPU_UM_HPP
+#ifndef QMCPLUSPLUS_AFQMC_HAMILTONIANOPERATIONS_THCOPS_HPP
+#define QMCPLUSPLUS_AFQMC_HAMILTONIANOPERATIONS_THCOPS_HPP
 
 #include<fstream>
 
@@ -29,9 +29,7 @@ namespace qmcplusplus
 namespace afqmc
 {
 
-namespace gpu_um 
-{
-
+template< class Alloc >
 class THCOps
 {
 #if defined(AFQMC_SP) 
@@ -40,10 +38,12 @@ class THCOps
   using SpC = ComplexType;  
 #endif
 
-  using CVector = boost::multi_array<ComplexType,1>;
-  using CMatrix = boost::multi_array<ComplexType,2>;
-  using SpCVector = boost::multi_array<SpC,1>;
-  using SpCMatrix = boost::multi_array<SpC,2>;
+  using CVector = boost::multi::array<ComplexType,1,Alloc>;
+  using CMatrix = boost::multi::array<ComplexType,2,Alloc>;
+  using SpCVector = boost::multi::array<SpC,1,Alloc>;
+  using SpCMatrix = boost::multi::array<SpC,2,Alloc>;
+  using Allocator = Alloc;  
+  using pointer = typename Alloc::pointer;  
 
   public:
 
@@ -57,7 +57,9 @@ class THCOps
            SpCMatrix&& piu_,
            SpCMatrix&& pau_,
            ValueType e0_,
+           Allocator alloc_ = Allocator(),  
            bool verbose=false ):
+                allocator_(alloc_),
                 NMO(nmo_),NAEA(naea_),NAEB(naeb_),
                 walker_type(type),
                 haj(std::move(h1)),
@@ -67,7 +69,8 @@ class THCOps
                 Luv(std::move(luv_)),
                 Piu(std::move(piu_)),
                 cPua(std::move(pau_)),
-                E0(e0_)
+                E0(e0_),
+                TMats( {0}, allocator_)
     {
       // simplifying limitation for the miniapp  
       assert(NAEA==NAEB);
@@ -105,7 +108,7 @@ class THCOps
       size_t rnv = rotMuv.shape()[1];
       size_t nel = ((walker_type==COLLINEAR)?(NAEA+NAEB):(NAEA));  
       size_t memory_needs = rnu*rnv + rnu + rnv + size_t(NAEA)*std::max(rnu,rnv) + size_t(2*NAEA*NMO); 
-      TMats.resize(extents[memory_needs]);
+      TMats.reextent( {memory_needs} );
     }
 
     ~THCOps() {}
@@ -137,26 +140,26 @@ class THCOps
         APP_ABORT(" Error: TMats.num_elements() < memory_needs() \n"); 
       size_t cnt=0;  
       // Guv[nspin][nu][nv]
-      boost::multi_array_ref<ComplexType,2> Guv(TMats.data(),extents[nu][nv]);
+      boost::multi::array_ref<ComplexType,2,pointer> Guv(TMats.data(),extents[nu][nv]);
       cnt+=Guv.num_elements();
       // Guu[u]: summed over spin
-      boost::multi_array_ref<ComplexType,1> Guu(TMats.data()+cnt,extents[nv]);
+      boost::multi::array_ref<ComplexType,1,pointer> Guu(TMats.data()+cnt,extents[nv]);
       cnt+=Guu.num_elements();
       // T1[nel_][nv]
-      boost::multi_array_ref<ComplexType,2> T1(TMats.data()+cnt,extents[NAEA][nv]);
+      boost::multi::array_ref<ComplexType,2,pointer> T1(TMats.data()+cnt,extents[NAEA][nv]);
       // Qub[nu][nel_]: using same space as T1 
-      boost::multi_array_ref<ComplexType,2> Qub(TMats.data()+cnt,extents[nu][NAEA]);
+      boost::multi::array_ref<ComplexType,2,pointer> Qub(TMats.data()+cnt,extents[nu][NAEA]);
       cnt+=std::max(Qub.num_elements(), T1.num_elements());
-      boost::multi_array_ref<ComplexType,1> Tuu(TMats.data()+cnt,extents[nu]);
+      boost::multi::array_ref<ComplexType,1,pointer> Tuu(TMats.data()+cnt,extents[nu]);
       cnt+=Tuu.num_elements();
-      boost::multi_array_ref<ComplexType,2> Rbk(TMats.data()+cnt,extents[NAEA][NMO]);
-      boost::multi_array_ref<ComplexType,1> R1D(Rbk.origin(),extents[Rbk.num_elements()]);
+      boost::multi::array_ref<ComplexType,2,pointer> Rbk(TMats.data()+cnt,extents[NAEA][NMO]);
+      boost::multi::array_ref<ComplexType,1,pointer> R1D(Rbk.origin(),extents[Rbk.num_elements()]);
       
       ComplexType Eav(0);  
       std::fill_n(E.origin(),E.num_elements(),ComplexType(0.0));  
       if(addH1) { 
-        boost::multi_array_ref<ComplexType,1> haj1D(haj.origin(),extents[haj.num_elements()]);
-        ma::product(ComplexType(1.0),G,haj1D,ComplexType(0.0),E[indices[range_t()][0]]);
+        boost::multi::array_ref<ComplexType,1,pointer> haj1D(haj.origin(),extents[haj.num_elements()]);
+        ma::product(ComplexType(1.0),G,haj1D,ComplexType(0.0),E( E.extension(0), 0));
         for(int i=0; i<nwalk; i++) {
           E[i][0] += E0;
           Eav+=E[i][0];
@@ -164,8 +167,8 @@ class THCOps
       }
       if(walker_type==CLOSED || walker_type==NONCOLLINEAR) {
         for(int wi=0; wi<nwalk; wi++) {
-          boost::const_multi_array_ref<ComplexType,2> Gw(G[wi].origin(),extents[nel_][nmo_]);
-          boost::const_multi_array_ref<ComplexType,1> G1D(G[wi].origin(),extents[nel_*nmo_]);
+          boost::multi::array_cref<ComplexType,2,pointer> Gw(G[wi].origin(),extents[nel_][nmo_]);
+          boost::multi::array_cref<ComplexType,1,pointer> G1D(G[wi].origin(),extents[nel_*nmo_]);
           Guv_Guu(Gw,Guv,Guu,T1,false);
           ma::product(rotMuv,Guu,Tuu);
           E[wi][2] = 0.5*ma::dot(Guu,Tuu);
@@ -182,22 +185,22 @@ class THCOps
       } else {
         for(int wi=0; wi<nwalk; wi++) {
           { // Alpha
-            boost::const_multi_array_ref<ComplexType,2> Gw(G[wi].origin(),extents[NAEA][nmo_]);
-            boost::const_multi_array_ref<ComplexType,1> G1DA(Gw.origin(),extents[Gw.num_elements()]);
+            boost::multi::array_cref<ComplexType,2,pointer> Gw(G[wi].origin(),extents[NAEA][nmo_]);
+            boost::multi::array_cref<ComplexType,1,pointer> G1DA(Gw.origin(),extents[Gw.num_elements()]);
             std::fill_n(Guu.origin(),Guu.num_elements(),SpC(0.0));
             Guv_Guu(Gw,Guv,Guu,T1,false);
             auto Mptr = rotMuv.origin();
             auto Gptr = Guv.origin();
             for(size_t k=0, kend=nu*nv; k<kend; ++k, ++Gptr, ++Mptr)
               (*Gptr) *= (*Mptr);
-            ma::product(Guv,rotcPua[indices[range_t()][range_t(0,NAEA)]],Qub);
+            ma::product(Guv,rotcPua( rotcPua.extension(0), {0,NAEA}), Qub);
             // using this for now, which should not be much worse
             ma::product(T(Qub),T(rotPiu),Rbk);
             E[wi][1] = -0.5*ma::dot(R1D,G1DA);
           }
           {  // beta
-            boost::const_multi_array_ref<ComplexType,2> Gw(G[wi].origin()+NAEA*NMO,extents[NAEB][nmo_]);
-            boost::const_multi_array_ref<ComplexType,1> G1DB(Gw.origin(),extents[Gw.num_elements()]);
+            boost::multi::array_cref<ComplexType,2,pointer> Gw(G[wi].origin()+NAEA*NMO,extents[NAEB][nmo_]);
+            boost::multi::array_cref<ComplexType,1,pointer> G1DB(Gw.origin(),extents[Gw.num_elements()]);
             Guv_Guu(Gw,Guv,Guu,T1,true);
             ma::product(rotMuv,Guu,Tuu);
             E[wi][2] = 0.5*ma::dot(Guu,Tuu);
@@ -205,7 +208,7 @@ class THCOps
             auto Gptr = Guv.origin();
             for(size_t k=0, kend=nu*nv; k<kend; ++k, ++Gptr, ++Mptr)
               (*Gptr) *= (*Mptr);
-            ma::product(Guv,rotcPua[indices[range_t()][range_t(NAEA,NAEA+NAEB)]],Qub);
+            ma::product(Guv,rotcPua( rotcPua.extension(0), {NAEA,NAEA+NAEB} ),Qub);
             // using this for now, which should not be much worse
             ma::product(T(Qub),T(rotPiu),Rbk);
             E[wi][1] -= 0.5*ma::dot(R1D,G1DB);
@@ -223,8 +226,8 @@ class THCOps
              typename = void
             >
     void vHS(MatA const& X, MatB&& v, double a=1., double c=0.) {
-        boost::const_multi_array_ref<ComplexType,2> X_(X.origin(),extents[X.shape()[0]][1]);
-        boost::multi_array_ref<ComplexType,2> v_(v.origin(),extents[1][v.shape()[0]]);
+        boost::multi::array_cref<ComplexType,2,pointer> X_(X.origin(),extents[X.shape()[0]][1]);
+        boost::multi::array_ref<ComplexType,2,pointer> v_(v.origin(),extents[1][v.shape()[0]]);
         vHS(X_,v_,a,c);
     }
 
@@ -247,17 +250,17 @@ class THCOps
       size_t memory_needs = nu*nwalk + nu*nmo_ + X.num_elements();
       if(TMats.num_elements() < memory_needs)
         APP_ABORT(" Error: TMats.num_elements() < memory_needs() \n");
-      boost::multi_array_ref<ComplexType,2> Tuw(TMats.data(),extents[nu][nwalk]);
+      boost::multi::array_ref<ComplexType,2,pointer> Tuw(TMats.data(),extents[nu][nwalk]);
       // O[nwalk * nmu * nmu]
       // reinterpret as RealType matrices with 2x the columns
-      boost::multi_array_ref<RealType,2> Luv_R(reinterpret_cast<RealType*>(Luv.origin()),
+      boost::multi::array_ref<RealType,2,pointer> Luv_R(reinterpret_cast<RealType*>(Luv.origin()),
                                                  extents[Luv.shape()[0]][2*Luv.shape()[1]]);
-      boost::const_multi_array_ref<RealType,2> X_R(reinterpret_cast<RealType const*>(X.origin()),
+      boost::multi::array_cref<RealType,2,pointer> X_R(reinterpret_cast<RealType const*>(X.origin()),
                                                  extents[X.shape()[0]][2*X.shape()[1]]);
-      boost::multi_array_ref<RealType,2> Tuw_R(reinterpret_cast<RealType*>(Tuw.origin()),
+      boost::multi::array_ref<RealType,2,pointer> Tuw_R(reinterpret_cast<RealType*>(Tuw.origin()),
                                                  extents[nu][2*nwalk]);
       ma::product(Luv_R,X_R,Tuw_R);
-      boost::multi_array_ref<ComplexType,2> Qiu(TMats.data()+nwalk*nu,extents[nmo_][nu]);
+      boost::multi::array_ref<ComplexType,2,pointer> Qiu(TMats.data()+nwalk*nu,extents[nmo_][nu]);
       for(int wi=0; wi<nwalk; wi++) {
         // Qiu[i][u] = T[u][wi] * conj(Piu[i][u])
         // v[wi][ik] = sum_u Qiu[i][u] * Piu[k][u]
@@ -267,7 +270,7 @@ class THCOps
           for(int u=0; u<nu; u++, ++p_)
             Qiu[i][u] = Tuw[u][wi]*conj(*p_);
         }
-        boost::multi_array_ref<ComplexType,2> v_(v[wi].origin(),extents[nmo_][nmo_]);
+        boost::multi::array_ref<ComplexType,2,pointer> v_(v[wi].origin(),extents[nmo_][nmo_]);
         // this can benefit significantly from 2-D partition of work
         // O[nmo * nmo * nmu]
         ma::product(a,Qiu,T(Piu),c,v_);
@@ -280,8 +283,8 @@ class THCOps
              typename = void
             >
     void vbias(MatA const& G, MatB&& v, double a=1., double c=0.) {
-        boost::const_multi_array_ref<ComplexType,2> G_(G.origin(),extents[1][G.shape()[0]]);
-        boost::multi_array_ref<ComplexType,2> v_(v.origin(),extents[v.shape()[0]][1]);
+        boost::multi::array_cref<ComplexType,2,pointer> G_(G.origin(),extents[1][G.shape()[0]]);
+        boost::multi::array_ref<ComplexType,2,pointer> v_(v.origin(),extents[v.shape()[0]][1]);
         vbias(G_,v_,a,c);
     }
 
@@ -301,15 +304,15 @@ class THCOps
       size_t memory_needs = nwalk*nu + nel_*nu + G.num_elements();
       if(TMats.num_elements() < memory_needs)
         APP_ABORT(" Error: TMats.num_elements() < memory_needs() \n");
-      boost::multi_array_ref<ComplexType,2> Guu(TMats.data(),extents[nu][nwalk]);
-      boost::multi_array_ref<ComplexType,2> T1(TMats.data()+nwalk*nu,extents[nu][nel_]);
+      boost::multi::array_ref<ComplexType,2,pointer> Guu(TMats.data(),extents[nu][nwalk]);
+      boost::multi::array_ref<ComplexType,2,pointer> T1(TMats.data()+nwalk*nu,extents[nu][nel_]);
       Guu_from_compact(G,Guu,T1);
       // reinterpret as RealType matrices with 2x the columns
-      boost::multi_array_ref<RealType,2> Luv_R(reinterpret_cast<RealType*>(Luv.origin()),
+      boost::multi::array_ref<RealType,2,pointer> Luv_R(reinterpret_cast<RealType*>(Luv.origin()),
                                                extents[Luv.shape()[0]][2*Luv.shape()[1]]);
-      boost::multi_array_ref<RealType,2> Guu_R(reinterpret_cast<RealType*>(Guu.origin()),
+      boost::multi::array_ref<RealType,2,pointer> Guu_R(reinterpret_cast<RealType*>(Guu.origin()),
                                                extents[nu][2*nwalk]);
-      boost::multi_array_ref<RealType,2> v_R(reinterpret_cast<RealType*>(v.origin()),
+      boost::multi::array_ref<RealType,2,pointer> v_R(reinterpret_cast<RealType*>(v.origin()),
                                                extents[v.shape()[0]][2*v.shape()[1]]);
       ma::product(a,T(Luv_R),Guu_R,c,v_R);
     }
@@ -335,7 +338,7 @@ class THCOps
       using ma::transposed;
       ComplexType a = (walker_type==CLOSED)?ComplexType(2.0):ComplexType(1.0);
       for(int iw=0; iw<nw; ++iw) {
-        boost::const_multi_array_ref<ComplexType,2> Giw(G[iw].origin(),extents[nel_][nmo_]);
+        boost::multi::array_cref<ComplexType,2,pointer> Giw(G[iw].origin(),extents[nel_][nmo_]);
         // transposing inetermediary to make dot products faster in the next step
         ma::product(transposed(Piu),transposed(Giw),T1);
         for(int u=0; u<nu; ++u)
@@ -376,16 +379,18 @@ class THCOps
       ma::product(G,rotPiu,T1);
       // This operation might benefit from a 2-D work distribution 
       if(beta)
-        ma::product(scl, rotcPua[indices[range_t()][range_t(NAEA,NAEA+NAEB)]], 
+        ma::product(scl, rotcPua( rotcPua.extension(0), {NAEA,NAEA+NAEB}),
                   T1, zero, Guv);
       else
-        ma::product(scl, rotcPua[indices[range_t()][range_t(0,NAEA)]], 
+        ma::product(scl, rotcPua( rotcPua.extension(0), {0,NAEA}),
                   T1, zero, Guv);
       for(int v=0; v<nv; ++v) 
         Guu[v] += Guv[v][v];  
     }
 
   protected:
+
+    Allocator allocator_;
 
     int NMO,NAEA,NAEB;
 
@@ -428,8 +433,6 @@ class THCOps
     SpCVector TMats; 
 
 };
-
-}
 
 }
 

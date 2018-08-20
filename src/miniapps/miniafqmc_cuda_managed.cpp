@@ -163,18 +163,18 @@ int main(int argc, char **argv)
   std::fill_n(get(B.origin()),K*N,Type(1));
   std::fill_n(get(C.origin()),M*N,Type(0));
 
+  std::fill_n(A_.origin(),M*K,Type(1));
+  std::fill_n(B_.origin(),K*N,Type(1));
+  std::fill_n(C_.origin(),M*N,Type(0));
+
   std::cout<<" Running on cpu " <<std::endl;
   ma::product(A_,B_,C_);
 
   double sum(0.0);
   for(int i=0; i<M; i++)
    for(int j=0; j<N; j++)
-    sum += std::abs(C[i][j]);
+    sum += std::abs(C_[i][j]);
   std::cout<<" sum(C): " <<sum  <<std::endl;
-
-  std::fill_n(get(A.origin()),M*K,Type(1));
-  std::fill_n(get(B.origin()),K*N,Type(1));
-  std::fill_n(get(C.origin()),M*N,Type(0));
 
   std::cout<<" Running on gpu " <<std::endl;
   ma::product(A,B,C);
@@ -182,7 +182,7 @@ int main(int argc, char **argv)
   sum=0.0;
   for(int i=0; i<M; i++)
    for(int j=0; j<N; j++)
-    sum += std::abs(C_[i][j]);
+    sum += std::abs(C[i][j]);
   std::cout<<" sum(C): " <<sum  <<std::endl;
 
 /*

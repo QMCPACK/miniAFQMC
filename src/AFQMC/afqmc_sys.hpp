@@ -38,62 +38,52 @@ namespace base
 /**
  * Quasi-global AFQMC object, contains workspaces 
  * 
- * \todo get rid of it and global state in general
+ * This version works on a single memory space, e.g. CPU, GPU, Managed Memory, etc, based on the allocator. 
  */
+template<class AllocType = std::allocator<ComplexType>
+        >
 struct afqmc_sys: public AFQMCInfo
 {
 
   public:
 
-    afqmc_sys() {}
+    using Alloc = AllocType; 
+    using pointer = typename Alloc::pointer; 
+    using const_pointer = typename Alloc::const_pointer; 
+    using IAlloc = typename Alloc::template rebind<int>::other;; 
+    Alloc allocator_;
+    IAlloc iallocator_;
 
-    afqmc_sys(int nmo_, int na) 
+    ComplexMatrix<Alloc> trialwfn_alpha;
+    ComplexMatrix<Alloc> trialwfn_beta;
+    
+    afqmc_sys() = delete;
+    afqmc_sys(int nmo_, int na, Alloc alloc_ = Alloc{}):
+      AFQMCInfo(nmo_,na,na),
+      allocator_(alloc_),
+      iallocator_(alloc_),
+      trialwfn_alpha( {nmo_,na}, alloc_ ), 
+      trialwfn_beta( {nmo_,na}, alloc_ ), 
+      NMO(nmo_),
+      NAEA(na),  
+      WORK( {0}, alloc_ ),
+      IWORK({NMO}, iallocator_ ),
+      TAU( {NMO}, alloc_ ),
+      TMat_NN( {NAEA,NAEA}, alloc_ ),
+      TMat_NM( {NAEA,NMO}, alloc_ ),
+      TMat_MN( {NMO,NAEA}, alloc_ ),
+      TMat_MM( {NMO,NMO}, alloc_ ),
+      Gcloc( {0,0}, alloc_ )
     {
-        setup(nmo_,na);
+      std::size_t buff = ma::getri_optimal_workspace_size(TMat_NN);
+      buff = std::max(buff,std::size_t(ma::geqrf_optimal_workspace_size(TMat_NM)));
+      buff = std::max(buff,std::size_t(ma::gqr_optimal_workspace_size(TMat_NM)));
+      buff = std::max(buff,std::size_t(ma::gelqf_optimal_workspace_size(TMat_MN)));
+      buff = std::max(buff,std::size_t(ma::glq_optimal_workspace_size(TMat_MN)));
+      WORK.reextent( {buff} );
     }
 
     ~afqmc_sys() {}
-
-    ComplexMatrix trialwfn_alpha;
-    ComplexMatrix trialwfn_beta;
-
-    // bad design, but simple for now
-    ComplexMatrix rotMuv;
-    ComplexMatrix rotPiu;
-    ComplexMatrix rotcPua;
-
-    void setup(int nmo_, int na) {
-      NMO = nmo_;
-      NAEA = NAEB = na;
-
-      TMat_NM.resize(extents[NAEA][NMO]);
-      TMat_MN.resize(extents[NMO][NAEA]);
-      TMat_NN.resize(extents[NAEA][NAEA]);
-      TMat_MM.resize(extents[NMO][NMO]); 
-
-      // reserve enough space in lapack's work array
-      // Make sure it is large enough for:
-      //  1. getri( TMat_NN )
-      WORK.reserve(  ma::getri_optimal_workspace_size(TMat_NN) );
-      //  2. geqrf( TMat_NM )
-      WORK.reserve(  ma::geqrf_optimal_workspace_size(TMat_NM) );
-      //  3. gqr( TMat_NM )
-      WORK.reserve(  ma::gqr_optimal_workspace_size(TMat_NM) );
-      //  4. gelqf( TMat_MN )
-      WORK.reserve(  ma::gelqf_optimal_workspace_size(TMat_MN) );
-      //  5. glq( TMat_MN )
-      WORK.reserve(  ma::glq_optimal_workspace_size(TMat_MN) );
-
-      // IWORK: integer buffer for getri/getrf  
-      IWORK.resize(NMO);
-
-      // TAU: ComplexVector used in QR routines 
-      TAU.resize(extents[NMO]);
-
-      // temporary storage for contraction of density matrix with 2-electron integrals  
-      Gcloc.resize(extents[1][1]); // force resize later 
-
-    } 
 
     // THC expects G[nwalk][ak]
     template< class WSet, 
@@ -108,7 +98,7 @@ struct afqmc_sys: public AFQMCInfo
       assert(W_data.shape()[0] >= nwalk);
       assert(W_data.shape()[1] >= 4);
       int N_ = compact?NAEA:NMO;
-      boost::multi_array_ref<ComplexType,4> G_4D(G.data(), extents[nwalk][2][N_][NMO]); 
+      boost::multi::array_ref<ComplexType,4,pointer> G_4D(G.origin(), {nwalk,2,N_,NMO}); 
       for(int n=0; n<nwalk; n++) {
         W_data[n][2] = base::MixedDensityMatrix<ComplexType>(trialwfn_alpha,W[n][0],
                        G_4D[n][0],TMat_NN,TMat_NM,IWORK,WORK,compact);
@@ -137,10 +127,10 @@ struct afqmc_sys: public AFQMCInfo
     {
       assert(vHS.shape()[1] == NMO*NMO);  
       using Type = typename std::decay<MatB>::type::element;
-      boost::const_multi_array_ref<Type,3> V(vHS.data(), extents[vHS.shape()[0]][NMO][NMO]);
+      boost::multi::array_cref<Type,3,const_pointer> V(vHS.origin(), {vHS.shape()[0],NMO,NMO});
       // re-interpretting matrices to avoid new temporary space  
-      boost::multi_array_ref<Type,2> T1(TMat_NM.data(), extents[NMO][NAEA]);
-      boost::multi_array_ref<Type,2> T2(TMat_MM.data(), extents[NMO][NAEA]);
+      boost::multi::array_ref<Type,2,pointer> T1(TMat_NM.origin(), {NMO,NAEA});
+      boost::multi::array_ref<Type,2,pointer> T2(TMat_MM.origin(), {NMO,NAEA});
       for(int nw=0, nwalk=W.shape()[0]; nw<nwalk; nw++) {
 
         ma::product(Propg,W[nw][0],TMat_MN);
@@ -182,35 +172,38 @@ struct afqmc_sys: public AFQMCInfo
 
 // No QR right now
         // LQ on the direct matrix
+/*
         ma::gelqf(W[i][0],TAU,WORK);
         ma::glq(W[i][0],TAU,WORK);
         ma::gelqf(W[i][1],TAU,WORK);
         ma::glq(W[i][1],TAU,WORK);
-
+*/
 
       }
     }
 
   private:
 
+    int NMO, NAEA;
+
     //! Buffers using std::vector
     //! Used in QR and invert
-    std::vector<ComplexType> WORK; 
-    std::vector<int> IWORK; 
+    ComplexVector<Alloc> WORK; 
+    IntegerVector<IAlloc> IWORK; 
 
     //! Vector used in QR routines 
-    ComplexVector TAU;
+    ComplexVector<Alloc> TAU;
 
     //! TMat_AB: Temporary Matrix of dimension [AxB]
     //! N: NAEA
     //! M: NMO
-    ComplexMatrix TMat_NN;
-    ComplexMatrix TMat_NM;
-    ComplexMatrix TMat_MN;
-    ComplexMatrix TMat_MM;
+    ComplexMatrix<Alloc> TMat_NN;
+    ComplexMatrix<Alloc> TMat_NM;
+    ComplexMatrix<Alloc> TMat_MN;
+    ComplexMatrix<Alloc> TMat_MM;
 
     //! storage for contraction of 2-electron integrals with density matrix
-    ComplexMatrix Gcloc;
+    ComplexMatrix<Alloc> Gcloc;
 };
 
 }

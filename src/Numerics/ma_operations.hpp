@@ -63,6 +63,21 @@ MultiArray2D transpose(MultiArray2D&& A){
 	return std::forward<MultiArray2D>(A);
 }
 
+template<class MultiArray2DA, 
+         class MultiArray2DB,
+         typename = typename std::enable_if<(std::decay<MultiArray2DA>::type::dimensionality > 1)>::type,
+         typename = typename std::enable_if<(std::decay<MultiArray2DB>::type::dimensionality > 1)>::type,
+         typename = typename std::enable_if<(std::decay<MultiArray2DA>::type::dimensionality 
+                                                == std::decay<MultiArray2DB>::type::dimensionality)>::type
+        >
+MultiArray2DB transpose(MultiArray2DA&& A, MultiArray2DB&& B){
+        assert(A.shape()[0] == B.shape()[1]);
+        assert(A.shape()[1] == B.shape()[0]);
+        for(int i = 0; i != A.shape()[0]; ++i)
+                B({0,B.shape()[0]},i) = A(i,{0,A.shape()[1]}); 
+        return std::forward<MultiArray2DB>(B);
+}
+
 template<class MA> struct op_tag : std::integral_constant<char, 'N'>{}; // see specializations
 template<class MA> MA arg(MA&& ma){return std::forward<MA>(ma);} // see specializations below
 
@@ -296,14 +311,17 @@ template<class MultiArray2D,
 MultiArray2D exp(MultiArray2D const& A) {
         using Type = typename MultiArray2D::element;
         using RealType = double; //typename qmcplusplus::afqmc::remove_complex<Type>::value_type;
-        using TVec = boost::multi_array<RealType,1>;
-        using TMat = boost::multi_array<Type,2>;
+// FIX FIX FIX Problems in gpu memory
+        using TVec = boost::multi::array<RealType,1>;
+        using TMat = boost::multi::array<Type,2>;
         using eigSys = std::pair<TVec,TMat>;
         assert(A.shape()[0]==A.shape()[1]);
         size_t N = A.shape()[0];
 
-        MultiArray2D ExpA(boost::extents[N][N]);
-        std::fill_n(ExpA.origin(),N*N,Type(0));
+// FIX FIX FIX Problems in gpu memory
+        MultiArray2D ExpA({N,N});
+        using qmcplusplus::detail::get;
+        std::fill_n(get(ExpA.origin()),N*N,Type(0));
 
         if(is_hermitian(A)) {
 
@@ -311,7 +329,7 @@ MultiArray2D exp(MultiArray2D const& A) {
           eigSys V = symEig<TVec,TMat>(A);
 
           // exp(A) = V*exp(M)*H(Z) 
-          MultiArray2D TA(boost::extents[N][N]);
+          MultiArray2D TA({N,N});
           for(int i=0; i<N; i++)
             for(int j=0; j<N; j++)
               TA[i][j] = V.second[i][j] * std::exp(V.first[j]);
