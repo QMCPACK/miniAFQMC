@@ -23,6 +23,7 @@
 
 #include "Configuration.h"
 #include "io/hdf_archive.h"
+#include "Numerics/detail/cuda_pointers.hpp"
 
 namespace qmcplusplus
 {
@@ -41,7 +42,7 @@ inline MultiArray2D hdfcsr2ma(hdf_archive& dump, int nr, int nc, Alloc alloc = A
 {
   using element = value_type; //typename MultiArray2D::value_type;
   using element_alloc = typename Alloc::template rebind<element>::other; 
-  using detail::get;
+  using detail::to_address;
 
   // Need to read:
   // - dims: nrow,ncols, nnz
@@ -66,7 +67,7 @@ inline MultiArray2D hdfcsr2ma(hdf_archive& dump, int nr, int nc, Alloc alloc = A
 
   element_alloc alloc_(alloc);
   MultiArray2D A({nr,nc}, alloc_);
-  std::fill_n(get(A.origin()),A.num_elements(),element(0.0));
+  std::fill_n(to_address(A.origin()),A.num_elements(),element(0.0));
 
   std::vector<int_type> nnz_per_row(nrows);
   std::vector<int_type> ptrb;

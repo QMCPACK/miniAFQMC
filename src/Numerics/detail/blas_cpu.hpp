@@ -17,6 +17,8 @@
 //    Oak Ridge National Laboratory
 // Alfredo A. Correa, correaa@llnl.gov
 //    Lawrence Livermore National Laboratory
+// Miguel A. Morales, moralessilva2@llnl.gov 
+//    Lawrence Livermore National Laboratory 
 //
 // File created by:
 // Jeongnim Kim, jeongnim.kim@gmail.com,
@@ -421,306 +423,249 @@ namespace BLAS_CPU
   {
     cgeru(&m, &n, &alpha, x, &incx, y, &incy, a, &lda);
   }
-}
 
-namespace LAPACK_CPU
-{
+  // Blas extensions
 
-  inline static void gesvd(char *jobu, char *jobvt, int *m, int *n, float *a,
-                           int *lda, float *s, float *u, int *ldu, float *vt,
-                           int *ldvt, float *work, int *lwork, int *info)
+  // C = alpha*op(A) + beta*op(B)
+  // unoptimized implementation
+  // assumes fortran ordering  
+  template<typename T>
+  inline static void geam(char Atrans, char Btrans, int m, int n, 
+                         T const alpha,
+                         T const* A, int lda,
+                         T const beta,
+                         T const* B, int ldb,
+                         T* C, int ldc)
   {
-    sgesvd(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, info);
+    if(n==0 || m==0) return;
+    using std::conj;
+    assert(ldc >= m);
+    // Special cases
+    // S1. set C to zero
+    if(alpha == T(0) && beta == T(0))
+    {
+      T zero(0);
+      for(int j=0; j<n; j++)
+        for(int i=0; i<m; i++)
+          C[ i + j*ldc ] = zero; 
+      return;
+    }    
+    // S2.  
+    if(alpha == T(1) && beta == T(0)) 
+    {
+      if( std::distance(A,C) > 0 ) {
+        if(Atrans == 'N' || Atrans == 'n')
+          assert( std::distance(A,C) >= n*lda );
+        else
+          assert( std::distance(A,C) >= m*lda );
+      } else {
+        assert( std::distance(C,A) >= n*ldc );
+      }
+      if(Atrans == 'N' || Atrans == 'n') {
+        assert(lda >= m);
+        for(int j=0; j<n; j++)
+          for(int i=0; i<m; i++)
+            C[ i + j*ldc ] = A[ i + j*lda ];
+      } else if(Atrans == 'T' || Atrans == 't') {
+        assert(lda >= n);
+        for(int j=0; j<n; j++)
+          for(int i=0; i<m; i++)
+            C[ i + j*ldc ] = A[ j + i*lda ];
+      } else if(Atrans == 'C' || Atrans == 'c') {
+        assert(lda >= n);
+        for(int j=0; j<n; j++)
+          for(int i=0; i<m; i++)
+            C[ i + j*ldc ] = conj(A[ j + i*lda ]);
+      } else {
+        throw std::runtime_error("Error: Invalid Atrans in geam.");
+      }
+      return;
+    }
+    if(alpha == T(0) && beta == T(1))
+    {
+      if( std::distance(B,C) > 0 ) {
+        if(Btrans == 'N' || Btrans == 'n')
+          assert( std::distance(B,C) >= n*ldb );
+        else
+          assert( std::distance(B,C) >= m*ldb );
+      } else {
+        assert( std::distance(C,B) >= n*ldc );
+      }
+      if(Btrans == 'N' || Btrans == 'n') {
+        assert(ldb >= m);
+        for(int j=0; j<n; j++)
+          for(int i=0; i<m; i++)
+            C[ i + j*ldc ] = B[ i + j*ldb ];
+      } else if(Btrans == 'T' || Btrans == 't') {
+        assert(ldb >= n);
+        for(int j=0; j<n; j++)
+          for(int i=0; i<m; i++)
+            C[ i + j*ldc ] = B[ j + i*ldb ];
+      } else if(Btrans == 'C' || Btrans == 'c') {
+        assert(ldb >= n);
+        for(int j=0; j<n; j++)
+          for(int i=0; i<m; i++)
+            C[ i + j*ldc ] = conj(B[ j + i*ldb ]);
+      } else {
+        throw std::runtime_error("Error: Invalid Btrans in geam.");
+      }
+      return;
+    }
+    // Check for in-place modes
+    // I1. A==C, lda==ldc, Atrans=='N'
+    if( std::distance(A,C) == 0 ) {
+      if( (lda != ldc) || (Atrans != 'N') || (Atrans != 'n') ) 
+        throw std::runtime_error("Error: In-place mode requires Op(A)='N' and lda=ldc.");
+      if( std::distance(B,C) > 0 ) {
+        if(Btrans == 'N' || Btrans == 'n')
+          assert( std::distance(B,C) >= n*ldb );
+        else
+          assert( std::distance(B,C) >= m*ldb );
+      } else {
+        assert( std::distance(C,B) >= n*ldc );
+      }
+      if(Btrans == 'N' || Btrans == 'n') {
+        assert(ldb >= m);
+        for(int j=0; j<n; j++)
+          for(int i=0; i<m; i++)
+            C[ i + j*ldc ] = alpha*C[ i + j*lda ] + beta*B[ i + j*ldb ];
+      } else if(Btrans == 'T' || Btrans == 't') {
+        assert(ldb >= n);
+        for(int j=0; j<n; j++)
+          for(int i=0; i<m; i++)
+            C[ i + j*ldc ] = alpha*C[ i + j*lda ] + beta*B[ j + i*ldb ];
+      } else if(Btrans == 'C' || Btrans == 'c') {
+        assert(ldb >= n);
+        for(int j=0; j<n; j++)
+          for(int i=0; i<m; i++)
+            C[ i + j*ldc ] = alpha*C[ i + j*lda ] + beta*conj(B[ j + i*ldb ]);
+      } else {
+        throw std::runtime_error("Error: Invalid Btrans in geam.");
+      }
+      return;
+    }
+    // I2.  B==C, ldb==ldc, Btrans=='N'
+    if( std::distance(B,C) == 0 ) {
+      if( (ldb != ldc) || (Btrans != 'N') || (Btrans != 'n') )
+        throw std::runtime_error("Error: In-place mode requires Op(B)='N' and ldb=ldc.");
+      if( std::distance(A,C) > 0 ) {
+        if(Atrans == 'N' || Atrans == 'n')
+          assert( std::distance(A,C) >= n*lda );
+        else
+          assert( std::distance(A,C) >= m*lda );
+      } else {
+        assert( std::distance(C,A) >= n*ldc );
+      }
+      if(Atrans == 'N' || Atrans == 'n') {
+        assert(lda >= m);
+        for(int j=0; j<n; j++)
+          for(int i=0; i<m; i++)
+            C[ i + j*ldc ] = beta*C[ i + j*lda ] + alpha*A[ i + j*lda ];
+      } else if(Atrans == 'T' || Atrans == 't') {
+        assert(lda >= n);
+        for(int j=0; j<n; j++)
+          for(int i=0; i<m; i++)
+            C[ i + j*ldc ] = beta*C[ i + j*lda ] + alpha*A[ j + i*lda ];
+      } else if(Atrans == 'C' || Atrans == 'c') {
+        assert(lda >= n);
+        for(int j=0; j<n; j++)
+          for(int i=0; i<m; i++)
+            C[ i + j*ldc ] = beta*C[ i + j*lda ] + alpha*conj(A[ j + i*lda ]);
+      } else {
+        throw std::runtime_error("Error: Invalid Atrans in geam.");
+      }
+      return;
+    }
+    // check that C does not overlap A or B
+    if( std::distance(A,C) > 0 ) { 
+      if(Atrans == 'N' || Atrans == 'n')
+        assert( std::distance(A,C) >= n*lda ); 
+      else  
+        assert( std::distance(A,C) >= m*lda ); 
+    } else {
+      assert( std::distance(C,A) >= n*ldc ); 
+    }
+    if( std::distance(B,C) > 0 ) {
+      if(Btrans == 'N' || Btrans == 'n')
+        assert( std::distance(B,C) >= n*ldb ); 
+      else
+        assert( std::distance(B,C) >= m*ldb );  
+    } else {
+      assert( std::distance(C,B) >= n*ldc );  
+    }
+    // Generic case
+    if(Atrans == 'N' || Atrans == 'n') {
+      assert(lda >= m);
+      if(Btrans == 'N' || Btrans == 'n') {
+        assert(ldb >= m);
+        for(int j=0; j<n; j++)
+          for(int i=0; i<m; i++)
+            C[ i + j*ldc ] = alpha*A[ i + j*lda ] + beta*B[ i + j*ldb ]; 
+      } else if(Btrans == 'T' || Btrans == 't') {
+        assert(ldb >= n);
+        for(int j=0; j<n; j++)
+          for(int i=0; i<m; i++)
+            C[ i + j*ldc ] = alpha*A[ i + j*lda ] + beta*B[ j + i*ldb ];
+      } else if(Btrans == 'C' || Btrans == 'c') {
+        assert(ldb >= n);
+        for(int j=0; j<n; j++)
+          for(int i=0; i<m; i++)
+            C[ i + j*ldc ] = alpha*A[ i + j*lda ] + beta*conj(B[ j + i*ldb ]);
+      } else {
+        throw std::runtime_error("Error: Invalid Btrans in geam.");
+      } 
+    } else if(Atrans == 'T' || Atrans == 't') {
+      assert(lda >= n);
+      if(Btrans == 'N' || Btrans == 'n') {
+        assert(ldb >= m);
+        for(int j=0; j<n; j++)
+          for(int i=0; i<m; i++)
+            C[ i + j*ldc ] = alpha*A[ j + i*lda ] + beta*B[ i + j*ldb ];
+      } else if(Btrans == 'T' || Btrans == 't') {
+        assert(ldb >= n);
+        for(int i=0; i<m; i++)
+          for(int j=0; j<n; j++)
+            C[ i + j*ldc ] = alpha*A[ j + i*lda ] + beta*B[ j + i*ldb ];
+      } else if(Btrans == 'C' || Btrans == 'c') {
+        assert(ldb >= n);
+        for(int i=0; i<m; i++)
+          for(int j=0; j<n; j++)
+            C[ i + j*ldc ] = alpha*A[ j + i*lda ] + beta*conj(B[ j + i*ldb ]);
+      } else {
+        throw std::runtime_error("Error: Invalid Btrans in geam.");
+      }
+    } else if(Atrans == 'C' || Atrans == 'c') {
+      assert(lda >= n);
+      if(Btrans == 'N' || Btrans == 'n') {
+        assert(ldb >= m);
+        for(int j=0; j<n; j++)
+          for(int i=0; i<m; i++)
+            C[ i + j*ldc ] = alpha*conj(A[ j + i*lda ]) + beta*B[ i + j*ldb ];
+      } else if(Btrans == 'T' || Btrans == 't') {
+        assert(ldb >= n);
+        for(int i=0; i<m; i++)
+          for(int j=0; j<n; j++)
+            C[ i + j*ldc ] = alpha*conj(A[ j + i*lda ]) + beta*B[ j + i*ldb ];
+      } else if(Btrans == 'C' || Btrans == 'c') {
+        assert(ldb >= n);
+        for(int i=0; i<m; i++)
+          for(int j=0; j<n; j++)
+            C[ i + j*ldc ] = alpha*conj(A[ j + i*lda ]) + beta*conj(B[ j + i*ldb ]);
+      } else {
+        throw std::runtime_error("Error: Invalid Btrans in geam.");
+      }
+    } else {
+      throw std::runtime_error("Error: Invalid Atrans in geam.");
+    }
   }
 
-  inline static void gesvd(char *jobu, char *jobvt, int *m, int *n, double *a,
-                           int *lda, double *s, double *u, int *ldu, double *vt,
-                           int *ldvt, double *work, int *lwork, int *info)
+  template<typename T>
+  inline static void set1D(int n, T const alpha, T* x, int incx)
   {
-    dgesvd(jobu, jobvt, m, n, a, lda, s, u, ldu, vt, ldvt, work, lwork, info);
-  }
-
-  inline static void geev(char *jobvl, char *jobvr, int *n, double *a, int *lda,
-                          double *alphar, double *alphai, double *vl, int *ldvl,
-                          double *vr, int *ldvr, double *work, int *lwork,
-                          int *info)
-  {
-    dgeev(jobvl, jobvr, n, a, lda, alphar, alphai, vl, ldvl, vr, ldvr, work,
-          lwork, info);
-  }
-
-  inline static void geev(char *jobvl, char *jobvr, int *n, float *a, int *lda,
-                          float *alphar, float *alphai, float *vl, int *ldvl,
-                          float *vr, int *ldvr, float *work, int *lwork,
-                          int *info)
-  {
-    sgeev(jobvl, jobvr, n, a, lda, alphar, alphai, vl, ldvl, vr, ldvr, work,
-          lwork, info);
-  }
-
-  inline static void ggev(char *jobvl, char *jobvr, int *n, double *a, int *lda,
-                          double *b, int *ldb, double *alphar, double *alphai,
-                          double *beta, double *vl, int *ldvl, double *vr,
-                          int *ldvr, double *work, int *lwork, int *info)
-  {
-    dggev(jobvl, jobvr, n, a, lda, b, ldb, alphar, alphai, beta, vl, ldvl, vr,
-          ldvr, work, lwork, info);
-  }
-
-  inline static void ggev(char *jobvl, char *jobvr, int *n, float *a, int *lda,
-                          float *b, int *ldb, float *alphar, float *alphai,
-                          float *beta, float *vl, int *ldvl, float *vr,
-                          int *ldvr, float *work, int *lwork, int *info)
-  {
-    sggev(jobvl, jobvr, n, a, lda, b, ldb, alphar, alphai, beta, vl, ldvl, vr,
-          ldvr, work, lwork, info);
-  }
-
-  inline static
-  void hevr (char &JOBZ, char &RANGE, char &UPLO, int &N, float *A, int &LDA,
-             float &VL, float &VU,int &IL, int &IU, float &ABSTOL, int &M, float *W,
-             float* Z, int &LDZ, int* ISUPPZ, float *WORK,
-             int &LWORK, float* RWORK, int &LRWORK, int* IWORK, int &LIWORK, int &INFO)
-  {
-    if(WORK) WORK[0]=0;
-    ssyevr (JOBZ,RANGE,UPLO,N,A,LDA,VL,VU,IL,IU,ABSTOL,M,W,Z,LDZ,ISUPPZ,
-            RWORK,LRWORK,IWORK,LIWORK,INFO);
-  }
-
-  inline static
-  void hevr (char &JOBZ, char &RANGE, char &UPLO, int &N, double *A, int &LDA,
-             double &VL, double &VU,int &IL, int &IU, double &ABSTOL, int &M, double *W,
-             double* Z, int &LDZ, int* ISUPPZ, double *WORK,
-             int &LWORK, double* RWORK, int &LRWORK, int* IWORK, int &LIWORK, int &INFO)
-  {
-    if(WORK) WORK[0]=0;
-    dsyevr (JOBZ,RANGE,UPLO,N,A,LDA,VL,VU,IL,IU,ABSTOL,M,W,Z,LDZ,ISUPPZ,
-            RWORK,LRWORK,IWORK,LIWORK,INFO);
-  }
-
-  inline static
-  void hevr (char &JOBZ, char &RANGE, char &UPLO, int &N, std::complex<float> *A, int &LDA,
-             float &VL, float &VU,int &IL, int &IU, float &ABSTOL, int &M, float *W,
-             std::complex<float>* Z, int &LDZ, int* ISUPPZ,std::complex<float> *WORK,
-             int &LWORK, float* RWORK, int &LRWORK, int* IWORK, int &LIWORK, int &INFO)
-  {
-    cheevr (JOBZ,RANGE,UPLO,N,A,LDA,VL,VU,IL,IU,ABSTOL,M,W,Z,LDZ,ISUPPZ,WORK,LWORK,
-            RWORK,LRWORK,IWORK,LIWORK,INFO);
-  }
-
-  inline static
-  void hevr (char &JOBZ, char &RANGE, char &UPLO, int &N, std::complex<double> *A, int &LDA,
-             double &VL, double &VU,int &IL, int &IU, double &ABSTOL, int &M, double *W,
-             std::complex<double>* Z, int &LDZ, int* ISUPPZ,std::complex<double> *WORK,
-             int &LWORK, double* RWORK, int &LRWORK, int* IWORK, int &LIWORK, int &INFO)
-  {
-    zheevr (JOBZ,RANGE,UPLO,N,A,LDA,VL,VU,IL,IU,ABSTOL,M,W,Z,LDZ,ISUPPZ,WORK,LWORK,
-            RWORK,LRWORK,IWORK,LIWORK,INFO);
-  }
-
-  void static getrf(
-	const int &n, const int &m, double *a, const int &n0, int *piv, int &st)
-  {
-	dgetrf(n, m, a, n0, piv, st);
-  }
-
-  void static getrf(
-	const int &n, const int &m, float *a, const int &n0, int *piv, int &st)
-  {
-	sgetrf(n, m, a, n0, piv, st);
-  }
-
-  void static getrf(
-	const int &n, const int &m, std::complex<double> *a, const int &n0, int *piv, int &st)
-  {
-	zgetrf(n, m, a, n0, piv, st);
-  }
-
-  void static getrf(
-	const int &n, const int &m, std::complex<float> *a, const int &n0, int *piv, int &st)
-  {
-	cgetrf(n, m, a, n0, piv, st);
-  }
-
-  void static getri(int n, float* restrict a, int n0, int const* restrict piv, float* restrict work, int const& n1, int& status)
-  {
-	sgetri(n, a, n0, piv, work, n1, status);
-  }
-
-  void static getri(int n, double* restrict a, int n0, int const* restrict piv, double* restrict work, int const& n1, int& status)
-  {
-	dgetri(n, a, n0, piv, work, n1, status);
-  }
-
-  void static getri(int n, std::complex<float>* restrict a, int n0, int const* restrict piv, std::complex<float>* restrict work, int const& n1, int& status)
-        {
-	cgetri(n, a, n0, piv, work, n1, status);
-  }
-
-  void static getri(int n, std::complex<double>* restrict a, int n0, int const* restrict piv, std::complex<double>* restrict work, int const& n1, int& status)
-  {
-	zgetri(n, a, n0, piv, work, n1, status);
-  }
-
-  void static geqrf(int M, int N, std::complex<double> *A, const int LDA, std::complex<double> *TAU, std::complex<double> *WORK, int LWORK, int& INFO)
-  {
-#ifdef __NO_QR__
-INFO=0;
-WORK[0]=0;
-#else
-	zgeqrf(M, N, A, LDA, TAU, WORK, LWORK, INFO);
-#endif
-  }
-
-  void static geqrf(int M, int N, double *A, const int LDA, double *TAU, double *WORK, int LWORK, int& INFO)
-  {
-#ifdef __NO_QR__
-INFO=0;
-WORK[0]=0;
-#else
-	dgeqrf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
-#endif
-  }
-
-  void static geqrf(int M, int N, std::complex<float> *A, const int LDA, std::complex<float> *TAU, std::complex<float> *WORK, int LWORK, int& INFO)
-  {
-#ifdef __NO_QR__
-INFO=0;
-WORK[0]=0;
-#else
-	cgeqrf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
-#endif
-  }
-
-  void static geqrf(int M, int N, float *A, const int LDA, float *TAU, float *WORK, int LWORK, int& INFO)
-  {
-#ifdef __NO_QR__
-INFO=0;
-WORK[0]=0;
-#else
-	sgeqrf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
-#endif
-  }
-
-  void static gelqf(int M, int N, std::complex<double> *A, const int LDA, std::complex<double> *TAU, std::complex<double> *WORK, int LWORK, int& INFO)
-  {
-#ifdef __NO_QR__
-INFO=0;
-WORK[0]=0;
-#else
-	zgelqf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
-#endif
-  }
-
-  void static gelqf(int M, int N, double *A, const int LDA, double *TAU, double *WORK, int LWORK, int& INFO)
-  {
-#ifdef __NO_QR__
-INFO=0;
-WORK[0]=0;
-#else
-	dgelqf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
-#endif
-  }
-
-  void static gelqf(int M, int N, std::complex<float> *A, const int LDA, std::complex<float> *TAU, std::complex<float> *WORK, int LWORK, int& INFO)
-  {
-#ifdef __NO_QR__
-INFO=0;
-WORK[0]=0;
-#else
-	cgelqf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
-#endif
-  }
-
-  void static gelqf(int M, int N, float *A, const int LDA,  float *TAU, float *WORK, int LWORK, int& INFO)
-  {
-#ifdef __NO_QR__
-INFO=0;
-WORK[0]=0;
-#else
-	sgelqf(M,N,A,LDA,TAU,WORK,LWORK,INFO);
-#endif
-  }
-
-  void static gqr(int M, int N, int K, std::complex<double> *A, const int LDA, std::complex<double> *TAU, std::complex<double> *WORK, int LWORK, int& INFO)
-  {
-#ifdef __NO_QR__
-INFO=0;
-WORK[0]=0;
-#else
-	zungqr(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
-#endif
-  }
-
-  void static gqr(int M, int N, int K, double *A, const int LDA, double *TAU, double *WORK, int LWORK, int& INFO)
-  {
-#ifdef __NO_QR__
-INFO=0;
-WORK[0]=0;
-#else
-	dorgqr(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
-#endif
-  }
-
-  void static gqr(int M, int N, int K, std::complex<float> *A, const int LDA, std::complex<float> *TAU, std::complex<float> *WORK, int LWORK, int& INFO)
-  {
-#ifdef __NO_QR__
-INFO=0;
-WORK[0]=0;
-#else
-	cungqr(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
-#endif
-  }
-
-  void static gqr(int M, int N, int K, float *A, const int LDA, float *TAU, float *WORK, int LWORK, int& INFO)
-  {
-#ifdef __NO_QR__
-INFO=0;
-WORK[0]=0;
-#else
-	sorgqr(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
-#endif
-  }
-
-  void static glq(int M, int N, int K, std::complex<double> *A, const int LDA, std::complex<double> *TAU, std::complex<double> *WORK, int LWORK, int& INFO)
-  {
-#ifdef __NO_QR__
-INFO=0;
-WORK[0]=0;
-#else
-	zunglq(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
-#endif
-  }
-
-  void static glq(int M, int N, int K, double *A, const int LDA, double *TAU, double *WORK, int LWORK, int& INFO)
-  {
-#ifdef __NO_QR__
-INFO=0;
-WORK[0]=0;
-#else
-	dorglq(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
-#endif
-  }
-
-  void static glq(int M, int N, int K, std::complex<float> *A, const int LDA, std::complex<float> *TAU, std::complex<float> *WORK, int LWORK, int& INFO)
-  {
-#ifdef __NO_QR__
-INFO=0;
-WORK[0]=0;
-#else
-	cunglq(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
-#endif
-  }
-    
-  void static glq(int M, int N, int K, float *A, const int LDA, float *TAU, float *WORK, int const LWORK, int& INFO){ 
-#ifdef __NO_QR__
-INFO=0;
-WORK[0]=0;
-#else
-	sorglq(M,N,K,A,LDA,TAU,WORK,LWORK,INFO);
-#endif
+    for(int i=0; i<n; i++, x+=incx)
+      *x = alpha;
   }
 
 }
 
-#endif // OHMMS_BLAS_H
+#endif

@@ -12,99 +12,77 @@
 //    Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef AFQMC_CUBLAS_POINTERS_HPP 
-#define AFQMC_CUBLAS_POINTERS_HPP
+#ifndef AFQMC_CUDA_POINTERS_HPP 
+#define AFQMC_CUDA_POINTERS_HPP
 
-#define CUBLAS_BLAS_TYPE    100
-#define CUBLASXT_BLAS_TYPE  200
-#define CUSTOM1_BLAS_TYPE   300
-#define CUSTOM2_BLAS_TYPE   400
-#define CUSTOM3_BLAS_TYPE   500
-
-#define CPU_MEMORY_POINTER_TYPE      1001
-#define GPU_MEMORY_POINTER_TYPE      2001
-#define MANAGED_MEMORY_POINTER_TYPE  3001
-#define CPU_OUTOFCARS_POINTER_TYPE   4001
-
-#include<cassert>
+#include "Numerics/detail/raw_pointers.hpp"
+#ifdef QMC_CUDA 
 #include <cuda_runtime.h>
-#include "cublas_v2.h"
+#include "Utilities/type_conversion.hpp"
+#include "Numerics/detail/cuda_gpu_pointer.hpp"
+#include "Numerics/detail/cuda_um_pointer.hpp"
+#include "Numerics/detail/cuda_ooc_pointer.hpp"
+#include <type_traits>
 
-template<class T>
-struct cuda_um_ptr{
-  using value_type = T;
-  using pointer = T*;
-  static const int blas_type = CUBLAS_BLAS_TYPE;
-  T* impl_;
-  cublasHandle_t* cublas_handle;
-  cuda_um_ptr() = default;
-  cuda_um_ptr(T* impl__, cublasHandle_t* cublas_handle_=nullptr):impl_(impl__),cublas_handle(cublas_handle_) {}
-// eventually check if memory types and blas types are convertible, e.g. CPU_MEMORY to CPU_OUTOFCARD
-  template<typename Q,
-           typename = typename std::enable_if_t<cuda_um_ptr<Q>::blas_type == blas_type>
-              >
-  cuda_um_ptr(cuda_um_ptr<Q> const& ptr):impl_(ptr.impl_),cublas_handle(ptr.cublas_handle) {} 
-  T& operator*() const{return *impl_;}
-  T& operator[](std::ptrdiff_t n) const{return impl_[n];}
-  T* operator->() const{return impl_;}
-  explicit operator bool() const{return (impl_!=nullptr);}
-  auto operator+(std::ptrdiff_t n) const{return cuda_um_ptr{impl_ + n,cublas_handle};}
-  std::ptrdiff_t operator-(cuda_um_ptr other) const{return std::ptrdiff_t(impl_-other.impl_);}
-  cuda_um_ptr& operator++() {++impl_; return *this;} 
-  cuda_um_ptr& operator--() {--impl_; return *this;} 
-  cuda_um_ptr& operator+=(std::ptrdiff_t d){impl_ += d; return *this;}
-  cuda_um_ptr& operator-=(std::ptrdiff_t d){impl_ -= d; return *this;}
-  bool operator==(cuda_um_ptr const& other) const{ return impl_==other.impl_; }
-  bool operator!=(cuda_um_ptr const& other) const{ return not (*this == other); } 
-  bool operator<=(cuda_um_ptr<T> const& other) const{
-    return impl_ <= other.impl_;
-  }
-  T* get() const {return impl_;}
-  friend decltype(auto) get(cuda_um_ptr const& self){return self.get();}
-};
+namespace cuda {
 
-  
-template<class T> struct cuda_um_allocator{
-  template<class U> struct rebind{typedef cuda_um_allocator<U> other;};
-  using value_type = T;
-  using pointer = cuda_um_ptr<T>;
-  using const_pointer = cuda_um_ptr<T const>;
-  using reference = T&;
-  using const_reference = T const&;
-  using size_type = std::size_t;
-  using difference_type = std::ptrdiff_t;
 
-  cublasHandle_t* cublas_handle_;
-  cuda_um_allocator(cublasHandle_t* cublas_handle__) : cublas_handle_(cublas_handle__){}
-  cuda_um_allocator() = delete;
-  ~cuda_um_allocator() = default;
-  cuda_um_allocator(cuda_um_allocator const& other) : cublas_handle_(other.cublas_handle_){}
-  template<class U>
-  cuda_um_allocator(cuda_um_allocator<U> const& other) : cublas_handle_(other.cublas_handle_) {} 
+template<class ptrA, class Size, class ptrB, 
+         typename = typename std::enable_if_t<not std::is_pointer<ptrA>::value>, 
+         typename = typename std::enable_if_t<not std::is_pointer<ptrB>::value> 
+        > 
+ptrB copy_n(ptrA const A, Size n, ptrB B) {
+  if(cudaSuccess != cudaMemcpy(to_address(B),to_address(A),n*sizeof(typename ptrA::value_type),cudaMemcpyDefault))
+   throw std::runtime_error("Error: cudaMemcpy returned error code.");
+  return B+n; 
+}  
+template<class T, class Size, class ptrA,
+         typename = typename std::enable_if_t<not std::is_pointer<ptrA>::value> 
+>
+T* copy_n(ptrA const A, Size n, T* B) {
+  if(cudaSuccess != cudaMemcpy(B,to_address(A),n*sizeof(typename ptrA::value_type),cudaMemcpyDefault))
+   throw std::runtime_error("Error: cudaMemcpy returned error code.");
+  return B+n;
+}
+template<class T, class Size, class ptrB,
+         typename = typename std::enable_if_t<not std::is_pointer<ptrB>::value> 
+>
+ptrB copy_n(T const* A, Size n, ptrB B) {
+  if(cudaSuccess != cudaMemcpy(to_address(B),A,n*sizeof(T),cudaMemcpyDefault))
+   throw std::runtime_error("Error: cudaMemcpy returned error code.");
+  return B+n;
+}
+template<class T, class Size>
+T* copy_n(T const* A, Size n, T* B) {
+  return std::copy_n(A,n,B);    
+//  if(cudaSuccess != cudaMemcpy(B,A,n*sizeof(T),cudaMemcpyDefault))
+//   throw std::runtime_error("Error: cudaMemcpy returned error code.");
+//  return B+n;
+}
 
-  cuda_um_ptr<T> allocate(size_type n, const void* hint = 0){
-    if(n == 0) return cuda_um_ptr<T>{};
-    T* p;
-    cudaMallocManaged ((void**)&p,n*sizeof(T),cudaMemAttachGlobal);
-    return cuda_um_ptr<T>{p,cublas_handle_};
-  }
-  void deallocate(cuda_um_ptr<T> ptr, size_type){
-    cudaFree(ptr.impl_); 
-  }
-  bool operator==(cuda_um_allocator const& other) const{
-    cublas_handle_ == other.cublas_handle_;   
-  }
-  bool operator!=(cuda_um_allocator const& other) const{
-    return not (other == *this);
-  }
-  template<class U, class... Args>
-  void construct(U* p, Args&&... args){
-    ::new((void*)p) U(std::forward<Args>(args)...);
-  }
-  template< class U >
-  void destroy(U* p){
-    p->~U();
-  }
-};
-  
+/*
+template<class T, class Size> 
+cuda_gpu_ptr<T> copy_n(cuda_gpu_ptr<T> const A, Size n, cuda_gpu_ptr<T> B) {
+  if(cudaSuccess != cudaMemcpy(to_address(B),to_address(A),n*sizeof(T),cudaMemcpyDefault))
+   throw std::runtime_error("Error: cudaMemcpy returned error code.");
+  return B+n; 
+}  
+template<class T, class Size>
+T* copy_n(cuda_gpu_ptr<T> const A, Size n, T* B) {
+  if(cudaSuccess != cudaMemcpy(B,to_address(A),n*sizeof(T),cudaMemcpyDefault))
+   throw std::runtime_error("Error: cudaMemcpy returned error code.");
+  return B+n;
+}
+template<class T, class Size>
+cuda_gpu_ptr<T> copy_n(T const* A, Size n, cuda_gpu_ptr<T> B) {
+  if(cudaSuccess != cudaMemcpy(to_address(B),A,n*sizeof(T),cudaMemcpyDefault))
+   throw std::runtime_error("Error: cudaMemcpy returned error code.");
+  return B+n;
+}
+*/
+
+}
+
+#endif
+
 #endif

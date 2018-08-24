@@ -8,15 +8,15 @@
 #include "../multi/index_range.hpp"
 
 #include<algorithm> // transform
-#include<cassert>
-#include<iostream> // cerr
-#include<memory>
 #include<array>
+#include<cassert>
+//#include<iostream> // cerr
+#include<memory>
 
 namespace boost{
 namespace multi{
 
-using std::cerr;
+//using std::cerr;
 
 using index = std::ptrdiff_t;
 using size_type = std::ptrdiff_t;
@@ -535,10 +535,10 @@ struct basic_array<T, dimensionality_type{1}, ElementPtr, Layout> : Layout{
 	using element_ptr = ElementPtr;
 	using element_const_ptr = typename std::pointer_traits<element_ptr>::template rebind<element const>;
 	using layout_t = Layout;
-	using const_reference = T const&;
-	using reference = decltype(*ElementPtr{});
+	using const_reference = decltype(*std::declval<element_const_ptr>()); //T const&;
+	using reference = decltype(*std::declval<element_ptr>()); // decltype(*ElementPtr{});
 protected:
-//	using initializer_list = recursive_ilist_t<T, dimensionality>;
+//	using initializer_list = recursive_ilist_t<T, di                                                                                                                               m mensionality>;
 	using initializer_list = std::initializer_list<T>;
 	template<class It>
 	void recursive_assign_(It first, It last){
@@ -764,11 +764,9 @@ struct array_ref : const_array_ref<T, D, ElementPtr>{
 	}
 	array_ref& operator=(array_ref const& o){return operator=<array_ref const&>(o);}
 //	typename array_ref::element_ptr 
-	typename array_ref::element_ptr const& data()const{return this->data_;}
-	typename array_ref::element_ptr const& data(){return this->data_;}
-	typename array_ref::element_ptr origin()const{return this->data_ + array_ref::layout_t::origin();}
-	typename array_ref::element_ptr origin(){return this->data_ + array_ref::layout_t::origin();}
-	friend decltype(auto) data(array_ref& self){return self.data();}
+	typename array_ref::element_ptr const& data() const{return this->data_;}
+	typename array_ref::element_ptr origin() const{return this->data_ + array_ref::layout_t::origin();}
+	friend decltype(auto) data(array_ref const& self){return self.data();}
 };
 
 template<typename... A> using carray_ref = array_ref<A...>;

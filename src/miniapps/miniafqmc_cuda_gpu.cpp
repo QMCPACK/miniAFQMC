@@ -155,7 +155,7 @@ int main(int argc, char **argv)
   }
 
   // using Unified Memory allocator
-  using Alloc = cuda::cuda_um_allocator<ComplexType>;
+  using Alloc = cuda::cuda_gpu_allocator<ComplexType>;
   using THCOps = afqmc::THCOps<Alloc>;
   using cuda::cublas_check;
   using cuda::cusolver_check;
@@ -205,7 +205,7 @@ int main(int argc, char **argv)
   base::afqmc_sys<Alloc> AFQMCSys(NMO,NAEA,um_alloc);
   ComplexMatrix<Alloc> Propg1({NMO,NMO}, um_alloc);
 
-  THCOps THC(afqmc::Initialize<THCOps>(dump,dt,AFQMCSys,Propg1));
+  THCOps THC(afqmc::Initialize<THCOps,base::afqmc_sys<Alloc>>(dump,dt,AFQMCSys,Propg1));
 
   RealType Eshift = 0;
   int nchol = THC.number_of_cholesky_vectors();            // number of cholesky vectors  
@@ -238,21 +238,30 @@ int main(int argc, char **argv)
   // 0: eloc, 1: weight, 2: ovlp_up, 3: ovlp_down, 4: w_eloc, 5: old_w_eloc, 6: old_ovlp_alpha, 7: old_ovlp_beta
   ComplexMatrix<Alloc> W_data( {nwalk,8}, um_alloc );
   // initialize walkers to trial wave function
-  for(int n=0; n<nwalk; n++)
-    for(int nm=0; nm<NMO; nm++)
-      for(int na=0; na<NAEA; na++) {
-        using std::conj;
-        W[n][0][nm][na] = conj(AFQMCSys.trialwfn_alpha[nm][na]);
-        W[n][1][nm][na] = conj(AFQMCSys.trialwfn_beta[nm][na]);
-      }
+  {
+    // conj(A) = H( T(A) ) (avoids cuda kernels)
+    // trick to avoid kernels
+    using ma::H;
+    using ma::T;
+    ComplexMatrix<Alloc> PsiT( {NAEA,NMO}, um_alloc );
+    ma::transform(T(AFQMCSys.trialwfn_alpha),PsiT);
+    for(int n=0; n<nwalk; n++)
+      ma::transform(H(PsiT),W[n][0]);
+    ma::transform(T(AFQMCSys.trialwfn_beta),PsiT);
+    for(int n=0; n<nwalk; n++)
+      ma::transform(H(PsiT),W[n][1]);
+  }
 
   // set weights to 1
-  for(int n=0; n<nwalk; n++)
-    W_data[n][1] = ComplexType(1.);
+  ma::setVector(ComplexType(1.),W_data( W_data.extension(0), 1)); 
+//    for(int n=0; n<nwalk; n++)
+//      W_data[n][1] = ComplexType(1.);
 
   // initialize overlaps and energy
   AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc);
+std::cout<<" done in AFQMCSys.calculate_mixed_density_matrix " <<std::endl;
   RealType Eav = THC.energy(W_data,Gc);
+std::cout<<" done in THC.energy " <<std::endl;
 
   std::cout<<"\n";
   std::cout<<"***********************************************************\n";
@@ -273,10 +282,12 @@ int main(int argc, char **argv)
       Timers[Timer_DM]->start();
       AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc);
       Timers[Timer_DM]->stop();
+std::cout<<" done in calculate_mixed_density_matrix " <<std::endl;
 
       Timers[Timer_vbias]->start();
       THC.vbias(Gc,vbias,sqrtdt);
       Timers[Timer_vbias]->stop();
+std::cout<<" done in vbias " <<std::endl;
 
       // 2. calculate X and weight
       //  X(chol,nw) = rand + i*vbias(chol,nw)
@@ -290,6 +301,7 @@ int main(int argc, char **argv)
           X[n][nw] += im*vbias[n][nw];
         }
       Timers[Timer_X]->stop();
+std::cout<<" done in X " <<std::endl;
 
       // 3. calculate vHS
       Timers[Timer_vHS]->start();

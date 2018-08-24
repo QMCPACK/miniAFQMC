@@ -40,7 +40,7 @@ namespace base
  * 
  * This version works on a single memory space, e.g. CPU, GPU, Managed Memory, etc, based on the allocator. 
  */
-template<class AllocType = std::allocator<ComplexType>
+template<class AllocType // = std::allocator<ComplexType>
         >
 struct afqmc_sys: public AFQMCInfo
 {

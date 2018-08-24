@@ -45,6 +45,8 @@ class THCOps
   using Allocator = Alloc;  
   using pointer = typename Alloc::pointer;  
   using const_pointer = typename Alloc::const_pointer;  
+  using real_type = typename Alloc::template rebind<SPRealType>::other::value_type;
+  using const_real_type = typename Alloc::template rebind<SPRealType>::other::value_type const;
   using real_pointer = typename Alloc::template rebind<SPRealType>::other::pointer;
   using real_const_pointer = typename Alloc::template rebind<SPRealType>::other::const_pointer;
 
@@ -60,7 +62,7 @@ class THCOps
            SpCMatrix&& piu_,
            SpCMatrix&& pau_,
            ValueType e0_,
-           Allocator alloc_ = Allocator(),  
+           Allocator alloc_ = Allocator{},  
            bool verbose=false ):
                 allocator_(alloc_),
                 NMO(nmo_),NAEA(naea_),NAEB(naeb_),
@@ -107,6 +109,7 @@ class THCOps
       // Sp_G needs: nel_*nmo_
       // vbias needs: nwalk*nu + nel_*nu 
       size_t nu = Luv.shape()[0];
+      size_t nv = Luv.shape()[1];
       size_t rnu = rotMuv.shape()[0];
       size_t rnv = rotMuv.shape()[1];
       size_t nel = ((walker_type==COLLINEAR)?(NAEA+NAEB):(NAEA));  
@@ -139,8 +142,10 @@ class THCOps
       // consider moving loop over spin to avoid storing the second copy which is not used  
       // simultaneously
       size_t memory_needs = nu*nv + nv + nu  + size_t(NAEA)*std::max(nv,nu) + size_t(2*NMO*NAEA);
-      if(TMats.num_elements() < memory_needs)
-        APP_ABORT(" Error: TMats.num_elements() < memory_needs() \n"); 
+      if(TMats.num_elements() < memory_needs) {
+       TMats.reextent({memory_needs}); 
+       // APP_ABORT(" Error: TMats.num_elements() < memory_needs() \n"); 
+      }  
       size_t cnt=0;  
       // Guv[nspin][nu][nv]
       boost::multi::array_ref<ComplexType,2,pointer> Guv(TMats.data(),{nu,nv});
@@ -251,16 +256,19 @@ class THCOps
       using ma::T;
       using std::conj;
       size_t memory_needs = nu*nwalk + nu*nmo_ + X.num_elements();
-      if(TMats.num_elements() < memory_needs)
-        APP_ABORT(" Error: TMats.num_elements() < memory_needs() \n");
+      if(TMats.num_elements() < memory_needs) {
+       TMats.reextent({memory_needs}); 
+       // APP_ABORT(" Error: TMats.num_elements() < memory_needs() \n"); 
+      }  
       boost::multi::array_ref<ComplexType,2,pointer> Tuw(TMats.data(),{nu,nwalk});
       // O[nwalk * nmu * nmu]
       // reinterpret as RealType matrices with 2x the columns
-      boost::multi::array_ref<RealType,2,real_pointer> Luv_R(reinterpret_cast<real_pointer>(Luv.origin()),
+      using detail::pointer_cast;
+      boost::multi::array_ref<RealType,2,real_pointer> Luv_R(pointer_cast<real_type>(Luv.origin()),
                                                  {Luv.shape()[0],2*Luv.shape()[1]});
-      boost::multi::array_cref<RealType,2,real_const_pointer> X_R(reinterpret_cast<real_const_pointer>(X.origin()),
+      boost::multi::array_cref<RealType,2,real_const_pointer> X_R(pointer_cast<const_real_type>(X.origin()),
                                                  {X.shape()[0],2*X.shape()[1]});
-      boost::multi::array_ref<RealType,2,real_pointer> Tuw_R(reinterpret_cast<real_pointer>(Tuw.origin()),
+      boost::multi::array_ref<RealType,2,real_pointer> Tuw_R(pointer_cast<real_type>(Tuw.origin()),
                                                  {nu,2*nwalk});
       ma::product(Luv_R,X_R,Tuw_R);
       boost::multi::array_ref<ComplexType,2,pointer> Qiu(TMats.data()+nwalk*nu,{nmo_,nu});
@@ -305,17 +313,20 @@ class THCOps
       assert(v.shape()[0]==nchol);  
       using ma::T;
       size_t memory_needs = nwalk*nu + nel_*nu + G.num_elements();
-      if(TMats.num_elements() < memory_needs)
-        APP_ABORT(" Error: TMats.num_elements() < memory_needs() \n");
+      if(TMats.num_elements() < memory_needs) {
+       TMats.reextent({memory_needs});
+       // APP_ABORT(" Error: TMats.num_elements() < memory_needs() \n"); 
+      }
       boost::multi::array_ref<ComplexType,2,pointer> Guu(TMats.data(),{nu,nwalk});
       boost::multi::array_ref<ComplexType,2,pointer> T1(TMats.data()+nwalk*nu,{nu,nel_});
       Guu_from_compact(G,Guu,T1);
       // reinterpret as RealType matrices with 2x the columns
-      boost::multi::array_ref<RealType,2,real_pointer> Luv_R(reinterpret_cast<real_pointer>(Luv.origin()),
+      using detail::pointer_cast;
+      boost::multi::array_ref<RealType,2,real_pointer> Luv_R(pointer_cast<real_type>(Luv.origin()),
                                                {Luv.shape()[0],2*Luv.shape()[1]});
-      boost::multi::array_ref<RealType,2,real_pointer> Guu_R(reinterpret_cast<real_pointer>(Guu.origin()),
+      boost::multi::array_ref<RealType,2,real_pointer> Guu_R(pointer_cast<real_type>(Guu.origin()),
                                                {nu,2*nwalk});
-      boost::multi::array_ref<RealType,2,real_pointer> v_R(reinterpret_cast<real_pointer>(v.origin()),
+      boost::multi::array_ref<RealType,2,real_pointer> v_R(pointer_cast<real_type>(v.origin()),
                                                {v.shape()[0],2*v.shape()[1]});
       ma::product(a,T(Luv_R),Guu_R,c,v_R);
     }

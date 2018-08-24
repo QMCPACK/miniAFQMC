@@ -180,6 +180,9 @@
 /* Fund acml library */
 #cmakedefine HAVE_ACML @HAVE_ACML@
 
+/* Using CUDA for GPU execution */
+#cmakedefine QMC_CUDA @QMC_CUDA@
+
 /* For AFQMC compilation  */
 #cmakedefine BUILD_AFQMC @BUILD_AFQMC@
 

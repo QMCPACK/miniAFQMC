@@ -97,6 +97,7 @@ SET(QMC_MPI 1 CACHE BOOL "Enable/disable MPI")
 SET(QMC_OMP 1 CACHE BOOL "Enable/disable OpenMP")
 SET(QMC_BITS 64 CACHE INTEGER "Select OS bit")
 SET(QMC_COMPLEX 1 CACHE INTEGER "Build for complex binary")
+SET(QMC_CUDA 0 CACHE BOOL "Enable/disable CUDA")
 SET(PRINT_DEBUG 0 CACHE BOOL "Enable/disable debug printing")
 
 ######################################################################

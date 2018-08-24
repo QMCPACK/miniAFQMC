@@ -26,7 +26,7 @@
 #include<cassert>
 #include<iostream>
 
-#include "Numerics/OhmmsBlas.h"
+//#include "Numerics/OhmmsBlas.h"
 #include "Numerics/detail/blas.hpp"
 
 namespace ma{
@@ -40,12 +40,16 @@ template<class MultiArray1Dx,
 auto
 dot(MultiArray1Dx&& x, MultiArray1Dy&& y){
         assert(x.size() == y.size());
-        return BLAS::dot(x.size(), x.origin(), x.strides()[0], y.origin(), y.strides()[0]);
+        using BLAS_CPU::dot;
+        using BLAS_GPU::dot;
+        return dot(x.size(), x.origin(), x.strides()[0], y.origin(), y.strides()[0]);
 }
 
 template<class T, class MultiArray1D, typename = typename std::enable_if<std::decay<MultiArray1D>::type::dimensionality == 1>::type >
 MultiArray1D scal(T a, MultiArray1D&& x){
-	BLAS::scal(x.size(), a, x.origin(), x.strides()[0]);
+        using BLAS_CPU::scal;
+        using BLAS_GPU::scal;
+	scal(x.size(), a, x.origin(), x.strides()[0]);
 	return std::forward<MultiArray1D>(x);
 }
 
@@ -57,12 +61,16 @@ template<class T,
 MultiArray2D scal(T a, MultiArray2D&& x){
 	assert( x.strides()[0] == x.shape()[1] ); // only on contiguous arrays 
 	assert( x.strides()[1] == 1 );            // only on contiguous arrays 
-        BLAS::scal(x.num_elements(), a, x.origin(), 1);
+        using BLAS_CPU::scal;
+        using BLAS_GPU::scal;
+        scal(x.num_elements(), a, x.origin(), 1);
         return std::forward<MultiArray2D>(x);
 }
 
 template<class T, class MultiArray1D>
 auto operator*=(MultiArray1D&& x, T a) -> decltype(scal(a, std::forward<MultiArray1D>(x))){
+        using BLAS_CPU::scal;
+        using BLAS_GPU::scal;
 	return scal(a, std::forward<MultiArray1D>(x));
 }
 
@@ -71,7 +79,9 @@ template<class T, class MultiArray1DA, class MultiArray1DB,
 >
 MultiArray1DB axpy(T x, MultiArray1DA const& a, MultiArray1DB&& b){
 	assert( a.shape()[0] == b.shape()[0] );
-	BLAS::axpy(a.shape()[0], x, a.origin(), a.strides()[0], b.origin(), b.strides()[0]);
+        using BLAS_CPU::axpy;
+        using BLAS_GPU::axpy;
+	axpy(a.shape()[0], x, a.origin(), a.strides()[0], b.origin(), b.strides()[0]);
 	return std::forward<MultiArray1DB>(b);
 }
 
@@ -85,7 +95,9 @@ MultiArray2DB axpy(T x, MultiArray2DA const& a, MultiArray2DB&& b){
 	assert( a.strides()[1] == 1 );            // only on contiguous arrays 
 	assert( b.strides()[0] == b.shape()[1] ); // only on contiguous arrays 
 	assert( b.strides()[1] == 1 );            // only on contiguous arrays 
-        BLAS::axpy(a.num_elements(), x, a.origin(), 1, b.origin(), 1);
+        using BLAS_CPU::axpy;
+        using BLAS_GPU::axpy;
+        axpy(a.num_elements(), x, a.origin(), 1, b.origin(), 1);
         return std::forward<MultiArray2DB>(b);
 }
 
@@ -99,7 +111,9 @@ MultiArray1DY gemv(T alpha, MultiArray2DA const& A, MultiArray1DX const& x, T be
 	assert( A.strides()[1] == 1 ); // gemv is not implemented for arrays with non-leading stride != 1
 	int M = A.shape()[1];
 	int N = A.shape()[0];
-	BLAS::gemv(IN, M, N, alpha, A.origin(), A.strides()[0], x.origin(), x.strides()[0], beta, y.origin(), y.strides()[0]);
+        using BLAS_CPU::gemv;
+        using BLAS_GPU::gemv;
+	gemv(IN, M, N, alpha, A.origin(), A.strides()[0], x.origin(), x.strides()[0], beta, y.origin(), y.strides()[0]);
 	return std::forward<MultiArray1DY>(y);
 } //y := alpha*A*x + beta*y,
 
@@ -167,6 +181,78 @@ MultiArray2DC gemm(T alpha, MultiArray2DA const& a, MultiArray2DB const& b, T be
 template<char TA, char TB, class T, class MultiArray2DA, class MultiArray2DB, class MultiArray2DC>
 MultiArray2DC gemm(MultiArray2DA const& a, MultiArray2DB const& b, MultiArray2DC&& c){
 	return gemm(1., a, b, 0., std::forward<MultiArray2DC>(c));
+}
+
+template<char TA, char TB, class T, class MultiArray2DA, class MultiArray2DB, class MultiArray2DC,
+        typename = typename std::enable_if< MultiArray2DA::dimensionality == 2 and 
+                                            MultiArray2DB::dimensionality == 2 and 
+                                            std::decay<MultiArray2DC>::type::dimensionality == 2>::type
+>
+MultiArray2DC geam(T alpha, MultiArray2DA const& a, T beta, MultiArray2DB const& b, MultiArray2DC&& c){
+        assert( a.strides()[1] == 1 );
+        assert( b.strides()[1] == 1 );
+        assert( c.strides()[1] == 1 );
+        assert( (TA == 'N') || (TA == 'T') || (TA == 'C')  );
+        assert( (TB == 'N') || (TB == 'T') || (TB == 'C')  );
+        if(TA == 'N' and TB == 'N'){
+                assert(a.shape()[0] == c.shape()[0] and a.shape()[1] == c.shape()[1]);
+                assert(b.shape()[0] == c.shape()[0] and b.shape()[1] == c.shape()[1]);
+        }
+        if((TA == 'T' or TA == 'C') and (TB == 'T' or TB == 'C')){
+                assert(a.shape()[1] == c.shape()[0] and a.shape()[0] == c.shape()[1]);
+                assert(b.shape()[1] == c.shape()[0] and b.shape()[0] == c.shape()[1]);
+        }
+        if((TA == 'T' or TA == 'C') and TB == 'N'){
+                assert(a.shape()[1] == c.shape()[0] and a.shape()[0] == c.shape()[1]);
+                assert(b.shape()[0] == c.shape()[0] and b.shape()[1] == c.shape()[1]);
+        }
+        if(TA == 'N' and (TB == 'T' or TB == 'C')){
+                assert(a.shape()[0] == c.shape()[0] and a.shape()[1] == c.shape()[1]);
+                assert(b.shape()[1] == c.shape()[0] and b.shape()[0] == c.shape()[1]);
+        }
+        using BLAS_CPU::geam;
+        using BLAS_GPU::geam;
+        geam(   TA, TB, c.shape()[1], c.shape()[0],
+                alpha, a.origin(), a.strides()[0],
+                beta, b.origin(), b.strides()[0],
+                c.origin(), c.strides()[0]
+        );
+        return std::forward<MultiArray2DC>(c);
+}
+
+template<char TA, class T, class MultiArray2DA, class MultiArray2DC,
+        typename = typename std::enable_if< MultiArray2DA::dimensionality == 2 and 
+                                            std::decay<MultiArray2DC>::type::dimensionality == 2>::type
+>
+MultiArray2DC geam(T alpha, MultiArray2DA const& a, MultiArray2DC&& c){
+        assert( a.strides()[1] == 1 );
+        assert( c.strides()[1] == 1 );
+        assert( (TA == 'N') || (TA == 'T') || (TA == 'C')  );
+        if(TA == 'N'){
+                assert(a.shape()[0] == c.shape()[0] and a.shape()[1] == c.shape()[1]);
+        }
+        if((TA == 'T' or TA == 'C')) { 
+                assert(a.shape()[1] == c.shape()[0] and a.shape()[0] == c.shape()[1]);
+        }
+        auto aorg(a.origin());
+        using BLAS_CPU::geam;
+        using BLAS_GPU::geam;
+        geam(   TA, TA, c.shape()[1], c.shape()[0],
+                alpha, a.origin(), a.strides()[0],
+                T(0), a.origin(), a.strides()[0], 
+                c.origin(), c.strides()[0]
+        );
+        return std::forward<MultiArray2DC>(c);
+}
+
+template<class T, class MultiArray1D, 
+        typename = typename std::enable_if< std::decay<MultiArray1D>::type::dimensionality == 1 > 
+>
+MultiArray1D setVector(T alpha, MultiArray1D&& a){
+        using BLAS_CPU::set1D;
+        using BLAS_GPU::set1D;
+        set1D(a.shape()[0],  alpha, a.origin(), a.strides()[0] ); 
+        return std::forward<MultiArray1D>(a);
 }
 
 }

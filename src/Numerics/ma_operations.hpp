@@ -21,6 +21,7 @@
 #ifndef MA_OPERATIONS_HPP
 #define MA_OPERATIONS_HPP
 
+#include "Configuration.h"
 #include "ma_blas.hpp"
 #include "ma_lapack.hpp"
 #include "sparse.hpp"
@@ -53,14 +54,26 @@ bool is_symmetric(MultiArray2D const& A){
 	return true;
 }
 
-template<class MultiArray2D, typename = typename std::enable_if<(std::decay<MultiArray2D>::type::dimensionality > 1)>::type>
+template<class MultiArray2D, typename = typename std::enable_if<(std::decay<MultiArray2D>::type::dimensionality == 2)>::type>
 MultiArray2D transpose(MultiArray2D&& A){
 	assert(A.shape()[0] == A.shape()[1]);
+        return ma::geam< 'T' > (1, arg(A), std::forward<MultiArray2D>(A));
+/*
 	using std::swap;
 	for(int i = 0; i != A.shape()[0]; ++i)
 		for(int j = 0; j != i; ++j)
 			swap(A[i][j], A[j][i]);
 	return std::forward<MultiArray2D>(A);
+*/
+}
+
+template<class MA> struct op_tag : std::integral_constant<char, 'N'>{}; // see specializations
+template<class MA> MA arg(MA&& ma){return std::forward<MA>(ma);} // see specializations below
+
+template<class MultiArray2D, typename = typename std::enable_if<(std::decay<MultiArray2D>::type::dimensionality == 2)>::type>
+void transform(MultiArray2D&& A){
+        assert(arg(A).shape()[0] == arg(A).shape()[1]);
+        ma::geam< op_tag<typename std::decay<MultiArray2D>::type>::value > (1, arg(A), arg(A));
 }
 
 template<class MultiArray2DA, 
@@ -71,15 +84,34 @@ template<class MultiArray2DA,
                                                 == std::decay<MultiArray2DB>::type::dimensionality)>::type
         >
 MultiArray2DB transpose(MultiArray2DA&& A, MultiArray2DB&& B){
-        assert(A.shape()[0] == B.shape()[1]);
-        assert(A.shape()[1] == B.shape()[0]);
-        for(int i = 0; i != A.shape()[0]; ++i)
-                B({0,B.shape()[0]},i) = A(i,{0,A.shape()[1]}); 
-        return std::forward<MultiArray2DB>(B);
+        return ma::geam< 'T' > (1, arg(A), std::forward<MultiArray2DB>(B));
 }
 
-template<class MA> struct op_tag : std::integral_constant<char, 'N'>{}; // see specializations
-template<class MA> MA arg(MA&& ma){return std::forward<MA>(ma);} // see specializations below
+template<class MultiArray2DA,
+         class MultiArray2DB,
+         typename = typename std::enable_if<(std::decay<MultiArray2DA>::type::dimensionality > 1)>::type,
+         typename = typename std::enable_if<(std::decay<MultiArray2DB>::type::dimensionality > 1)>::type,
+         typename = typename std::enable_if<(std::decay<MultiArray2DA>::type::dimensionality
+                                                == std::decay<MultiArray2DB>::type::dimensionality)>::type
+        >
+MultiArray2DB transform(MultiArray2DA const& A, MultiArray2DB&& B){
+        return ma::geam< op_tag<MultiArray2DA>::value > (1, arg(A), std::forward<MultiArray2DB>(B));
+}
+
+template<class T, class MultiArray2DA, class MultiArray2DB, class MultiArray2DC,
+        typename = typename std::enable_if<
+                MultiArray2DA::dimensionality == 2 and
+                MultiArray2DB::dimensionality == 2 and
+                std::decay<MultiArray2DC>::type::dimensionality == 2
+        >::type
+>
+MultiArray2DC add(T alpha, MultiArray2DA const& A, T beta, MultiArray2DB const& B, MultiArray2DC&& C){
+        return ma::geam<
+                op_tag<MultiArray2DA>::value,
+                op_tag<MultiArray2DB>::value
+        >
+        (alpha, arg(A), beta, arg(B), std::forward<MultiArray2DC>(C));
+}
 
 template<class T, class MultiArray2DA, class MultiArray1DB, class MultiArray1DC,
 	typename = typename std::enable_if<
@@ -305,23 +337,22 @@ T determinant(MultiArray2D&& m, MultiArray1D&& pivot){
 	return detvalue;
 }
 
+// doesn't work for references right now
 template<class MultiArray2D,
          typename = typename std::enable_if_t<MultiArray2D::dimensionality == 2>
         >
 MultiArray2D exp(MultiArray2D const& A) {
         using Type = typename MultiArray2D::element;
-        using RealType = double; //typename qmcplusplus::afqmc::remove_complex<Type>::value_type;
-// FIX FIX FIX Problems in gpu memory
-        using TVec = boost::multi::array<RealType,1>;
-        using TMat = boost::multi::array<Type,2>;
+        using RType = typename qmcplusplus::afqmc::remove_complex<Type>::value_type;
+        using Alloc = typename MultiArray2D::allocator_type;
+        using RAlloc = typename Alloc::template rebind<RType>::other;
+        using TVec = boost::multi::array<RType,1,RAlloc>;
+        using TMat = boost::multi::array<Type,2,Alloc>;
         using eigSys = std::pair<TVec,TMat>;
         assert(A.shape()[0]==A.shape()[1]);
         size_t N = A.shape()[0];
 
-// FIX FIX FIX Problems in gpu memory
-        MultiArray2D ExpA({N,N});
-        using qmcplusplus::detail::get;
-        std::fill_n(get(ExpA.origin()),N*N,Type(0));
+        MultiArray2D ExpA({N,N}, A.get_allocator());
 
         if(is_hermitian(A)) {
 
@@ -329,7 +360,7 @@ MultiArray2D exp(MultiArray2D const& A) {
           eigSys V = symEig<TVec,TMat>(A);
 
           // exp(A) = V*exp(M)*H(Z) 
-          MultiArray2D TA({N,N});
+          MultiArray2D TA({N,N}, A.get_allocator());
           for(int i=0; i<N; i++)
             for(int j=0; j<N; j++)
               TA[i][j] = V.second[i][j] * std::exp(V.first[j]);

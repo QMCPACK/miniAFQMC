@@ -6,14 +6,15 @@
 
 #include "../multi/array_ref.hpp"
 
-#include<iostream> // cerr
 #include<algorithm>
+#include<array>
+//#include<iostream> // cerr
 #include<numeric>
 
 namespace boost{
 namespace multi{
 
-using std::cerr;
+//using std::cerr;
 
 template<class TT> auto list_extensions(std::initializer_list<TT> const& il){
 	return std::array<index_extension, 1>{index_extension{0, size_type(il.size())}};
@@ -44,7 +45,7 @@ private:
 public:
 //	explicit array(array const&){}
 	template<class Array, typename = decltype(std::declval<Array>().extensions())>
-	array(Array&& other) : array(other.extensions()){
+	array(Array&& other) : array(other.extensions(),other.allocator_){
 		array::operator=(std::forward<Array>(other));
 	}
 	explicit array(extensions_type e = {}) : 
@@ -89,14 +90,18 @@ public:
 		return array_ref<T, D, typename std::allocator_traits<Allocator>::pointer>::operator[](i);
 	}*/
 	array& operator=(array const& other){
-		array tmp(other.extensions());
+		array tmp(other.extensions(),allocator_);
 		for(auto i : tmp.extension()) tmp[i] = other[i];
 		swap(tmp);
 		return *this;
 	}
+        array& operator=(array && other){
+                swap(other);
+                return *this;
+        }
 	template<class Array>
 	array& operator=(Array const& a){
-		array tmp(a.extensions());
+		array tmp(a.extensions(),allocator_);
 		tmp.array_ref<T, D, typename std::allocator_traits<Allocator>::pointer>::operator=(a);
 		swap(tmp);
 		return *this;
@@ -106,7 +111,7 @@ public:
 		this->recursive_assign_(il.begin(), il.end());
 	}
 	void reextent(extensions_type const& e){
-		array tmp(e);
+		array tmp(e, allocator_);
 		tmp.intersection_assign_(*this);
 		swap(tmp);
 	}
@@ -114,8 +119,11 @@ public:
 	void swap(array& other) noexcept{
 		using std::swap;
 		swap(this->data_, other.data_);
-		using layout_t = std::decay_t<decltype(this->layout())>;
-		swap(static_cast<layout_t&>(*this), static_cast<layout_t&>(other));
+		swap(this->allocator_, other.allocator_);
+		swap(
+			static_cast<typename array_ref<T, D, typename std::allocator_traits<Allocator>::pointer>::layout_t&>(*this), 
+			static_cast<typename array_ref<T, D, typename std::allocator_traits<Allocator>::pointer>::layout_t&>(other)
+		);
 	}
 	friend void swap(array& self, array& other){self.swap(other);}
 	//! Destructs the array
@@ -126,10 +134,15 @@ public:
 	typename array::reference operator[](index i){
 		return array_ref<T, D, typename std::allocator_traits<Allocator>::pointer>::operator[](i);
 	}
-	using array_ref<T, D, typename std::allocator_traits<Allocator>::pointer>::operator[];
 	typename array::const_reference operator[](index i) const{
 		return array_ref<T, D, typename std::allocator_traits<Allocator>::pointer>::operator[](i);
 	}
+	typename array::element_ptr data(){return array_ref<T, D, typename std::allocator_traits<Allocator>::pointer>::data();}
+	typename array::element_const_ptr data() const{return array_ref<T, D, typename std::allocator_traits<Allocator>::pointer>::data();}
+
+	typename array::element_ptr origin(){return array_ref<T, D, typename std::allocator_traits<Allocator>::pointer>::origin();}
+	typename array::element_const_ptr origin() const{return array_ref<T, D, typename std::allocator_traits<Allocator>::pointer>::origin();}
+        allocator_type get_allocator() const { return allocator_; }
 private:
 	void destroy(){
 	//	destroy(this->data() + this->num_elements());

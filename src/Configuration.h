@@ -88,7 +88,7 @@ namespace qmcplusplus
   using ComplexMatrix =  boost::multi::array<ComplexType,2,Alloc>;
   template< class Alloc = std::allocator<SPComplexType> >
   using SPComplexMatrix =  boost::multi::array<SPComplexType,2,Alloc>;
-
+/*
 namespace detail {
   inline static int* get(int* ptr) { return ptr; }
   inline static unsigned int* get(unsigned int* ptr) { return ptr; }
@@ -99,7 +99,7 @@ namespace detail {
   inline static std::complex<float>* get(std::complex<float>* ptr) { return ptr; }
   inline static std::complex<double>* get(std::complex<double>* ptr) { return ptr; }
 }
-
+*/
 inline std::ostream &app_log() { return std::cout; }
 
 inline std::ostream &app_error()

@@ -19,6 +19,7 @@
 
 #include <type_traits/scalar_traits.h>
 #include "boost/multi_array.hpp"
+#include "Numerics/detail/raw_pointers.hpp"
 
 namespace qmcplusplus
 {
@@ -165,7 +166,8 @@ struct container_proxy<boost::multi::array<T,2> >
   }
   inline pointer data()
   {
-    return scalar_traits<T>::get_address(ref.origin());
+    using detail::to_address;
+    return scalar_traits<T>::get_address(to_address(ref.origin()));
   }
   inline void resize(size_t n)
   {
@@ -193,7 +195,8 @@ struct container_proxy<boost::multi::array_ref<T,2> >
   }
   inline pointer data()
   {
-    return scalar_traits<T>::get_address(ref.origin());
+    using detail::to_address;
+    return scalar_traits<T>::get_address(to_address(ref.origin()));
   }
   inline void resize(size_t n)
   {

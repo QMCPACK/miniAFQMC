@@ -16,29 +16,263 @@
 #define AFQMC_BLAS_GPU_HPP
 
 #include<cassert>
-#include "Numerics/detail/cublas_wrapper.hpp"
+#include<vector>
 #include "Numerics/detail/cuda_pointers.hpp"
+#include "Numerics/detail/cublas_wrapper.hpp"
+#include "Numerics/detail/cublasXt_wrapper.hpp"
+
+// Currently available:
+// Lvl-1: dot, axpy, scal
+// Lvl-2: gemv
+// Lvl-3: gemm
 
 namespace BLAS_GPU
 {
-
-  template<typename T, 
+  // scal Specializations
+  template<class T,
            class ptr,
-           typename = typename std::enable_if_t<ptr::blas_type == CUBLAS_BLAS_TYPE> 
+           typename = typename std::enable_if_t< (ptr::memory_type != CPU_OUTOFCARS_POINTER_TYPE) > 
+          >
+  inline static void scal(int n, T alpha, ptr x, int incx)
+  {
+    if(CUBLAS_STATUS_SUCCESS != cublas::cublas_scal(*x.handles.cublas_handle,n,alpha,to_address(x),incx))
+      throw std::runtime_error("Error: cublas_scal returned error code.");
+  }
+
+  template<class T,
+           class ptr,
+           typename = typename std::enable_if_t< (ptr::memory_type == CPU_OUTOFCARS_POINTER_TYPE) >,
+           typename = void 
+          >
+  inline static void scal(int n, T alpha, ptr x, int incx)
+  {
+    using BLAS_CPU::scal;
+    return scal(n,alpha,to_address(x),incx);
+  }
+
+  // dot Specializations
+  template<class ptrA,
+           class ptrB,
+           typename = typename std::enable_if_t< (ptrA::memory_type != CPU_OUTOFCARS_POINTER_TYPE) and 
+                                                 (ptrB::memory_type != CPU_OUTOFCARS_POINTER_TYPE) 
+                                               >
+          >
+  inline static auto dot(int const n, ptrA const& x, int const incx, ptrB const& y, int const incy)
+  {
+    return cublas::cublas_dot(*x.handles.cublas_handle,n,to_address(x),incx,to_address(y),incy);
+  }
+
+  template<class ptrA,
+           class ptrB,
+           typename = typename std::enable_if_t< (ptrA::memory_type == CPU_OUTOFCARS_POINTER_TYPE) or
+                                                 (ptrB::memory_type == CPU_OUTOFCARS_POINTER_TYPE) 
+                                               >,
+           typename = void
+          >
+  inline static auto dot(int const n, ptrA const& x, int const incx, ptrB const& y, int const incy)
+  {
+    using BLAS_CPU::dot;
+    return dot(n,to_address(x),incx,to_address(y),incy);  
+  }
+
+  // axpy Specializations
+  template<typename T,
+           class ptrA,
+           class ptrB,
+           typename = typename std::enable_if_t< (ptrA::memory_type != CPU_OUTOFCARS_POINTER_TYPE) and
+                                                 (ptrB::memory_type != CPU_OUTOFCARS_POINTER_TYPE) 
+                                               >
+          >
+  inline static void axpy(int n, T const a,
+                          ptrA const& x, int incx, 
+                          ptrB && y, int incy)
+  {
+    if(CUBLAS_STATUS_SUCCESS != cublas::cublas_axpy(*x.handles.cublas_handle,n,a,
+                                                    to_address(x),incx,to_address(y),incy))
+      throw std::runtime_error("Error: cublas_axpy returned error code.");
+  }
+
+  template<typename T,
+           class ptrA,
+           class ptrB,
+           typename = typename std::enable_if_t< (ptrA::memory_type == CPU_OUTOFCARS_POINTER_TYPE) or
+                                                 (ptrB::memory_type == CPU_OUTOFCARS_POINTER_TYPE)
+                                               >,
+           typename = void
+          >
+  inline static void axpy(int n, T const a,
+                          ptrA const& x, int incx,
+                          ptrB && y, int incy)
+  {
+    using BLAS_CPU::axpy;
+    axpy(n,a,to_address(x),incx,to_address(y),incy);
+  }
+
+  // GEMV Specializations
+  template<typename T, 
+           class ptrA,
+           class ptrB,
+           class ptrC,
+           typename = typename std::enable_if_t< (ptrA::memory_type != CPU_OUTOFCARS_POINTER_TYPE) and 
+                                                 (ptrB::memory_type != CPU_OUTOFCARS_POINTER_TYPE) and
+                                                 (ptrC::memory_type != CPU_OUTOFCARS_POINTER_TYPE) 
+                                               >
+          >
+  inline static void gemv(char Atrans, int M, int N,
+                          T alpha,
+                          ptrA const& A, int lda,
+                          ptrB const& x, int incx,
+                          T beta,
+                          ptrC && y, int incy)
+  {
+    if(CUBLAS_STATUS_SUCCESS != cublas::cublas_gemv(*A.handles.cublas_handle,Atrans,
+                                            M,N,alpha,to_address(A),lda,to_address(x),incx,
+                                            beta,to_address(y),incy)) 
+      throw std::runtime_error("Error: cublas_gemv returned error code.");
+  }
+
+  template<typename T,
+           class ptrA,
+           class ptrB,
+           class ptrC,
+           typename = typename std::enable_if_t< (ptrA::memory_type == CPU_OUTOFCARS_POINTER_TYPE) or 
+                                                 (ptrB::memory_type == CPU_OUTOFCARS_POINTER_TYPE) or
+                                                 (ptrC::memory_type == CPU_OUTOFCARS_POINTER_TYPE) 
+                                               >,
+           typename = void
+          >
+  inline static void gemv(char Atrans, int M, int N, 
+                          T alpha,
+                          ptrA const& A, int lda,
+                          ptrB const& x, int incx,
+                          T beta,
+                          ptrC && y, int incy)
+  {
+#ifdef HAVE_MAGMA
+#else
+    using BLAS_CPU::gemv;
+    gemv(Atrans,M,N,alpha,to_address(A),lda,to_address(x),incx,beta,to_address(y),incy);
+#endif    
+/*
+    const char Btrans('N');
+    const int one(1);
+    if(CUBLAS_STATUS_SUCCESS != cublas::cublasXt_gemm(*A.handles.cublasXt_handle,Atrans,Btrans,
+                                            M,one,K,alpha,to_address(A),lda,to_address(x),incx,
+                                            beta,to_address(y),incy))
+      throw std::runtime_error("Error: cublasXt_gemv (gemm) returned error code.");
+*/
+  }
+
+  // GEMM Specializations
+  template<typename T, 
+           class ptrA,
+           class ptrB,
+           class ptrC,
+           typename = typename std::enable_if_t< (ptrA::memory_type != CPU_OUTOFCARS_POINTER_TYPE) and 
+                                                 (ptrB::memory_type != CPU_OUTOFCARS_POINTER_TYPE) and
+                                                 (ptrC::memory_type != CPU_OUTOFCARS_POINTER_TYPE) 
+                                               >
           >
   inline static void gemm(char Atrans, char Btrans, int M, int N, int K,
                           T alpha,
-                          ptr const& A, int lda,
-                          ptr const& B, int ldb,
+                          ptrA const& A, int lda,
+                          ptrB const& B, int ldb,
                           T beta,
-                          ptr & C, int ldc)
+                          ptrC && C, int ldc)
   {
-    // check that all handles are the same or consistent
-std::cout<<" running cublasDgemm " <<" " <<M <<" " <<N <<" " <<K <<" " <<alpha <<" " <<beta <<" " <<lda <<" " <<ldb <<std::endl;
-    if(CUBLAS_STATUS_SUCCESS != cublas_gemm(*A.cublas_handle,Atrans,Btrans,
-                                            M,N,K,alpha,A.get(),lda,B.get(),ldb,beta,C.get(),ldc))
+    if(CUBLAS_STATUS_SUCCESS != cublas::cublas_gemm(*A.handles.cublas_handle,Atrans,Btrans,
+                                            M,N,K,alpha,to_address(A),lda,to_address(B),ldb,beta,to_address(C),ldc)) 
       throw std::runtime_error("Error: cublas_gemm returned error code.");
-std::cout<<" done running cublasDgemm " <<std::endl;
+  }
+
+  template<typename T,
+           class ptrA,
+           class ptrB,
+           class ptrC,
+           typename = typename std::enable_if_t< (ptrA::memory_type == CPU_OUTOFCARS_POINTER_TYPE) or 
+                                                 (ptrB::memory_type == CPU_OUTOFCARS_POINTER_TYPE) or
+                                                 (ptrC::memory_type == CPU_OUTOFCARS_POINTER_TYPE) 
+                                               >,
+           typename = void
+          >
+  inline static void gemm(char Atrans, char Btrans, int M, int N, int K,
+                          T alpha,
+                          ptrA const& A, int lda,
+                          ptrB const& B, int ldb,
+                          T beta,
+                          ptrC && C, int ldc)
+  {
+    if(CUBLAS_STATUS_SUCCESS != cublas::cublasXt_gemm(*A.handles.cublasXt_handle,Atrans,Btrans,
+                                            M,N,K,alpha,to_address(A),lda,to_address(B),ldb,beta,to_address(C),ldc))
+      throw std::runtime_error("Error: cublasXt_gemm returned error code.");
+  }
+
+  // Blas Extensions
+  // geam  
+  template<class T,
+           class ptrA,
+           class ptrB,
+           class ptrC,
+           typename = typename std::enable_if_t< (ptrA::memory_type != CPU_OUTOFCARS_POINTER_TYPE) and 
+                                                 (ptrB::memory_type != CPU_OUTOFCARS_POINTER_TYPE) and
+                                                 (ptrC::memory_type != CPU_OUTOFCARS_POINTER_TYPE) 
+                                               >
+          >
+  inline static void geam(char Atrans, char Btrans, int M, int N,
+                         T const alpha,
+                         ptrA const& A, int lda,
+                         T const beta,
+                         ptrB const& B, int ldb,
+                         ptrC C, int ldc)
+  {
+    if(CUBLAS_STATUS_SUCCESS != cublas::cublas_geam(*A.handles.cublas_handle,Atrans,Btrans,M,N,alpha,to_address(A),lda,
+                                                    beta,to_address(B),ldb,to_address(C),ldc))
+      throw std::runtime_error("Error: cublas_geam returned error code.");
+  }
+
+  template<class T,
+           class ptrA,
+           class ptrB,
+           class ptrC,
+           typename = typename std::enable_if_t< (ptrA::memory_type == CPU_OUTOFCARS_POINTER_TYPE) or 
+                                                 (ptrB::memory_type == CPU_OUTOFCARS_POINTER_TYPE) or
+                                                 (ptrC::memory_type == CPU_OUTOFCARS_POINTER_TYPE) 
+                                               >,
+           typename = void
+          >
+  inline static void geam(char Atrans, char Btrans, int M, int N,
+                         T const alpha,
+                         ptrA const& A, int lda,
+                         T const beta,
+                         ptrB const& B, int ldb,
+                         ptrC C, int ldc)
+  {
+    using BLAS_CPU::geam;
+    return geam(Atrans,Btrans,M,N,alpha,to_address(A),lda,beta,to_address(B),ldb,to_address(C),ldc); 
+  }
+
+  template<class T,
+           class ptr,
+           typename = typename std::enable_if_t<not (ptr::memory_type == CPU_OUTOFCARS_POINTER_TYPE) >,
+           typename = void
+          >          
+  inline static void set1D(int n, T const alpha, ptr x, int incx)
+  {
+    // No set funcion in cuda!!! Avoiding kernels for now
+    std::vector<T> buff(n,alpha); 
+    if(CUBLAS_STATUS_SUCCESS != cublasSetVector(n,sizeof(T),buff.data(),1,to_address(x),incx)) 
+      throw std::runtime_error("Error: cublasSetVector returned error code.");
+  }
+
+  template<class T,
+           class ptr,
+           typename = typename std::enable_if_t< (ptr::memory_type == CPU_OUTOFCARS_POINTER_TYPE) >
+          >
+  inline static void set1D(int n, T const alpha, ptr x, int incx)
+  {
+    auto y = to_address(x);
+    for(int i=0; i<n; i++, y+=incx)
+      *y = alpha; 
   }
 
 }

@@ -155,7 +155,7 @@ int main(int argc, char **argv)
   }
 
   // using Unified Memory allocator
-  using Alloc = cuda::cuda_um_allocator<ComplexType>;
+  using Alloc = cuda::cuda_ooc_allocator<ComplexType>;
   using THCOps = afqmc::THCOps<Alloc>;
   using cuda::cublas_check;
   using cuda::cusolver_check;

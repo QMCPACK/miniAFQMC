@@ -15,9 +15,39 @@
 #ifndef AFQMC_CUDA_UTILITIES_HPP 
 #define AFQMC_CUDA_UTILITIES_HPP
 
+#define GPU_MEMORY_POINTER_TYPE      1001
+#define MANAGED_MEMORY_POINTER_TYPE  2001
+#define CPU_OUTOFCARS_POINTER_TYPE   3001
+
+#ifdef QMC_CUDA
 #include<cassert>
 #include <cuda_runtime.h>
 #include "cublas_v2.h"
+#include "cublasXt.h"
+#include "cusolverDn.h"
+#ifdef HAVE_MAGMA
+#include "magma_v2.h"
+#endif
+
+namespace cuda {
+
+  inline void cublas_check(cublasStatus_t sucess, std::string message="")
+  {
+    if(CUBLAS_STATUS_SUCCESS != sucess) {
+      std::cerr<<message <<std::endl;
+      std::cerr.flush();
+      throw std::runtime_error(" Error code returned by cuda. \n");
+    }
+  }
+
+  inline void cusolver_check(cusolverStatus_t sucess, std::string message="")
+  {
+    if(CUSOLVER_STATUS_SUCCESS != sucess) {
+      std::cerr<<message <<std::endl;
+      std::cerr.flush();
+      throw std::runtime_error(" Error code returned by cuda. \n");
+    }
+  }
 
   inline cublasOperation_t cublasOperation(char A) {
     if(A=='N' or A=='n')
@@ -31,4 +61,15 @@
     return CUBLAS_OP_N;
   }
 
+  struct gpu_handles {
+    cublasHandle_t* cublas_handle;
+    cublasXtHandle_t* cublasXt_handle;
+    cusolverDnHandle_t* cusolverDn_handle; 
+#ifdef HAVE_MAGMA
+    magma_queue_t* queue;
+#endif
+  };
+}
+
+#endif
 #endif

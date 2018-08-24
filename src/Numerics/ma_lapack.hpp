@@ -23,6 +23,8 @@
 #define MA_LAPACK_HPP
 
 #include "Numerics/OhmmsBlas.h"
+#include "Utilities/type_conversion.hpp"
+#include "Numerics/detail/lapack.hpp"
 #include<cassert>
 
 namespace ma{
@@ -37,7 +39,9 @@ MultiArray2D getrf(MultiArray2D&& m, Array1D& pivot){
 	assert(pivot.size() >= std::min(m.shape()[1], m.shape()[0]));
 	
 	int status = -1;
-	LAPACK::getrf(
+        using LAPACK_CPU::getrf;
+        using LAPACK_GPU::getrf;
+	getrf(
 		m.shape()[1], m.shape()[0], m.origin(), m.strides()[0], 
 		pivot.data(), 
 		status
@@ -47,17 +51,21 @@ MultiArray2D getrf(MultiArray2D&& m, Array1D& pivot){
 }
 
 template<class MultiArray2D>
-int getri_optimal_workspace_size(MultiArray2D const& A){
+int getri_optimal_workspace_size(MultiArray2D & A){
 	typename MultiArray2D::element WORK;
+        int piv;
 	int status = -1;
-	LAPACK::getri(
-		A.shape()[0], nullptr, A.strides()[0], 
-		nullptr, 
-		&WORK, /*lwork*/ -1, 
+        int lwork = -1; 
+        using LAPACK_CPU::getri;
+        using LAPACK_GPU::getri;
+        getri(
+		A.shape()[0], A.origin(), A.strides()[0], 
+	        &piv, 
+		&WORK, lwork, 
 		status
 	);
 	assert(status == 0);
-	return real(WORK);
+	return lwork;
 }
 
 template<class MultiArray2D, class MultiArray1D, class Buffer>
@@ -68,10 +76,13 @@ MultiArray2D getri(MultiArray2D&& A, MultiArray1D const& IPIV, Buffer&& WORK){
 	assert(WORK.size() >= std::max(std::size_t(1), std::size_t(A.shape()[0])));
 	
 	int status = -1;
-	LAPACK::getri(
+        int lwork = WORK.size();
+        using LAPACK_CPU::getri;
+        using LAPACK_GPU::getri;
+	getri(
 		A.shape()[0], A.origin(), A.strides()[0], 
 		IPIV.origin(), 
-		WORK.data(), WORK.size(), 
+		WORK.data(), lwork, 
 		status
 	);
 	assert(status == 0);
@@ -232,68 +243,77 @@ MultiArray2D potrf(MultiArray2D&& A) {
 }
 */
 
-template<class MultiArray1D,
+template<class MultiArray1DR,
          class MultiArray2D,
-         typename = typename std::enable_if_t<MultiArray1D::dimensionality == 1>,
+         typename = typename std::enable_if_t<MultiArray1DR::dimensionality == 1>,
          typename = typename std::enable_if_t<MultiArray2D::dimensionality == 2>
         >
-std::pair<MultiArray1D,MultiArray2D> symEig(MultiArray2D const& A) {
-        using eigSys = std::pair<MultiArray1D,MultiArray2D>;
+std::pair<MultiArray1DR,MultiArray2D> symEig(MultiArray2D const& A) {
+        using eigSys = std::pair<MultiArray1DR,MultiArray2D>;
         using Type = typename MultiArray2D::element;
-        using RealType = double; 
+        using RType = typename qmcplusplus::afqmc::remove_complex<Type>::value_type;
+        using Alloc = typename MultiArray2D::allocator_type;
+        using RAlloc = typename Alloc::template rebind<RType>::other;
+        using IAlloc = typename Alloc::template rebind<int>::other;
+
         using std::conj;
+
         assert(A.shape()[0]==A.shape()[1]);
         assert(A.strides()[1]==1);
         assert(A.shape()[0]>0);
         int N = A.shape()[0];
         int LDA = A.strides()[0];
 
-            MultiArray1D eigVal({N});
-            MultiArray2D eigVec({N,N});
-            MultiArray2D A_({N,N});
+            MultiArray1DR eigVal({N}, RAlloc(A.get_allocator()));
+            MultiArray2D eigVec({N,N}, A.get_allocator());
+            MultiArray2D A_({N,N}, A.get_allocator());
+// FIX GPU
             for(int i=0; i<N; i++)
               for(int j=0; j<N; j++)
                 A_[i][j] = conj(A[i][j]);
             char JOBZ('V');
             char RANGE('A');
             char UPLO('U');
-            RealType VL=0;
-            RealType VU=0;
+            RType VL=0;
+            RType VU=0;
             int IL=0;
             int IU=0;
-            RealType ABSTOL=0;//DLAMCH( 'Safe minimum' );
+            RType ABSTOL=0;//DLAMCH( 'Safe minimum' );
             int M; // output: total number of eigenvalues found
-            std::vector<int> ISUPPZ(2*N);
-            std::vector<Type> WORK(1); // set with workspace query
+            boost::multi::array<int,1,IAlloc> ISUPPZ( {2*N}, IAlloc(A.get_allocator()));
+            boost::multi::array<Type,1,Alloc> WORK({1}, A.get_allocator()); // set with workspace query
             int LWORK=-1;
-            std::vector<RealType> RWORK(1); // set with workspace query
+            boost::multi::array<RType,1,RAlloc> RWORK({1}, RAlloc(A.get_allocator())); // set with workspace query
             int LRWORK=-1;
-            std::vector<int> IWORK(1);
+            boost::multi::array<int,1,IAlloc> IWORK({1},IAlloc(A.get_allocator()));
             int LIWORK=-1;
             int INFO;
 
-            LAPACK::hevr (JOBZ, RANGE, UPLO, N, A_.origin(), LDA, VL, VU, IL, IU, ABSTOL,
-                          M,eigVal.origin(), eigVec.origin(), N, ISUPPZ.data(), WORK.data(), LWORK,
-                          RWORK.data(), LRWORK, IWORK.data(), LIWORK, INFO);
+            using LAPACK_CPU::hevr;
+            using LAPACK_GPU::hevr;
+            hevr (JOBZ, RANGE, UPLO, N, A_.origin(), LDA, VL, VU, IL, IU, ABSTOL,
+                          M,eigVal.origin(), eigVec.origin(), N, ISUPPZ.origin(), WORK.origin(), LWORK,
+                          RWORK.origin(), LRWORK, IWORK.origin(), LIWORK, INFO);
 
-            LWORK = int(real(WORK[0]));
-            WORK.resize(LWORK);
-            LRWORK = int(RWORK[0]);
-            RWORK.resize(LRWORK);
-            LIWORK = int(IWORK[0]);
-            IWORK.resize(LIWORK);
+            // LAPACK_CPU::hevr returns the space query already in LWORK, etc.
+            WORK.reextent({LWORK});
+            RWORK.reextent({LRWORK});
+            IWORK.reextent({LIWORK});
 
-            LAPACK::hevr (JOBZ, RANGE, UPLO, N, A_.origin(), LDA, VL, VU, IL, IU, ABSTOL,
-                          M,eigVal.origin(), eigVec.origin(), N, ISUPPZ.data(), WORK.data(), LWORK,
-                          RWORK.data(), LRWORK, IWORK.data(), LIWORK, INFO);
+            hevr (JOBZ, RANGE, UPLO, N, A_.origin(), LDA, VL, VU, IL, IU, ABSTOL,
+                          M,eigVal.origin(), eigVec.origin(), N, ISUPPZ.origin(), WORK.origin(), LWORK,
+                          RWORK.origin(), LRWORK, IWORK.origin(), LIWORK, INFO);
 
-            if(INFO != 0) throw std::runtime_error(" error in ma::eig: Error code != 0");
+            if(INFO != 0) {
+                std::cerr<<" hevr Error code: " <<INFO <<std::endl; std::cerr.flush();
+                throw std::runtime_error(" error in ma::eig: Error code != 0");
+            }
             if(M != N) throw std::runtime_error(" error in ma::eig: Not enough eigenvalues");
             for(int i=0; i<N; i++)
               for(int j=i+1; j<N; j++)
                 std::swap(eigVec[i][j],eigVec[j][i]);
 
-            return std::pair<MultiArray1D,MultiArray2D>{eigVal,eigVec};
+            return std::pair<MultiArray1DR,MultiArray2D>{eigVal,eigVec};
 
 }
 
