@@ -97,7 +97,7 @@ SET(QMC_MPI 1 CACHE BOOL "Enable/disable MPI")
 SET(QMC_OMP 1 CACHE BOOL "Enable/disable OpenMP")
 SET(QMC_BITS 64 CACHE INTEGER "Select OS bit")
 SET(QMC_COMPLEX 1 CACHE INTEGER "Build for complex binary")
-SET(QMC_CUDA 0 CACHE BOOL "Enable/disable CUDA")
+SET(QMC_CUDA 1 CACHE BOOL "Enable/disable CUDA")
 SET(PRINT_DEBUG 0 CACHE BOOL "Enable/disable debug printing")
 
 ######################################################################
@@ -474,7 +474,8 @@ ENDIF(ENABLE_GCOV)
 #ENDIF()
 # once C++11 is needed
 IF(CXX11_NEEDED)
-  SET(CXX11_FLAG "-std=c++14 -stdlib=libc++")
+  SET(CXX11_FLAG "-std=c++14")
+  #SET(CXX11_FLAG "-std=c++14 -stdlib=libc++")
   #check if the CXX compiler supports -std=c++11 option
   include(CheckCXXCompilerFlag)
   CHECK_CXX_COMPILER_FLAG(${CXX11_FLAG} CXX_COMPILER_SUPPORT_CXX11)
@@ -627,6 +628,37 @@ IF(Boost_FOUND)
 ELSE()
   MESSAGE(FATAL_ERROR "Require boost 1.54.x or higher. Set BOOST_ROOT")
 ENDIF()
+
+SET(HAVE_CUDA 0)
+IF(QMC_CUDA)
+  set(CUDA_PROPAGATE_HOST_FLAGS OFF)
+  FIND_PACKAGE(CUDA REQUIRED)
+  #set(CUDA_NVCC_FLAGS
+  #  "-arch=sm_20;-Drestrict=__restrict__;-DNO_CUDA_MAIN;-O3;-use_fast_math")
+  if(CUDA_NVCC_FLAGS MATCHES "arch")
+    # User defined NVCC flags
+    MESSAGE(STATUS "Setting CUDA FLAGS=${CUDA_NVCC_FLAGS}")
+  else(CUDA_NVCC_FLAGS MATCHES "arch")
+    # Automatically set the default NVCC flags
+    SET(CUDA_NVCC_FLAGS "-Drestrict=__restrict__;-DNO_CUDA_MAIN")
+    if (QMC_COMPLEX)
+      SET(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-DQMC_COMPLEX")
+    endif()
+    if ( CMAKE_BUILD_TYPE STREQUAL "DEBUG" )
+      SET(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-g;-G")
+    else()
+      # Temporarily disable fast_math because it causes multiple test failures
+      # SET(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-O3;-use_fast_math")
+      SET(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-O3")
+    ENDIF()
+    SET( CUDA_ARCH sm_60 CACHE STRING "CUDA architecture sm_XX")
+    SET(CUDA_NVCC_FLAGS "-arch=${CUDA_ARCH};${CUDA_NVCC_FLAGS}")
+  endif(CUDA_NVCC_FLAGS MATCHES "arch")
+  set(HAVE_CUDA 1)
+  MESSAGE("   CUDA_NVCC_FLAGS=${CUDA_NVCC_FLAGS}")
+ELSE(QMC_CUDA)
+  MESSAGE(STATUS "Disabling CUDA")
+ENDIF(QMC_CUDA)
 
 #
 

@@ -20,6 +20,10 @@
 #include "Numerics/detail/cuda_pointers.hpp"
 #include "Numerics/detail/cublas_wrapper.hpp"
 #include "Numerics/detail/cublasXt_wrapper.hpp"
+// hand coded kernels for blas extensions
+#include "Kernels/adotpby.cuh"
+#include "Kernels/axty.cuh"
+#include "Kernels/adiagApy.cuh"
 
 // Currently available:
 // Lvl-1: dot, axpy, scal
@@ -251,16 +255,18 @@ namespace BLAS_GPU
     return geam(Atrans,Btrans,M,N,alpha,to_address(A),lda,beta,to_address(B),ldb,to_address(C),ldc); 
   }
 
-  template<class T,
+  //template<class T,
+  template<
            class ptr,
            typename = typename std::enable_if_t<not (ptr::memory_type == CPU_OUTOFCARS_POINTER_TYPE) >,
            typename = void
           >          
-  inline static void set1D(int n, T const alpha, ptr x, int incx)
+  //inline static void set1D(int n, T const alpha, ptr x, int incx)
+  inline static void set1D(int n, typename ptr::value_type const alpha, ptr x, int incx)
   {
     // No set funcion in cuda!!! Avoiding kernels for now
-    std::vector<T> buff(n,alpha); 
-    if(CUBLAS_STATUS_SUCCESS != cublasSetVector(n,sizeof(T),buff.data(),1,to_address(x),incx)) 
+    std::vector<typename ptr::value_type> buff(n,alpha); 
+    if(CUBLAS_STATUS_SUCCESS != cublasSetVector(n,sizeof(typename ptr::value_type),buff.data(),1,to_address(x),incx)) 
       throw std::runtime_error("Error: cublasSetVector returned error code.");
   }
 
@@ -273,6 +279,106 @@ namespace BLAS_GPU
     auto y = to_address(x);
     for(int i=0; i<n; i++, y+=incx)
       *y = alpha; 
+  }
+
+  // dot extension 
+  template<class T,
+           class ptrA,
+           class ptrB,
+           class ptrC,
+           typename = typename std::enable_if_t< (ptrA::memory_type != CPU_OUTOFCARS_POINTER_TYPE) and
+                                                 (ptrB::memory_type != CPU_OUTOFCARS_POINTER_TYPE) and 
+                                                 (ptrC::memory_type != CPU_OUTOFCARS_POINTER_TYPE) 
+                                               >
+          >
+  inline static void adotpby(int const n, T const alpha, ptrA const& x, int const incx, ptrB const& y, int const incy, T const beta, ptrC result)
+  {
+    kernels::adotpby(n,alpha,to_address(x),incx,to_address(y),incy,beta,to_address(result));
+  }
+
+  template<class T,
+           class ptrA,
+           class ptrB,
+           class ptrC,
+           typename = typename std::enable_if_t< (ptrA::memory_type == CPU_OUTOFCARS_POINTER_TYPE) or
+                                                 (ptrB::memory_type == CPU_OUTOFCARS_POINTER_TYPE) or 
+                                                 (ptrC::memory_type == CPU_OUTOFCARS_POINTER_TYPE) 
+                                               >,
+           typename = void
+          >
+  inline static void adotpby(int const n, T const alpha, ptrA const& x, int const incx, ptrB const& y, int const incy, T const beta, ptrC result)
+  {
+    using BLAS_CPU::adotpby;
+    adotpby(n,alpha,to_address(x),incx,to_address(y),incy,beta,to_address(result));
+  }
+
+
+  // axty
+  template<class T,
+           class ptrA,
+           class ptrB,
+           typename = typename std::enable_if_t< (ptrA::memory_type != CPU_OUTOFCARS_POINTER_TYPE) and
+                                                 (ptrB::memory_type != CPU_OUTOFCARS_POINTER_TYPE) 
+                                               >
+          >
+  inline static void axty(int n,
+                         T const alpha,
+                         ptrA const x, int incx,
+                         ptrB y, int incy)
+  {
+    if(incx != 1 || incy != 1)
+      throw std::runtime_error("Error: axty with inc != 1 not implemented.");
+    kernels::axty(n,alpha,to_address(x),to_address(y));
+  }
+
+  template<class T,
+           class ptrA,
+           class ptrB,
+           typename = typename std::enable_if_t< (ptrA::memory_type == CPU_OUTOFCARS_POINTER_TYPE) or
+                                                 (ptrB::memory_type == CPU_OUTOFCARS_POINTER_TYPE) 
+                                               >,
+           typename = void
+          >
+  inline static void axty(int n,
+                         T const alpha,
+                         ptrA const x, int incx,
+                         ptrB y, int incy)
+  {
+    using BLAS_CPU::axty;
+    axty(n,alpha,to_address(x),incx,to_address(y),incy);
+  }
+
+  // adiagApy
+  template<class T,
+           class ptrA,
+           class ptrB,
+           typename = typename std::enable_if_t< (ptrA::memory_type != CPU_OUTOFCARS_POINTER_TYPE) and
+                                                 (ptrB::memory_type != CPU_OUTOFCARS_POINTER_TYPE)
+                                               >
+          >
+  inline static void adiagApy(int n,
+                         T const alpha,
+                         ptrA const A, int lda,
+                         ptrB y, int incy)
+  {
+    kernels::adiagApy(n,alpha,to_address(A),lda,to_address(y),incy);
+  }
+
+  template<class T,
+           class ptrA,
+           class ptrB,
+           typename = typename std::enable_if_t< (ptrA::memory_type == CPU_OUTOFCARS_POINTER_TYPE) or
+                                                 (ptrB::memory_type == CPU_OUTOFCARS_POINTER_TYPE)
+                                               >,
+           typename = void
+          >
+  inline static void adiagApy(int n,
+                         T const alpha,
+                         ptrA const A, int lda,
+                         ptrB y, int incy)
+  {
+    using BLAS_CPU::adiagApy;
+    adiagApy(n,alpha,to_address(A),lda,to_address(y),incy);
   }
 
 }

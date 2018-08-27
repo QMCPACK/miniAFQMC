@@ -70,7 +70,7 @@ inline std::tuple<int,int,int> peek(hdf_archive& dump)
   dump.pop();
   dump.pop();
 
-  return {NMO,NAEA,NAEB};
+  return std::tuple<int,int,int>{NMO,NAEA,NAEB};
   
 }
 

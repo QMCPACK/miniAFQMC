@@ -25,6 +25,7 @@
 #include "ma_blas.hpp"
 #include "ma_lapack.hpp"
 #include "sparse.hpp"
+#include "Numerics/helpers/determinant.hpp"
 
 #include<type_traits> // enable_if
 #include<vector>
@@ -291,34 +292,41 @@ int invert_optimal_workspace_size(MultiArray2D const& m){
 template<class MultiArray2D, class MultiArray1D, class Buffer, class T = typename std::decay<MultiArray2D>::type::element>
 T invert(MultiArray2D&& m, MultiArray1D&& pivot, Buffer&& WORK){
 	assert(m.shape()[0] == m.shape()[1]);
-	assert(pivot.size() >= m.shape()[0]);
+	assert(pivot.size() >= m.shape()[0]+1);
 
 	getrf(std::forward<MultiArray2D>(m), pivot);
-	T detvalue(1.0);
-	for(int i=0, ip=1, m_ = m.shape()[0]; i != m_; i++, ip++){
-		if(pivot[i]==ip){
-			detvalue *= +static_cast<T>(m[i][i]);
-		}else{
-			detvalue *= -static_cast<T>(m[i][i]);
-		}
-	}
+	T detvalue = determinant_from_getrf<T>(m.shape()[0], m.origin(), m.strides()[0], pivot.origin());
 	getri(std::forward<MultiArray2D>(m), pivot, WORK);
 	return detvalue;
 }
 
+template<class MultiArray2D, class MultiArray1D, class Buffer, class T = typename std::decay<MultiArray2D>::type::element>
+void invert(MultiArray2D&& m, MultiArray1D&& pivot, Buffer&& WORK, T* detvalue){
+        assert(m.shape()[0] == m.shape()[1]);
+        assert(pivot.size() >= m.shape()[0]+1);
+
+        getrf(std::forward<MultiArray2D>(m), pivot);
+        determinant_from_getrf<T>(m.shape()[0], m.origin(), m.strides()[0], pivot.origin(), detvalue);
+        getri(std::forward<MultiArray2D>(m), pivot, WORK);
+}
+
+/*
 template<class MultiArray2D, class MultiArray1D, class T = typename std::decay<MultiArray2D>::type::element>
 T invert(MultiArray2D&& m, MultiArray1D&& pivot){
+static_assert(0,"finish implementation");
 	std::vector<typename std::decay<MultiArray2D>::type::element> WORK;
-	WORK.reserve(invert_optimal_workspace_size(m));
+	WORK.reextent({invert_optimal_workspace_size(m)});
 	return invert(m, pivot, WORK);
 }
 
 template<class MultiArray2D, class T = typename std::decay<MultiArray2D>::type::element>
 MultiArray2D invert(MultiArray2D&& m){
+static_assert(0,"finish implementation");
 	std::vector<int> pivot(m.shape()[0]);
 	auto det = invert(m, pivot);
 	return std::forward<MultiArray2D>(m);
 }
+*/
 
 template<class MultiArray2D, class MultiArray1D, class T = typename std::decay<MultiArray2D>::type::element>
 T determinant(MultiArray2D&& m, MultiArray1D&& pivot){
@@ -326,15 +334,16 @@ T determinant(MultiArray2D&& m, MultiArray1D&& pivot){
 	assert(pivot.size() >= m.shape()[0]);
         
 	getrf(std::forward<MultiArray2D>(m), std::forward<MultiArray1D>(pivot));
-	T detvalue(1.0);
-	for(int i=0,ip=1,m_=m.shape()[0]; i<m_; i++, ip++){
-		if(pivot[i]==ip){
-			detvalue *= static_cast<T>(m[i][i]);
-		}else{
-			detvalue *= -static_cast<T>(m[i][i]);
-		}
-	}
-	return detvalue;
+	return determinant_from_getrf<T>(m.shape()[0], m.origin(), m.strides()[0], pivot.origin());
+}
+
+template<class MultiArray2D, class MultiArray1D, class T = typename std::decay<MultiArray2D>::type::element>
+void determinant(MultiArray2D&& m, MultiArray1D&& pivot, T* detvalue){
+        assert(m.shape()[0] == m.shape()[1]);
+        assert(pivot.size() >= m.shape()[0]);
+
+        getrf(std::forward<MultiArray2D>(m), std::forward<MultiArray1D>(pivot));
+        determinant_from_getrf<T>(m.shape()[0], m.origin(), m.strides()[0], pivot.origin(), detvalue);
 }
 
 // doesn't work for references right now

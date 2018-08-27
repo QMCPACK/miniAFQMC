@@ -666,6 +666,71 @@ namespace BLAS_CPU
       *x = alpha;
   }
 
+  // y = beta*y + alpha * dot(a,b)
+  template<typename T>
+  inline static
+  void adotpby(int n, T const alpha, const T* restrict a, int incx, const T* restrict b, int incy, T const beta, T* result)
+  {
+    
+    T res=T(0);
+    for(int i=0, ia=0, ib=0; i<n; ++i, ia+=incx, ib+=incy)
+      res += a[ia]*b[ib];
+    *result = beta*(*result) + alpha*res;
+  }
+
+/*
+  template<typename T, typename Q>
+  inline static
+  void adotpby(int n, Q const alpha, const std::complex<T>* restrict a, int incx, const T* restrict b, int incy, Q const beta, std::complex<T>* result)
+  {
+    std::complex<T> res=T(0);
+    for(int i=0, ia=0, ib=0; i<n; ++i, ia+=incx, ib+=incy)
+      res += a[ia]*b[ib];
+    *result = beta*(*result) + alpha*res;
+  }
+
+  template<typename T, typename Q>
+  inline static
+  void adotpby(int n, Q const alpha, const T* restrict a, int incx, const std::complex<T>* restrict b, int incy, Q const beta, std::complex<T>* result)
+  {
+    std::complex<T> res=T(0);
+    for(int i=0, ia=0, ib=0; i<n; ++i, ia+=incx, ib+=incy)
+      res += a[ia]*b[ib];
+    *result = beta*(*result) + alpha*res;
+  }
+
+  template<typename T, typename Q>
+  inline static
+  void adotpby(int n, Q const alpha, const std::complex<T>* restrict a, int incx, const std::complex<T>* restrict b, int incy, Q const beta, std::complex<T>* result)
+  {
+    std::complex<T> res=T(0);
+    for(int i=0, ia=0, ib=0; i<n; ++i, ia+=incx, ib+=incy)
+      res += a[ia]*b[ib];
+    *result = beta*(*result) + alpha*res;
+  }
+*/
+
+  template<typename T>
+  inline static void axty(int n,
+                         T const alpha,
+                         T const* x, int incx,
+                         T * y, int incy)
+  {
+    for(int i=0; i<n; i++)
+      y[i*incy] *= alpha*x[i*incx];
+  }
+
+  // y[i] = y[i] + alpha*A[i][i]
+  template<typename T>
+  inline static void adiagApy(int n,
+                         T const alpha,
+                         T const* A, int lda,
+                         T * y, int incy)
+  {
+    for(int i=0; i<n; i++)
+      y[i*incy] += alpha*A[i*lda + i];
+  }
+
 }
 
 #endif

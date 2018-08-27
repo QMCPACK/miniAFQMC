@@ -60,7 +60,7 @@ template< class Tp,
           class IBuffer,
           class TBuffer 
         >
-inline Tp MixedDensityMatrix(const MatA& conjA, const MatB& B, MatC&& C, Mat&& T1, Mat&& T2, IBuffer& IWORK, TBuffer& WORK, bool compact=true)
+inline void MixedDensityMatrix(const MatA& conjA, const MatB& B, MatC&& C, Mat&& T1, Mat&& T2, IBuffer& IWORK, TBuffer& WORK, Tp* ovlp, bool compact=true)
 {
   // check dimensions are consistent
   assert( conjA.shape()[0] == B.shape()[0] );
@@ -83,7 +83,7 @@ inline Tp MixedDensityMatrix(const MatA& conjA, const MatB& B, MatC&& C, Mat&& T
   ma::product(T(B),conjA,std::forward<Mat>(T1));  
 
   // T1 = T1^(-1)
-  Tp ovlp = static_cast<Tp>(ma::invert(std::forward<Mat>(T1),IWORK,WORK));
+  ma::invert(std::forward<Mat>(T1),IWORK,WORK,ovlp);
 
   if(compact) {
 
@@ -99,8 +99,6 @@ inline Tp MixedDensityMatrix(const MatA& conjA, const MatB& B, MatC&& C, Mat&& T
     ma::product(conjA,std::forward<Mat>(T2),std::forward<MatC>(C));
 
   }
-
-  return ovlp;
 }
 
 
@@ -121,7 +119,7 @@ template< class Tp,
           class Mat,
           class IBuffer
         >
-inline Tp Overlap(const MatA& conjA, const MatB& B, Mat&& T1, IBuffer& IWORK)
+inline void Overlap(const MatA& conjA, const MatB& B, Mat&& T1, IBuffer& IWORK,Tp* ovlp)
 {
   // check dimensions are consistent
   assert( conjA.shape()[0] == B.shape()[0] );
@@ -134,7 +132,7 @@ inline Tp Overlap(const MatA& conjA, const MatB& B, Mat&& T1, IBuffer& IWORK)
   // T(B)*conj(A) 
   ma::product(T(B),conjA,std::forward<Mat>(T1));  
 
-  return static_cast<Tp>(ma::determinant(std::forward<Mat>(T1),IWORK));
+  ma::determinant(std::forward<Mat>(T1),IWORK,ovlp);
 }
 
 } // namespace base

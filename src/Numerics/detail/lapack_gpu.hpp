@@ -24,6 +24,7 @@
 #include "Numerics/detail/lapack_cpu.hpp"
 #endif
 #include "Numerics/detail/cuda_pointers.hpp"
+#include "Numerics/detail/cublas_wrapper.hpp"
 //#include "Numerics/detail/cusolve_wrapper.hpp"
 
 namespace LAPACK_GPU
@@ -115,7 +116,27 @@ namespace LAPACK_GPU
     using MAGMA::getrf_gpu;
     getrf_gpu(n, m, to_address(a), n0, to_address(piv), st);
 #else
-    throw std::runtime_error("Error: getrf not implemented in gpu.");
+    if(n!=m)
+      throw std::runtime_error("Error: LAPACK_GPU::getrf only implemented for squared matrices.\n"); 
+    std::vector<typename ptr::value_type> buff(n*n);
+    std::vector<int> Ibuff(n+1);
+    cudaMemcpy(buff.data(),to_address(a),sizeof(typename ptr::value_type)*n*n,cudaMemcpyDeviceToHost);
+    cudaMemcpy(Ibuff.data(),to_address(piv),sizeof(int)*(n+1),cudaMemcpyDeviceToHost);
+    using LAPACK_CPU::getrf;
+    getrf(n, n, buff.data(), n0, Ibuff.data(), st);
+    cudaMemcpy(to_address(a),buff.data(),sizeof(typename ptr::value_type)*n*n,cudaMemcpyHostToDevice);
+    cudaMemcpy(to_address(piv),Ibuff.data(),sizeof(int)*(n+1),cudaMemcpyHostToDevice);
+/*
+    if(n!=m)
+      throw std::runtime_error("Error: LAPACK_GPU::getrf only implemented for squared matrices.\n"); 
+    auto a_(to_address(a));
+std::cout<<" getrf n: " <<n <<std::endl;
+    if(CUBLAS_STATUS_SUCCESS != cublas::cublas_getrfBatched(*a.handles.cublas_handle, n,
+                                       &a_, n0, to_address(piv), to_address(piv)+n, 1))
+      throw std::runtime_error("Error: cublas_getrf returned error code."); 
+    cudaMemcpy(&st,to_address(piv)+n,sizeof(int),cudaMemcpyDeviceToHost);
+std::cout<<" getrf status: " <<st <<std::endl;
+*/
 #endif
   }
 
@@ -125,7 +146,7 @@ namespace LAPACK_GPU
            class ptrW,
            typename = typename std::enable_if_t< (ptr::memory_type != GPU_MEMORY_POINTER_TYPE) > 
           >
-  inline static void getri(int const n, ptr a, int const n0, ptrI piv, ptrW work, int& n1, int& status)
+  inline static void getri(int n, ptr a, int n0, ptrI piv, ptrW work, int& n1, int& status)
   {
 #ifdef HAVE_MAGMA
     using MAGMA::getri;
@@ -138,13 +159,14 @@ namespace LAPACK_GPU
 #endif
   }
 
+  // write separate query function to avoid hack!!!
   template<class ptr,
            class ptrI,
            class ptrW,
            typename = typename std::enable_if_t< (ptr::memory_type == GPU_MEMORY_POINTER_TYPE)>,
            typename = void
           >
-  inline static void getri(int const n, ptr a, int const n0, ptrI piv, ptrW work, int& n1, int& status)
+  inline static void getri(int n, ptr a, int n0, ptrI piv, ptrW work, int& n1, int& status)
   {
 #ifdef HAVE_MAGMA
     using MAGMA::getri_gpu;
@@ -152,16 +174,32 @@ namespace LAPACK_GPU
 #else
     if(n1==-1) {
       n1 = n*n;  
+      status=0;  
       return;
     }
     if(n1 < n*n)
       throw std::runtime_error("Error: cublas_getri required buffer space of n*n."); 
+    using detail::to_address;
+    std::vector<typename ptr::value_type> buff(n*n);
+    std::vector<typename ptr::value_type> w_(n*n);
+    std::vector<int> Ibuff(n+1);
+    cudaMemcpy(buff.data(),to_address(a),sizeof(typename ptr::value_type)*n*n,cudaMemcpyDeviceToHost);
+    cudaMemcpy(Ibuff.data(),to_address(piv),sizeof(int)*(n+1),cudaMemcpyDeviceToHost);
+    using LAPACK_CPU::getri;
+    getri(n, buff.data(), n0, Ibuff.data(), w_.data(), n1, status);
+    cudaMemcpy(to_address(a),buff.data(),sizeof(typename ptr::value_type)*n*n,cudaMemcpyHostToDevice);
+/**
     if(n0!=n) 
       throw std::runtime_error("Error: cublas_getri currently requires lda==n"); 
-    if(CUBLAS_STATUS_SUCCESS != cublas::cublas_getriBatched(*x.handles.cublas_handle, n,
-                                                            &to_address(a), n0, to_address(piv), &to_address(work), n, status, 1);
+    auto a_(to_address(a));
+    using detail::to_address;
+    auto w_(to_address(work));
+    if(CUBLAS_STATUS_SUCCESS != cublas::cublas_getriBatched(*a.handles.cublas_handle, n,
+                   &a_, n0, to_address(piv), &w_, n, to_address(piv)+n, 1))
       throw std::runtime_error("Error: cublas_getri returned error code."); 
     cudaMemcpy(to_address(a),to_address(work),n*n,cudaMemcpyDeviceToDevice);
+    cudaMemcpy(&status,to_address(piv)+n,sizeof(int),cudaMemcpyDeviceToHost);
+*/
 #endif
   }
 

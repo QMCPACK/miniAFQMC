@@ -21,6 +21,7 @@
 #include "Configuration.h"
 #include "type_traits/scalar_traits.h"
 #include "Numerics/ma_operations.hpp"
+#include "Numerics/ma_blas.hpp"
 #include "Utilities/type_conversion.hpp"
 
 namespace qmcplusplus
@@ -162,68 +163,84 @@ class THCOps
       cnt+=Tuu.num_elements();
       boost::multi::array_ref<ComplexType,2,pointer> Rbk(TMats.data()+cnt,{NAEA,NMO});
       boost::multi::array_ref<ComplexType,1,pointer> R1D(Rbk.origin(),{Rbk.num_elements()});
-      
+
       ComplexType Eav(0);  
-      std::fill_n(E.origin(),E.num_elements(),ComplexType(0.0));  
+      cuda::fill_n(E.origin(),E.num_elements(),ComplexType(0.0));  
       if(addH1) { 
         boost::multi::array_ref<ComplexType,1,pointer> haj1D(haj.origin(),{haj.num_elements()});
         ma::product(ComplexType(1.0),G,haj1D,ComplexType(0.0),E( E.extension(0), 0));
-        for(int i=0; i<nwalk; i++) {
-          E[i][0] += E0;
-          Eav+=E[i][0];
-        }
+//        for(int i=0; i<nwalk; i++) {
+//          E[i][0] += E0;
+//          Eav+=E[i][0];
+//        }
       }
+
       if(walker_type==CLOSED || walker_type==NONCOLLINEAR) {
         for(int wi=0; wi<nwalk; wi++) {
           boost::multi::array_cref<ComplexType,2,const_pointer> Gw(G[wi].origin(),{nel_,nmo_});
           boost::multi::array_cref<ComplexType,1,const_pointer> G1D(G[wi].origin(),{nel_*nmo_});
           Guv_Guu(Gw,Guv,Guu,T1,false);
           ma::product(rotMuv,Guu,Tuu);
-          E[wi][2] = 0.5*ma::dot(Guu,Tuu);
+          //E[wi][2] = 0.5*ma::dot(Guu,Tuu);
+          ma::adotpby(ComplexType(0.5),Guu,Tuu,ComplexType(0.0),E[wi].origin()+2);
+/*
           auto Mptr = rotMuv.origin();  
           auto Gptr = Guv.origin();  
           for(size_t k=0, kend=nu*nv; k<kend; ++k, ++Gptr, ++Mptr)
             (*Gptr) *= (*Mptr); 
+*/
+          ma::axty(ComplexType(1.0),rotMuv,Guv);  
           ma::product(Guv,rotcPua,Qub);
           // using this for now, which should not be much worse
           ma::product(T(Qub),T(rotPiu),Rbk);
-          E[wi][1] = -0.5*ma::dot(R1D,G1D);
-          Eav += (E[wi][1]+E[wi][2]);
+          //E[wi][1] = -0.5*ma::dot(R1D,G1D);
+          ma::adotpby(ComplexType(-0.5),R1D,G1D,ComplexType(0.0),E[wi].origin()+1);
+//          Eav += (E[wi][1]+E[wi][2]);
         }
       } else {
         for(int wi=0; wi<nwalk; wi++) {
           { // Alpha
             boost::multi::array_cref<ComplexType,2,const_pointer> Gw(G[wi].origin(),{NAEA,nmo_});
             boost::multi::array_cref<ComplexType,1,const_pointer> G1DA(Gw.origin(),{Gw.num_elements()});
-            std::fill_n(Guu.origin(),Guu.num_elements(),SpC(0.0));
+            cuda::fill_n(Guu.origin(),Guu.num_elements(),SpC(0.0));
             Guv_Guu(Gw,Guv,Guu,T1,false);
+/*
             auto Mptr = rotMuv.origin();
             auto Gptr = Guv.origin();
             for(size_t k=0, kend=nu*nv; k<kend; ++k, ++Gptr, ++Mptr)
               (*Gptr) *= (*Mptr);
+*/
+            ma::axty(ComplexType(1.0),rotMuv,Guv);  
             ma::product(Guv,rotcPua( rotcPua.extension(0), {0,NAEA}), Qub);
             // using this for now, which should not be much worse
             ma::product(T(Qub),T(rotPiu),Rbk);
-            E[wi][1] = -0.5*ma::dot(R1D,G1DA);
+            //E[wi][1] = -0.5*ma::dot(R1D,G1DA);
+            ma::adotpby(ComplexType(-0.5),R1D,G1DA,ComplexType(0.0),E[wi].origin()+1);
           }
           {  // beta
             boost::multi::array_cref<ComplexType,2,const_pointer> Gw(G[wi].origin()+NAEA*NMO,{NAEB,nmo_});
             boost::multi::array_cref<ComplexType,1,const_pointer> G1DB(Gw.origin(),{Gw.num_elements()});
             Guv_Guu(Gw,Guv,Guu,T1,true);
             ma::product(rotMuv,Guu,Tuu);
-            E[wi][2] = 0.5*ma::dot(Guu,Tuu);
+            //E[wi][2] = 0.5*ma::dot(Guu,Tuu);
+            ma::adotpby(ComplexType(0.5),Guu,Tuu,ComplexType(0.0),E[wi].origin()+2);
+/*
             auto Mptr = rotMuv.origin();
             auto Gptr = Guv.origin();
             for(size_t k=0, kend=nu*nv; k<kend; ++k, ++Gptr, ++Mptr)
               (*Gptr) *= (*Mptr);
+*/
+            ma::axty(ComplexType(1.0),rotMuv,Guv);  
             ma::product(Guv,rotcPua( rotcPua.extension(0), {NAEA,NAEA+NAEB} ),Qub);
             // using this for now, which should not be much worse
             ma::product(T(Qub),T(rotPiu),Rbk);
-            E[wi][1] -= 0.5*ma::dot(R1D,G1DB);
+            //E[wi][1] -= 0.5*ma::dot(R1D,G1DB);
+            ma::adotpby(ComplexType(-0.5),R1D,G1DB,ComplexType(1.0),E[wi].origin()+1);
           }
-          Eav += (E[wi][1]+E[wi][2]);
+//          Eav += (E[wi][1]+E[wi][2]);
         }
       }    
+      Eav = ma::sum(E(E.extension(0),{0,3}));
       using std::real;
       return real(Eav)/nwalk;
     }
@@ -351,12 +368,21 @@ class THCOps
 
       using ma::transposed;
       ComplexType a = (walker_type==CLOSED)?ComplexType(2.0):ComplexType(1.0);
+      ComplexType zero(0.0);
       for(int iw=0; iw<nw; ++iw) {
         boost::multi::array_cref<ComplexType,2,const_pointer> Giw(G[iw].origin(),{nel_,nmo_});
         // transposing inetermediary to make dot products faster in the next step
         ma::product(transposed(Piu),transposed(Giw),T1);
         for(int u=0; u<nu; ++u)
           Guu[u][iw] = a*ma::dot(cPua[u],T1[u]);               
+/* can be rewritten as, which will have a small effect on CPUs and will avoid multiple launches in GPU
+        ma::product(a,transposed(Piu),transposed(Giw),zero,T1);
+        gemmStridedBatched('N','N',1,1,nel_,to_address(cPua.origin()),1,nel_,
+                                            to_address(T1.origin()),nel_,nel_,
+                                            to_address(Guu.origin()),1,Guu.strides()[0],nu);
+        // or implement a general gemmStridedBatched expecting 3D objects and create them on the fly
+        gemmStridedBatched(cPua3D,T13D,Guu3D);
+*/
       }
     }  
 
@@ -398,8 +424,9 @@ class THCOps
       else
         ma::product(scl, rotcPua( rotcPua.extension(0), {0,NAEA}),
                   T1, zero, Guv);
-      for(int v=0; v<nv; ++v) 
-        Guu[v] += Guv[v][v];  
+//      for(int v=0; v<nv; ++v) 
+//        Guu[v] += Guv[v][v];  
+      ma::adiagApy(ComplexType(1.0),Guv,Guu);  
     }
 
   protected:

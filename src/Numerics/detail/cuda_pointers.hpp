@@ -24,9 +24,14 @@
 #include "Numerics/detail/cuda_ooc_pointer.hpp"
 #include <type_traits>
 
+#include "Kernels/fill_n.cuh"
+
 namespace cuda {
 
-
+/*
+ * NEED TO FIX THIS, RIGHT NOW WILL TAKE ALL ITERATORS WHICH IS WRONG!!!!!
+ * NEED A is_cuda_pointer predicate!!!!
+ */
 template<class ptrA, class Size, class ptrB, 
          typename = typename std::enable_if_t<not std::is_pointer<ptrA>::value>, 
          typename = typename std::enable_if_t<not std::is_pointer<ptrB>::value> 
@@ -55,31 +60,32 @@ ptrB copy_n(T const* A, Size n, ptrB B) {
 template<class T, class Size>
 T* copy_n(T const* A, Size n, T* B) {
   return std::copy_n(A,n,B);    
-//  if(cudaSuccess != cudaMemcpy(B,A,n*sizeof(T),cudaMemcpyDefault))
-//   throw std::runtime_error("Error: cudaMemcpy returned error code.");
-//  return B+n;
 }
 
-/*
-template<class T, class Size> 
-cuda_gpu_ptr<T> copy_n(cuda_gpu_ptr<T> const A, Size n, cuda_gpu_ptr<T> B) {
-  if(cudaSuccess != cudaMemcpy(to_address(B),to_address(A),n*sizeof(T),cudaMemcpyDefault))
-   throw std::runtime_error("Error: cudaMemcpy returned error code.");
-  return B+n; 
-}  
-template<class T, class Size>
-T* copy_n(cuda_gpu_ptr<T> const A, Size n, T* B) {
-  if(cudaSuccess != cudaMemcpy(B,to_address(A),n*sizeof(T),cudaMemcpyDefault))
-   throw std::runtime_error("Error: cudaMemcpy returned error code.");
-  return B+n;
+
+
+
+/* fill_n */
+template<class ptrA, class Size, class T, 
+         typename = typename std::enable_if_t<(ptrA::memory_type!=CPU_OUTOFCARS_POINTER_TYPE)> 
+        >
+void fill_n(ptrA A, Size n, const T& value) {
+  kernels::fill_n(to_address(A),n,value);
 }
-template<class T, class Size>
-cuda_gpu_ptr<T> copy_n(T const* A, Size n, cuda_gpu_ptr<T> B) {
-  if(cudaSuccess != cudaMemcpy(to_address(B),A,n*sizeof(T),cudaMemcpyDefault))
-   throw std::runtime_error("Error: cudaMemcpy returned error code.");
-  return B+n;
+
+template<class ptrA, class Size, class T,
+         typename = typename std::enable_if_t<(ptrA::memory_type==CPU_OUTOFCARS_POINTER_TYPE)>,
+         typename = void 
+        >
+void fill_n(ptrA A, Size n, const T& value) {
+  std::fill_n(to_address(A),n,value);
 }
-*/
+
+template<class T, class Size>
+void fill_n(T* A, Size n, const T& value) {
+  std::fill_n(A,n,value);
+}
+
 
 }
 

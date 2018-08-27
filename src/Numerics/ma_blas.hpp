@@ -45,6 +45,75 @@ dot(MultiArray1Dx&& x, MultiArray1Dy&& y){
         return dot(x.size(), x.origin(), x.strides()[0], y.origin(), y.strides()[0]);
 }
 
+// my blas extension
+template<class T,
+         class MultiArray1Dx,
+         class MultiArray1Dy,
+         class ptr,
+         typename = typename std::enable_if<std::decay<MultiArray1Dx>::type::dimensionality == 1>::type,
+         typename = typename std::enable_if<std::decay<MultiArray1Dy>::type::dimensionality == 1>::type
+>
+MultiArray1Dy
+adotpby(T const alpha, MultiArray1Dx const& x, MultiArray1Dy const& y, T const beta, ptr res){
+        assert(x.size() == y.size());
+        using BLAS_CPU::adotpby;
+        using BLAS_GPU::adotpby;
+        adotpby(x.size(), alpha, x.origin(), x.strides()[0], 
+                                        y.origin(), y.strides()[0], beta, res);
+        return y;
+}
+
+template<class T,
+         class MultiArray1Dx,
+         class MultiArray1Dy,
+         typename = typename std::enable_if<std::decay<MultiArray1Dx>::type::dimensionality == 1>::type,
+         typename = typename std::enable_if<std::decay<MultiArray1Dy>::type::dimensionality == 1>::type
+>
+MultiArray1Dy
+axty(T const alpha, MultiArray1Dx const& x, MultiArray1Dy && y){
+        assert(x.size() == y.size());
+        using BLAS_CPU::axty;
+        using BLAS_GPU::axty;
+        axty(x.size(), alpha, x.origin(), x.strides()[0], y.origin(), y.strides()[0]);
+        return y;
+}
+
+template<class T,
+         class MultiArray2DA,
+         class MultiArray2DB,
+         typename = typename std::enable_if<std::decay<MultiArray2DA>::type::dimensionality == 2>::type,
+         typename = typename std::enable_if<std::decay<MultiArray2DB>::type::dimensionality == 2>::type,
+         typename = void
+>
+MultiArray2DB
+axty(T const alpha, MultiArray2DA const& A, MultiArray2DB && B){
+        assert(A.num_elements() == B.num_elements());
+        assert(A.strides()[1]==1);
+        assert(A.strides()[0]==A.shape()[1]);
+        assert(B.strides()[1]==1);
+        assert(B.strides()[0]==B.shape()[1]);
+        using BLAS_CPU::axty;
+        using BLAS_GPU::axty;
+        axty(A.num_elements(), alpha, A.origin(), 1, B.origin(), 1);
+        return B;
+}
+
+template<class T,
+         class MultiArray2DA,
+         class MultiArray1Dy,
+         typename = typename std::enable_if<std::decay<MultiArray2DA>::type::dimensionality == 2>::type,
+         typename = typename std::enable_if<std::decay<MultiArray1Dy>::type::dimensionality == 1>::type
+>
+MultiArray1Dy
+adiagApy(T const alpha, MultiArray2DA const& A, MultiArray1Dy && y){
+        assert(A.shape()[0] == A.shape()[1]);
+        assert(A.shape()[0] == y.size());
+        using BLAS_CPU::adiagApy;
+        using BLAS_GPU::adiagApy;
+        adiagApy(y.size(), alpha, A.origin(), A.strides()[0], y.origin(), y.strides()[0]);
+        return y;
+}
+
 template<class T, class MultiArray1D, typename = typename std::enable_if<std::decay<MultiArray1D>::type::dimensionality == 1>::type >
 MultiArray1D scal(T a, MultiArray1D&& x){
         using BLAS_CPU::scal;

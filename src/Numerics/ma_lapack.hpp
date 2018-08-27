@@ -36,7 +36,7 @@ template<class MultiArray2D, class Array1D>
 MultiArray2D getrf(MultiArray2D&& m, Array1D& pivot){
 	assert(m.strides()[0] >= std::max(std::size_t(1), std::size_t(m.shape()[1])));
 	assert(m.strides()[1] == 1);
-	assert(pivot.size() >= std::min(m.shape()[1], m.shape()[0]));
+	assert(pivot.size() >= std::min(m.shape()[1], m.shape()[0]+1));
 	
 	int status = -1;
         using LAPACK_CPU::getrf;
@@ -69,10 +69,10 @@ int getri_optimal_workspace_size(MultiArray2D & A){
 }
 
 template<class MultiArray2D, class MultiArray1D, class Buffer>
-MultiArray2D getri(MultiArray2D&& A, MultiArray1D const& IPIV, Buffer&& WORK){
+MultiArray2D getri(MultiArray2D&& A, MultiArray1D & IPIV, Buffer&& WORK){
 //	assert(A.strides()[0] > std::max(std::size_t(1), A.shape()[1]));
 	assert(A.strides()[1] == 1);
-	assert(IPIV.size() >= A.shape()[0]);
+	assert(IPIV.size() >= A.shape()[0]+1);
 	assert(WORK.size() >= std::max(std::size_t(1), std::size_t(A.shape()[0])));
 	
 	int status = -1;

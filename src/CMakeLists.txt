@@ -123,11 +123,20 @@ ENDIF()
     Utilities/OhmmsInfo.cpp 
     Utilities/NewTimer.cpp
     io/hdf_archive.cpp
+    Kernels/determinant.cu 
+    Kernels/adotpby.cu
+    Kernels/fill_n.cu
+    Kernels/axty.cu
+    Kernels/adiagApy.cu
     ${GITREV_TMP}
     )
 
-   ADD_LIBRARY(qmcutil ${UTILITIES})
-
+  IF(QMC_CUDA)
+    CUDA_ADD_LIBRARY(qmcutil ${UTILITIES})
+    CUDA_ADD_CUBLAS_TO_TARGET(qmcutil)
+  ELSE(QMC_CUDA)
+    ADD_LIBRARY(qmcutil ${UTILITIES})
+  ENDIF(QMC_CUDA)
 
   # For unit tests, enable use for the fake RNG
   FUNCTION( USE_FAKE_RNG TARGET )
