@@ -381,6 +381,40 @@ namespace BLAS_GPU
     adiagApy(n,alpha,to_address(A),lda,to_address(y),incy);
   }
 
+  template<class ptr,
+           typename = typename std::enable_if_t<(ptr::memory_type != CPU_OUTOFCARS_POINTER_TYPE)> 
+          >
+  inline static auto sum(int n, ptr const x, int incx) 
+  {
+    kernels::sum(n,to_address(x),incx);
+  }
+
+  template<class ptr,
+           typename = typename std::enable_if_t<(ptr::memory_type != CPU_OUTOFCARS_POINTER_TYPE)>
+          >
+  inline static auto sum(int m, int n, ptr const A, int lda)
+  {
+    kernels::sum(m,n,to_address(A),lda);
+  }
+
+  template<class ptr,
+           typename = typename std::enable_if_t<(ptr::memory_type == CPU_OUTOFCARS_POINTER_TYPE)>
+          >
+  inline static auto sum(int n, ptr const x, int incx)
+  {
+    using BLAS_CPU::sum;
+    sum(n,to_address(x),incx);
+  }
+
+  template<class ptr,
+           typename = typename std::enable_if_t<(ptr::memory_type == CPU_OUTOFCARS_POINTER_TYPE)>
+          >
+  inline static auto sum(int m, int n, ptr const A, int lda)
+  {
+    using BLAS_CPU::sum;
+    sum(m,n,to_address(A),lda);
+  }
+
 }
 
 #endif

@@ -731,6 +731,28 @@ namespace BLAS_CPU
       y[i*incy] += alpha*A[i*lda + i];
   }
 
+  template<typename T>
+  inline static T sum(int n,
+                      T const* x, int incx)
+  {
+    T res(0);
+    for(int i=0; i<n; i++)
+      res += x[i*indx];  
+    return res;
+  }
+
+  // assume Fortran ordering like all blas calls
+  template<typename T>
+  inline static T sum(int m, int n,
+                      T const* A, int lda)
+  {
+    T res(0);
+    for(int i=0; i<n; i++)
+     for(int j=0; j<m; j++)
+      res += A[i*lda+j];
+    return res;
+  }
+
 }
 
 #endif

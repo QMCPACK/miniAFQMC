@@ -114,6 +114,27 @@ adiagApy(T const alpha, MultiArray2DA const& A, MultiArray1Dy && y){
         return y;
 }
 
+template<class MultiArray1D,
+         typename = typename std::enable_if<std::decay<MultiArray1D>::type::dimensionality == 1>::type
+>
+void
+sum(MultiArray1D const& y){
+        using BLAS_CPU::sum;
+        using BLAS_GPU::sum;
+        return sum(y.size(), y.origin(), y.strides()[0]);
+}
+
+template<class MultiArray2D,
+         typename = typename std::enable_if<std::decay<MultiArray2D>::type::dimensionality == 2>::type
+>
+void
+sum(MultiArray2D const& A){
+        assert(A.strides()[1] == 1);
+        using BLAS_CPU::sum;
+        using BLAS_GPU::sum;
+        return sum(A.shape()[0], A.shape()[1], A.origin(), A.strides()[0]);
+}
+
 template<class T, class MultiArray1D, typename = typename std::enable_if<std::decay<MultiArray1D>::type::dimensionality == 1>::type >
 MultiArray1D scal(T a, MultiArray1D&& x){
         using BLAS_CPU::scal;
