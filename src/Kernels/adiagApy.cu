@@ -32,13 +32,15 @@ __global__ void kernel_adiagApy(int N, T const alpha, T const* A, int lda, T* y,
 
 void adiagApy(int N, double const alpha, double const* A, int lda, double *y, int incy) 
 {
-  kernel_adiagApy<<<1,256>>>(N,alpha,A,lda,y,incy);
+  int block_dim = 256;
+  int grid_dim = (N + block_dim - 1)/block_dim;
+  kernel_adiagApy<<<grid_dim, block_dim>>>(N,alpha,A,lda,y,incy);
 }
 
 void adiagApy(int N, std::complex<double> const alpha, std::complex<double> const* A, int lda, 
              std::complex<double> *y, int incy) 
 {
-  int block_dim = 128;
+  int block_dim = 256;
   int grid_dim = (N + block_dim - 1)/block_dim;
   kernel_adiagApy<<<grid_dim, block_dim>>>(N,static_cast<thrust::complex<double> const>(alpha),
                             reinterpret_cast<thrust::complex<double> const*>(A),lda,
@@ -47,7 +49,9 @@ void adiagApy(int N, std::complex<double> const alpha, std::complex<double> cons
 
 void adiagApy(int N, float const alpha, float const* A, int lda, float *y, int incy)
 {
-  kernel_adiagApy<<<1,256>>>(N,alpha,A,lda,y,incy);
+  int block_dim = 256;
+  int grid_dim = (N + block_dim - 1)/block_dim;
+  kernel_adiagApy<<<grid_dim, block_dim>>>(N,alpha,A,lda,y,incy);
 }
 
 void adiagApy(int N, std::complex<float> const alpha, std::complex<float> const* A, int lda,

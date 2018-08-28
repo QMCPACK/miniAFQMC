@@ -128,6 +128,7 @@ ENDIF()
     Kernels/fill_n.cu
     Kernels/axty.cu
     Kernels/adiagApy.cu
+    Kernels/sum.cu
     ${GITREV_TMP}
     )
 
