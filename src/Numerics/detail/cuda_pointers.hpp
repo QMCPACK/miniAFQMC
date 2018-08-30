@@ -25,6 +25,7 @@
 #include <type_traits>
 
 #include "Kernels/fill_n.cuh"
+#include "Kernels/print.cuh"
 
 namespace cuda {
 
@@ -66,24 +67,55 @@ T* copy_n(T const* A, Size n, T* B) {
 
 
 /* fill_n */
-template<class ptrA, class Size, class T, 
+template<class ptrA, class T, 
          typename = typename std::enable_if_t<(ptrA::memory_type!=CPU_OUTOFCARS_POINTER_TYPE)> 
         >
-void fill_n(ptrA A, Size n, const T& value) {
-  kernels::fill_n(to_address(A),n,value);
+void fill_n(ptrA A, int n, int stride, const T& value) {
+  kernels::fill_n(to_address(A),n,stride,value);
 }
 
-template<class ptrA, class Size, class T,
+template<class ptrA, class T,
          typename = typename std::enable_if_t<(ptrA::memory_type==CPU_OUTOFCARS_POINTER_TYPE)>,
          typename = void 
         >
-void fill_n(ptrA A, Size n, const T& value) {
-  std::fill_n(to_address(A),n,value);
+void fill_n(ptrA A, int n, int stride, const T& value) {
+  typename ptrA::value_type* p = to_address(A);
+  for(int i=0; i<n; i++, p+=stride)
+    *p = static_cast<typename ptrA::value_type>(value);
 }
 
-template<class T, class Size>
-void fill_n(T* A, Size n, const T& value) {
-  std::fill_n(A,n,value);
+template<class T>
+void fill_n(T* p, int n, int stride, const T& value) {
+  for(int i=0; i<n; i++, p+=stride)
+    *p = value; 
+}
+
+
+// print
+template<class ptr, 
+         typename = typename std::enable_if_t<(ptr::memory_type!=CPU_OUTOFCARS_POINTER_TYPE)>
+        >
+void print(std::string str, ptr p, int n) {
+  kernels::print(str,to_address(p),n);
+}
+
+template<class ptr, 
+         typename = typename std::enable_if_t<(ptr::memory_type==CPU_OUTOFCARS_POINTER_TYPE)>,
+         typename = void
+        >
+void print(std::string str, ptr p, int n) {
+  std::cout<<str <<" ";
+  for(int i=0; i<n; i++)
+    std::cout<<*(to_address(p)+i) <<" "; 
+  std::cout<<std::endl;
+}
+
+template<typename T>
+void print(std::string str, T const* p, int n) {
+  std::cout<<str <<" ";
+  for(int i=0; i<n; i++)
+    std::cout<<*(p+i) <<" ";
+  std::cout<<std::endl;
 }
 
 

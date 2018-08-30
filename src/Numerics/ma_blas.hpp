@@ -98,6 +98,29 @@ axty(T const alpha, MultiArray2DA const& A, MultiArray2DB && B){
         return B;
 }
 
+// On fortran ordering, 
+// implements z[i][j] = beta * z[i][j] + alpha * conj(y[i][j]) * x[i]
+template<class T,
+         class MultiArray2DA,
+         class MultiArray1D,
+         class MultiArray2DB,
+         typename = typename std::enable_if_t< (MultiArray2DA::dimensionality == 2) and
+                                (MultiArray1D::dimensionality == 1) and
+                                (std::decay<MultiArray2DB>::type::dimensionality == 2)>
+>
+MultiArray2DB
+acAxpbB(T const alpha, MultiArray2DA const& A, MultiArray1D const& x, T const beta, MultiArray2DB && B){
+        assert(A.num_elements() == B.num_elements());
+        assert(A.shape()[0]==B.shape()[0]);
+        assert(A.shape()[1]==B.shape()[1]);
+        assert(A.shape()[1]==x.shape()[0]);
+        using BLAS_CPU::acAxpbB;
+        using BLAS_GPU::acAxpbB;
+        acAxpbB(A.shape()[1],A.shape()[0],alpha,A.origin(),A.strides()[0],
+                x.origin(),x.strides()[0],beta,B.origin(),B.strides()[0]);
+        return B;
+}
+
 template<class T,
          class MultiArray2DA,
          class MultiArray1Dy,
@@ -117,7 +140,7 @@ adiagApy(T const alpha, MultiArray2DA const& A, MultiArray1Dy && y){
 template<class MultiArray1D,
          typename = typename std::enable_if<std::decay<MultiArray1D>::type::dimensionality == 1>::type
 >
-void
+auto
 sum(MultiArray1D const& y){
         using BLAS_CPU::sum;
         using BLAS_GPU::sum;
@@ -125,14 +148,16 @@ sum(MultiArray1D const& y){
 }
 
 template<class MultiArray2D,
-         typename = typename std::enable_if<std::decay<MultiArray2D>::type::dimensionality == 2>::type
+         typename = typename std::enable_if<std::decay<MultiArray2D>::type::dimensionality == 2>::type,
+         typename = void 
 >
-void
+auto
 sum(MultiArray2D const& A){
         assert(A.strides()[1] == 1);
         using BLAS_CPU::sum;
         using BLAS_GPU::sum;
-        return sum(A.shape()[0], A.shape()[1], A.origin(), A.strides()[0]);
+        // blas call assumes fortran ordering
+        return sum(A.shape()[1], A.shape()[0], A.origin(), A.strides()[0]);
 }
 
 template<class T, class MultiArray1D, typename = typename std::enable_if<std::decay<MultiArray1D>::type::dimensionality == 1>::type >
@@ -217,7 +242,6 @@ MultiArray1DY gemv(MultiArray2DA const& A, MultiArray1DX const& x, MultiArray1DY
 //	gemm<'T', 'N'>(1., A, B, 0., C); // C = T(A*T(B)) = B*T(A) or T(C) = A*T(B)
 //	gemm<'N', 'T'>(1., A, B, 0., C); // C =  T(T(A)*B) = T(B)*A or T(C) = T(A)*B
 
-
 template<char TA, char TB, class T, class MultiArray2DA, class MultiArray2DB, class MultiArray2DC, 
 	typename = typename std::enable_if< MultiArray2DA::dimensionality == 2 and MultiArray2DB::dimensionality == 2 and std::decay<MultiArray2DC>::type::dimensionality == 2>::type
 >
@@ -271,6 +295,63 @@ MultiArray2DC gemm(T alpha, MultiArray2DA const& a, MultiArray2DB const& b, T be
 template<char TA, char TB, class T, class MultiArray2DA, class MultiArray2DB, class MultiArray2DC>
 MultiArray2DC gemm(MultiArray2DA const& a, MultiArray2DB const& b, MultiArray2DC&& c){
 	return gemm(1., a, b, 0., std::forward<MultiArray2DC>(c));
+}
+
+// Expect: A[nbatch][nrow][ncol]
+template<char TA, char TB, class T, class MultiArray3DA, class MultiArray3DB, class MultiArray3DC, 
+	typename = typename std::enable_if< MultiArray3DA::dimensionality == 3 and 
+                                    MultiArray3DB::dimensionality == 3 and 
+                                    std::decay<MultiArray3DC>::type::dimensionality == 3>::type
+        >
+MultiArray3DC gemmStridedBatched(T alpha, MultiArray3DA const& a, MultiArray3DB const& b, 
+                                 T beta, MultiArray3DC&& c){
+	assert( a.strides()[2] == 1 );
+	assert( b.strides()[2] == 1 );
+	assert( c.strides()[2] == 1 );
+	assert( a.shape()[0] == b.shape()[0] );
+	assert( a.shape()[0] == c.shape()[0] );
+	assert( (TA == 'N') || (TA == 'T') || (TA == 'C')  );
+	assert( (TB == 'N') || (TB == 'T') || (TB == 'C')  );
+	int M = -1;
+	int N = -1;
+	int K = -1;
+	if(TA == 'N' and TB == 'N'){
+		M = a.shape()[2];
+		N = b.shape()[1];
+		K = a.shape()[1];
+		assert(a.shape()[1] == b.shape()[2] and c.shape()[1] == b.shape()[1] and c.shape()[2] == a.shape()[2]);
+	}
+	if((TA == 'T' or TA == 'C') and (TB == 'T' or TB == 'C')){
+		M = a.shape()[1];
+		N = b.shape()[2];
+		K = a.shape()[2];
+		assert(a.shape()[2] == b.shape()[1] and c.shape()[1] == b.shape()[2] and c.shape()[2] == a.shape()[1]);
+	}
+	if((TA == 'T' or TA == 'C') and TB == 'N'){
+		M = a.shape()[1];
+		N = b.shape()[1];
+		K = a.shape()[2];
+		assert(a.shape()[2] == b.shape()[2] and c.shape()[1] == b.shape()[1] and c.shape()[2] == a.shape()[1]);
+	}
+	if(TA == 'N' and (TB == 'T' or TB == 'C')){
+		M = a.shape()[2];
+		N = b.shape()[2];
+		K = a.shape()[1];
+		assert(a.shape()[1] == b.shape()[1] and c.shape()[1] == b.shape()[2] and c.shape()[2] == a.shape()[2]);
+	}
+        using BLAS_CPU::gemmStridedBatched;
+        using BLAS_GPU::gemmStridedBatched;
+        gemmStridedBatched(
+		TA, TB, 
+		M, N, K, 
+                alpha, 
+		a.origin(), a.strides()[1],a.strides()[0],
+		b.origin(), b.strides()[1],b.strides()[0],
+		beta, 
+		c.origin(), c.strides()[1],c.strides()[0],
+                a.shape()[0]
+	);
+	return std::forward<MultiArray3DC>(c);
 }
 
 template<char TA, char TB, class T, class MultiArray2DA, class MultiArray2DB, class MultiArray2DC,

@@ -556,6 +556,80 @@ namespace cublas {
     return sucess;
   }
 
+  inline cublasStatus_t cublas_gemmStridedBatched(cublasHandle_t handle,
+                          char Atrans, char Btrans, int M, int N, int K,
+                          const float alpha,
+                          const float * A, int lda, int strideA,
+                          const float * B, int ldb, int strideB,
+                          const float beta,
+                          float * C, int ldc, int strideC, int batchSize)
+  {
+    cublasStatus_t sucess =
+                cublasSgemmStridedBatched(handle,
+                           cublasOperation(Atrans),cublasOperation(Btrans),
+                           M,N,K,&alpha,A,lda,strideA,B,ldb,strideB,&beta,C,ldc,strideC,batchSize); 
+    cudaDeviceSynchronize ();
+    return sucess;
+  }
+
+  inline cublasStatus_t cublas_gemmStridedBatched(cublasHandle_t handle,
+                          char Atrans, char Btrans, int M, int N, int K,
+                          const double alpha,
+                          const double * A, int lda, int strideA,
+                          const double * B, int ldb, int strideB,
+                          const double beta,
+                          double * C, int ldc, int strideC, int batchSize)
+  {
+    cublasStatus_t sucess =
+                cublasDgemmStridedBatched(handle,
+                           cublasOperation(Atrans),cublasOperation(Btrans),
+                           M,N,K,&alpha,A,lda,strideA,B,ldb,strideB,&beta,C,ldc,strideC,batchSize);
+    cudaDeviceSynchronize ();
+    return sucess;
+  }
+
+  inline cublasStatus_t cublas_gemmStridedBatched(cublasHandle_t handle,
+                          char Atrans, char Btrans, int M, int N, int K,
+                          const std::complex<float> alpha,
+                          const std::complex<float> * A, int lda, int strideA,
+                          const std::complex<float> * B, int ldb, int strideB,
+                          const std::complex<float> beta,
+                          std::complex<float> * C, int ldc, int strideC, int batchSize)
+  {
+    cublasStatus_t sucess =
+                cublasCgemmStridedBatched(handle,
+                           cublasOperation(Atrans),cublasOperation(Btrans),
+                           M,N,K,
+                           reinterpret_cast<cuComplex const*>(&alpha),
+                           reinterpret_cast<cuComplex const*>(A),lda,strideA,
+                           reinterpret_cast<cuComplex const*>(B),ldb,strideB,
+                           reinterpret_cast<cuComplex const*>(&beta),
+                           reinterpret_cast<cuComplex *>(C),ldc,strideC,batchSize);
+    cudaDeviceSynchronize ();
+    return sucess;
+  }
+
+  inline cublasStatus_t cublas_gemmStridedBatched(cublasHandle_t handle,
+                          char Atrans, char Btrans, int M, int N, int K,
+                          const std::complex<double> alpha,
+                          const std::complex<double> * A, int lda, int strideA,
+                          const std::complex<double> * B, int ldb, int strideB,
+                          const std::complex<double> beta,
+                          std::complex<double> * C, int ldc, int strideC, int batchSize)
+  {
+    cublasStatus_t sucess =
+                cublasZgemmStridedBatched(handle,
+                           cublasOperation(Atrans),cublasOperation(Btrans),
+                           M,N,K,
+                           reinterpret_cast<cuDoubleComplex const*>(&alpha),
+                           reinterpret_cast<cuDoubleComplex const*>(A),lda,strideA,
+                           reinterpret_cast<cuDoubleComplex const*>(B),ldb,strideB,
+                           reinterpret_cast<cuDoubleComplex const*>(&beta),
+                           reinterpret_cast<cuDoubleComplex *>(C),ldc,strideC,batchSize);
+    cudaDeviceSynchronize ();
+    return sucess;
+  }
+
 
 }
 

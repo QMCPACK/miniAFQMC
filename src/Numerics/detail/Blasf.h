@@ -231,6 +231,34 @@ void scgemv(const char &trans, const int &nr, const int &nc,
             const std::complex<float> &beta, std::complex<float> *cv,
             const int &incy);
 
+void cblas_sgemm_batch (const CBLAS_LAYOUT Layout, const CBLAS_TRANSPOSE* transa_array, 
+            const CBLAS_TRANSPOSE* transb_array, const int* m_array, const int* n_array, 
+            const int* k_array, const void *alpha_array, const void **a_array, 
+            const int* lda_array, const void **b_array, const int* ldb_array, 
+            const void *beta_array, void **c_array, const int* ldc_array, 
+            const int group_count, const int* group_size);
+
+void cblas_cgemm_batch (const CBLAS_LAYOUT Layout, const CBLAS_TRANSPOSE* transa_array, 
+            const CBLAS_TRANSPOSE* transb_array, const int* m_array, const int* n_array, 
+            const int* k_array, const void *alpha_array, const void **a_array, 
+            const int* lda_array, const void **b_array, const int* ldb_array, 
+            const void *beta_array, void **c_array, const int* ldc_array, 
+            const int group_count, const int* group_size);
+
+void cblas_dgemm_batch (const CBLAS_LAYOUT Layout, const CBLAS_TRANSPOSE* transa_array, 
+            const CBLAS_TRANSPOSE* transb_array, const int* m_array, const int* n_array, 
+            const int* k_array, const void *alpha_array, const void **a_array, 
+            const int* lda_array, const void **b_array, const int* ldb_array, 
+            const void *beta_array, void **c_array, const int* ldc_array, 
+            const int group_count, const int* group_size);
+
+void cblas_zgemm_batch (const CBLAS_LAYOUT Layout, const CBLAS_TRANSPOSE* transa_array, 
+            const CBLAS_TRANSPOSE* transb_array, const int* m_array, const int* n_array, 
+            const int* k_array, const void *alpha_array, const void **a_array, 
+            const int* lda_array, const void **b_array, const int* ldb_array, 
+            const void *beta_array, void **c_array, const int* ldc_array, 
+            const int group_count, const int* group_size);
+
 #endif
 
 void dsyrk(const char &, const char &, const int &, const int &, const double &,

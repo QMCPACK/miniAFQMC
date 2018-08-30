@@ -25,18 +25,37 @@
 #include "cublas_v2.h"
 #include "cublasXt.h"
 #include "cusolverDn.h"
+#include "curand.h"
 #ifdef HAVE_MAGMA
 #include "magma_v2.h"
 #endif
 
 namespace cuda {
 
+  inline void cuda_check(cudaError_t sucess, std::string message="")
+  {
+    if(cudaSuccess != sucess) {
+      std::cerr<<message <<std::endl;
+      std::cerr.flush();
+      throw std::runtime_error(" Error code returned by cuda. \n");
+    }
+  }
+
   inline void cublas_check(cublasStatus_t sucess, std::string message="")
   {
     if(CUBLAS_STATUS_SUCCESS != sucess) {
       std::cerr<<message <<std::endl;
       std::cerr.flush();
-      throw std::runtime_error(" Error code returned by cuda. \n");
+      throw std::runtime_error(" Error code returned by cublas. \n");
+    }
+  }
+
+  inline void curand_check(curandStatus_t sucess, std::string message="")
+  {
+    if(CURAND_STATUS_SUCCESS != sucess) {
+      std::cerr<<message <<std::endl;
+      std::cerr.flush();
+      throw std::runtime_error(" Error code returned by curand. \n");
     }
   }
 
@@ -45,7 +64,7 @@ namespace cuda {
     if(CUSOLVER_STATUS_SUCCESS != sucess) {
       std::cerr<<message <<std::endl;
       std::cerr.flush();
-      throw std::runtime_error(" Error code returned by cuda. \n");
+      throw std::runtime_error(" Error code returned by cusolver. \n");
     }
   }
 

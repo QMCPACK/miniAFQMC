@@ -12,23 +12,18 @@
 //    Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef AFQMC_FILL_N_KERNELS_HPP
-#define AFQMC_FILL_N_KERNELS_HPP
+#ifndef AFQMC_ZERO_COMPLEX_PART_KERNELS_HPP
+#define AFQMC_ZERO_COMPLEX_PART_KERNELS_HPP
 
-#include<cassert>
-#include<cuda.h>
-#include<cuda_runtime.h>
 #include <complex>
 
 namespace kernels 
 {
 
-void fill_n(int * first, int N, int stride, int const value);
-void fill_n(float * first, int N,  int stride, float const value);
-void fill_n(double * first, int N,  int stride, double const value);
-void fill_n(std::complex<float> * first, int N,  int stride, std::complex<float> const value);
-void fill_n(std::complex<double> * first, int N,  int stride, std::complex<double> const value);
-
+void zero_complex_part(int n, std::complex<double> * x); 
+void zero_complex_part(int n, std::complex<float> * x);
+void zero_complex_part(int n, double * x);
+void zero_complex_part(int n, float * x);
 
 }
 

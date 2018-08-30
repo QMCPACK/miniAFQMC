@@ -167,8 +167,9 @@ struct h5data_proxy<boost::multi::array<T,1,cuda::cuda_gpu_allocator<T>>>
       ref_.resize({dims[0]});
     std::size_t sz = ref_.num_elements();
     boost::multi::array<T,1> buf( {sz} ); 
-    return h5d_read(grp,aname,get_address(buf.data()),xfer_plist);
+    auto ret = h5d_read(grp,aname,get_address(buf.data()),xfer_plist);
     cuda::copy_n(buf.data(),sz,ref_.origin());
+    return ret;
   }
 
   inline bool write(hid_t grp, const std::string& aname, hid_t xfer_plist=H5P_DEFAULT)
@@ -196,8 +197,9 @@ struct h5data_proxy<boost::multi::array<T,2,cuda::cuda_gpu_allocator<T>>>: publi
       ref_.reextent({dims[0],dims[1]});
     std::size_t sz = ref_.num_elements();
     boost::multi::array<T,1> buf( {sz} );
-    return h5d_read(grp,aname,get_address(buf.data()),xfer_plist);
+    auto ret = h5d_read(grp,aname,get_address(buf.data()),xfer_plist);
     cuda::copy_n(buf.data(),sz,ref_.origin());
+    return ret;
   }
   inline bool write(hid_t grp, const std::string& aname, hid_t xfer_plist=H5P_DEFAULT)
   {
@@ -231,8 +233,9 @@ struct h5data_proxy<boost::multi::array_ref<T,1,cuda::cuda_gpu_ptr<T>>>
     }
     std::size_t sz = ref_.num_elements();
     boost::multi::array<T,1> buf( {sz} );
-    return h5d_read(grp,aname,get_address(buf.data()),xfer_plist);
+    auto ret = h5d_read(grp,aname,get_address(buf.data()),xfer_plist);
     cuda::copy_n(buf.data(),sz,ref_.origin());
+    return ret;
   }
 
   inline bool write(hid_t grp, const std::string& aname, hid_t xfer_plist=H5P_DEFAULT)
@@ -265,8 +268,9 @@ struct h5data_proxy<boost::multi::array_ref<T,2,cuda::cuda_gpu_ptr<T>>>: public 
     }
     std::size_t sz = ref_.num_elements();
     boost::multi::array<T,1> buf( {sz} );
-    return h5d_read(grp,aname,get_address(buf.data()),xfer_plist);
+    auto ret = h5d_read(grp,aname,get_address(buf.data()),xfer_plist);
     cuda::copy_n(buf.data(),sz,ref_.origin());
+    return ret;
   }
   inline bool write(hid_t grp, const std::string& aname, hid_t xfer_plist=H5P_DEFAULT)
   {

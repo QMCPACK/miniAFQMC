@@ -12,24 +12,19 @@
 //    Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef AFQMC_FILL_N_KERNELS_HPP
-#define AFQMC_FILL_N_KERNELS_HPP
-
-#include<cassert>
-#include<cuda.h>
-#include<cuda_runtime.h>
 #include <complex>
 
-namespace kernels 
+namespace kernels
 {
 
-void fill_n(int * first, int N, int stride, int const value);
-void fill_n(float * first, int N,  int stride, float const value);
-void fill_n(double * first, int N,  int stride, double const value);
-void fill_n(std::complex<float> * first, int N,  int stride, std::complex<float> const value);
-void fill_n(std::complex<double> * first, int N,  int stride, std::complex<double> const value);
+double sum(int n, double const* x, int incx);
+std::complex<double> sum(int n, std::complex<double> const* x, int incx);
+float sum(int n, float const* x, int incx);
+std::complex<float> sum(int n, std::complex<float> const* x, int incx);
 
+double sum(int m, int n, double const* x, int lda);
+std::complex<double> sum(int m, int n, std::complex<double> const* x, int lda);
+float sum(int m, int n, float const* x, int lda);
+std::complex<float> sum(int m, int n, std::complex<float> const* x, int lda);
 
 }
-
-#endif

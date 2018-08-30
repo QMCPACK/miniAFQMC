@@ -12,29 +12,103 @@
 //    Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
 
-#include<cassert>
 #include <complex>
-#include<cuda.h>
 #include <thrust/complex.h>
-#include<cuda_runtime.h>
+#include <thrust/reduce.h>
+#include <thrust/device_ptr.h>
+#include "Kernels/strided_range.hpp"
+#include "Kernels/strided_2Drange.hpp"
 
-namespace kernels 
+namespace kernels
 {
 
-template<typename T>
-__global__ void kernel_sum(int M, int N, T const* A, int lda, T* res) 
+/*
+ * There is a bug in CUDA9.2 when calling reduce with thrust::complex.
+ * Temporary hack until bug is fixed...
+ */
+
+double sum(int n, double const* x, int incx)
 {
-   int i = threadIdx.x + blockDim.x*blockIdx.x;
-   if (i<N) {
-     y[i*incy] += alpha*A[i*lda+i];
-   }
+ thrust::device_ptr<double const> x_(x);
+ strided_range<thrust::device_ptr<double const> > strided(x_, x_+n*incx, incx);
+ return thrust::reduce(strided.begin(),strided.end());
 }
 
-void sum(int M, int N, double const* A, int lda) 
+std::complex<double> sum(int n, std::complex<double> const* x, int incx)
 {
-  kernel_sum<<1,256>>>(M,N,A,lda);
+ thrust::device_ptr<double const> x_(reinterpret_cast<double const*>(x));
+ strided_range<thrust::device_ptr<double const> > Rstrided(x_, x_+2*n*incx, 2*incx);
+ double R = thrust::reduce(Rstrided.begin(),Rstrided.end());
+ strided_range<thrust::device_ptr<double const> > Istrided(x_+1, x_+1+2*n*incx, 2*incx);
+ double I = thrust::reduce(Istrided.begin(),Istrided.end());
+ return std::complex<double>(R,I);
+/*
+ thrust::device_ptr<thrust::complex<double const> > x_(reinterpret_cast<thrust::complex<double const>* >(x));
+ strided_range<thrust::device_ptr<thrust::complex<double const> > > strided(x_, x_+n, incx);
+ return static_cast<std::complex<double> >(thrust::reduce(strided.begin(),strided.end()));
+*/
 }
 
-
+float sum(int n, float const* x, int incx)
+{
+ thrust::device_ptr<float const> x_(x);
+ strided_range<thrust::device_ptr<float const> > strided(x_, x_+n*incx, incx);
+ return thrust::reduce(strided.begin(),strided.end());
 }
 
+std::complex<float> sum(int n, std::complex<float> const* x, int incx)
+{
+ thrust::device_ptr<float const> x_(reinterpret_cast<float const*>(x));
+ strided_range<thrust::device_ptr<float const> > Rstrided(x_, x_+2*n*incx, 2*incx);
+ float R = thrust::reduce(Rstrided.begin(),Rstrided.end());
+ strided_range<thrust::device_ptr<float const> > Istrided(x_+1, x_+1+2*n*incx, 2*incx);
+ float I = thrust::reduce(Istrided.begin(),Istrided.end());
+ return std::complex<float>(R,I);
+/*
+ thrust::device_ptr<thrust::complex<float const> > x_(reinterpret_cast<thrust::complex<float const>*>(x));
+ strided_range<thrust::device_ptr<thrust::complex<float const> > > strided(x_, x_+n, incx);
+ return static_cast<std::complex<float> >(thrust::reduce(strided.begin(),strided.end()));
+*/
+}
+
+double sum(int m, int n, double const* x, int lda)
+{
+ thrust::device_ptr<double const> x_(x);
+ strided_2Drange<thrust::device_ptr<double const> > strided(x_, x_+n*lda, lda, m);
+ return thrust::reduce(strided.begin(),strided.end());
+}
+
+std::complex<double> sum(int m, int n, std::complex<double> const* x, int lda)
+{
+  std::complex<double> res;
+  for(int i=0; i<m; i++) 
+    res += sum(n,x+i,lda);
+  return res;
+/*
+ thrust::device_ptr<thrust::complex<double> const> x_(reinterpret_cast<thrust::complex<double>const*>(x));
+ strided_2Drange<thrust::device_ptr<thrust::complex<double> const> > strided(x_, x_+n*lda, lda, m);
+ return static_cast<std::complex<double> >(thrust::reduce(strided.begin(),strided.end()));
+*/
+}
+
+float sum(int m, int n, float const* x, int lda)
+{
+ thrust::device_ptr<float const> x_(x);
+ strided_2Drange<thrust::device_ptr<float const> > strided(x_, x_+n*lda, lda, m);
+ return thrust::reduce(strided.begin(),strided.end());
+}
+
+std::complex<float> sum(int m, int n, std::complex<float> const* x, int lda)
+{
+  std::complex<float> res;
+  for(int i=0; i<m; i++)
+    res += sum(n,x+i,lda);
+  return res;
+/*
+ thrust::device_ptr<thrust::complex<float> const> x_(reinterpret_cast<thrust::complex<float> const*>(x));
+ strided_2Drange<thrust::device_ptr<thrust::complex<float> const> > strided(x_, x_+n*lda, lda, m);
+ return static_cast<std::complex<float> >(thrust::reduce(strided.begin(),strided.end()));
+*/
+}
+
+}

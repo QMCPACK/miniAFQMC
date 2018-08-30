@@ -129,6 +129,9 @@ ENDIF()
     Kernels/axty.cu
     Kernels/adiagApy.cu
     Kernels/sum.cu
+    Kernels/acAxpbB.cu
+    Kernels/print.cu
+    Kernels/zero_complex_part.cu
     ${GITREV_TMP}
     )
 

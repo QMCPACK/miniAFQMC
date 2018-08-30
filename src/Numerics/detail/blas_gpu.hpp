@@ -23,7 +23,9 @@
 // hand coded kernels for blas extensions
 #include "Kernels/adotpby.cuh"
 #include "Kernels/axty.cuh"
+#include "Kernels/sum.cuh"
 #include "Kernels/adiagApy.cuh"
+#include "Kernels/acAxpbB.cuh"
 
 // Currently available:
 // Lvl-1: dot, axpy, scal
@@ -334,7 +336,7 @@ namespace BLAS_GPU
   template<class T,
            class ptrA,
            class ptrB,
-           typename = typename std::enable_if_t< (ptrA::memory_type == CPU_OUTOFCARS_POINTER_TYPE) or
+           typename = typename std::enable_if_t< (ptrA::memory_type == CPU_OUTOFCARS_POINTER_TYPE) and 
                                                  (ptrB::memory_type == CPU_OUTOFCARS_POINTER_TYPE) 
                                                >,
            typename = void
@@ -346,6 +348,47 @@ namespace BLAS_GPU
   {
     using BLAS_CPU::axty;
     axty(n,alpha,to_address(x),incx,to_address(y),incy);
+  }
+
+  // acAxpbB
+  template<class T,
+           class ptrA,
+           class ptrx,
+           class ptrB,
+           typename = typename std::enable_if_t< (ptrA::memory_type != CPU_OUTOFCARS_POINTER_TYPE) and
+                                                 (ptrx::memory_type != CPU_OUTOFCARS_POINTER_TYPE) and
+                                                 (ptrB::memory_type != CPU_OUTOFCARS_POINTER_TYPE) 
+                                               >
+          >
+  inline static void acAxpbB(int m, int n,
+                             T const alpha,
+                             ptrA const A, int lda,
+                             ptrx const x, int incx,
+                             T const beta,
+                             ptrB B, int ldb)
+  {
+    kernels::acAxpbB(m,n,alpha,to_address(A),lda,to_address(x),incx,beta,to_address(B),ldb);
+  }
+
+  template<class T,
+           class ptrA,
+           class ptrx,
+           class ptrB,
+           typename = typename std::enable_if_t< (ptrA::memory_type == CPU_OUTOFCARS_POINTER_TYPE) and
+                                                 (ptrx::memory_type == CPU_OUTOFCARS_POINTER_TYPE) and 
+                                                 (ptrB::memory_type == CPU_OUTOFCARS_POINTER_TYPE) 
+                                               >,
+           typename = void
+          >
+  inline static void acAxpbB(int m, int n,
+                             T const alpha,
+                             ptrA const A, int lda,
+                             ptrx const x, int incx,
+                             T const beta,
+                             ptrB B, int ldb)
+  {
+    using BLAS_CPU::acAxpbB;
+    acAxpbB(m,n,alpha,to_address(A),lda,to_address(x),incx,beta,to_address(B),ldb);
   }
 
   // adiagApy
@@ -386,7 +429,7 @@ namespace BLAS_GPU
           >
   inline static auto sum(int n, ptr const x, int incx) 
   {
-    kernels::sum(n,to_address(x),incx);
+    return kernels::sum(n,to_address(x),incx);
   }
 
   template<class ptr,
@@ -394,25 +437,66 @@ namespace BLAS_GPU
           >
   inline static auto sum(int m, int n, ptr const A, int lda)
   {
-    kernels::sum(m,n,to_address(A),lda);
+    return kernels::sum(m,n,to_address(A),lda);
   }
 
   template<class ptr,
-           typename = typename std::enable_if_t<(ptr::memory_type == CPU_OUTOFCARS_POINTER_TYPE)>
+           typename = typename std::enable_if_t<(ptr::memory_type == CPU_OUTOFCARS_POINTER_TYPE)>,
+           typename = void 
           >
   inline static auto sum(int n, ptr const x, int incx)
   {
     using BLAS_CPU::sum;
-    sum(n,to_address(x),incx);
+    return sum(n,to_address(x),incx);
   }
 
   template<class ptr,
-           typename = typename std::enable_if_t<(ptr::memory_type == CPU_OUTOFCARS_POINTER_TYPE)>
+           typename = typename std::enable_if_t<(ptr::memory_type == CPU_OUTOFCARS_POINTER_TYPE)>,
+           typename = void 
           >
   inline static auto sum(int m, int n, ptr const A, int lda)
   {
     using BLAS_CPU::sum;
-    sum(m,n,to_address(A),lda);
+    return sum(m,n,to_address(A),lda);
+  }
+
+  template<class T,
+           class ptrA,
+           class ptrB,
+           class ptrC,
+           typename = typename std::enable_if_t<(ptrA::memory_type != CPU_OUTOFCARS_POINTER_TYPE)
+                                            and (ptrB::memory_type != CPU_OUTOFCARS_POINTER_TYPE)
+                                            and (ptrC::memory_type != CPU_OUTOFCARS_POINTER_TYPE)>
+          >
+  inline static void gemmStridedBatched(char Atrans, char Btrans, int M, int N, int K,
+                          T const alpha, ptrA const A, int lda, int strideA,
+                          ptrB const B, int ldb, int strideB, T beta,
+                          ptrC C, int ldc, int strideC, int batchSize)
+  {
+    cublas::cublas_gemmStridedBatched(*A.handles.cublas_handle,Atrans,Btrans,M,N,K,
+               alpha,to_address(A),lda,strideA,to_address(B),ldb,strideB,
+               beta,to_address(C),ldc,strideC,batchSize);
+  }
+
+  template<class T,
+           class ptrA,
+           class ptrB,
+           class ptrC,
+           typename = typename std::enable_if_t<(ptrA::memory_type == CPU_OUTOFCARS_POINTER_TYPE)
+                                            and (ptrB::memory_type == CPU_OUTOFCARS_POINTER_TYPE)
+                                            and (ptrC::memory_type == CPU_OUTOFCARS_POINTER_TYPE)
+                                               >,
+           typename = void
+          >
+  inline static void gemmStridedBatched(char Atrans, char Btrans, int M, int N, int K,
+                          T const alpha, ptrA const A, int lda, int strideA,
+                          ptrB const B, int ldb, int strideB, T beta,
+                          ptrC C, int ldc, int strideC, int batchSize)
+  {
+    using BLAS_CPU::gemmStridedBatched;
+    gemmStridedBatched(Atrans,Btrans,M,N,K,
+               alpha,to_address(A),lda,strideA,to_address(B),ldb,strideB,
+               beta,to_address(C),ldc,strideC,batchSize);
   }
 
 }

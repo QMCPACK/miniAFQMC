@@ -38,7 +38,7 @@ template< class MatA,
           class MatB,
           class MatC
         >
-inline void apply_expM( const MatA& V, MatB&& S, MatC&& T1, MatC&& T2, int order=6)
+inline void apply_expM( const MatA& V, MatB&& S, MatC & T1, MatC & T2, int order=6)
 { 
   assert( V.shape()[0] == V.shape()[1] );
   assert( V.shape()[1] == S.shape()[0] );
@@ -50,20 +50,14 @@ inline void apply_expM( const MatA& V, MatB&& S, MatC&& T1, MatC&& T2, int order
   using ComplexType = typename std::decay<MatB>::type::element; 
   ComplexType zero(0.);
   ComplexType one(1.);
-  MatC& rT1 = T1;
-  MatC& rT2 = T2;
+  MatC* rT1 = &T1;
+  MatC* rT2 = &T2;
 
-  T1 = S;
+  cuda::copy_n(S.origin(),S.num_elements(),T1.origin());
   for(int n=1; n<=order; n++) {
     ComplexType fact = ComplexType(0.0,1.0)*static_cast<ComplexType>(1.0/static_cast<double>(n));
-    ma::product(fact,V,rT1,zero,rT2);
-    // S += (*pT2); 
-    ma::axpy(one,rT2,S);
-/*
-    for(int i=0, ie=S.shape()[0]; i<ie; i++)
-     for(int j=0, je=S.shape()[1]; j<je; j++)
-      S[i][j] += rT2[i][j];
-*/
+    ma::product(fact,V,*rT1,zero,*rT2);
+    ma::axpy(one,*rT2,S);
     std::swap(rT1,rT2);
   }
 

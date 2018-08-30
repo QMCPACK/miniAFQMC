@@ -112,7 +112,7 @@ public:
 	}
 	void reextent(extensions_type const& e){
 		array tmp(e, allocator_);
-		tmp.intersection_assign_(*this);
+//		tmp.intersection_assign_(*this);
 		swap(tmp);
 	}
 	friend void reextent(array& self, extensions_type const& e){self.reextent(e);}

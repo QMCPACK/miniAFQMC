@@ -97,15 +97,15 @@ struct afqmc_sys: public AFQMCInfo
       assert(G.shape()[0] == nwalk);
       assert(G.shape()[1] >= 2*NAEA*NMO);
       assert(W_data.shape()[0] >= nwalk);
-      assert(W_data.shape()[1] >= 4);
+      assert(W_data.shape()[1] >= 5);
       int N_ = compact?NAEA:NMO;
       boost::multi::array_ref<ComplexType,4,pointer> G_4D(G.origin(), {nwalk,2,N_,NMO}); 
       for(int n=0; n<nwalk; n++) {
         base::MixedDensityMatrix<ComplexType>(trialwfn_alpha,W[n][0],
-                       G_4D[n][0],TMat_NN,TMat_NM,IWORK,WORK,&W_data[n][2],compact);
+                       G_4D[n][0],TMat_NN,TMat_NM,IWORK,WORK,&W_data[n][3],compact);
 
         base::MixedDensityMatrix<ComplexType>(trialwfn_beta,W[n][1],
-                       G_4D[n][1],TMat_NN,TMat_NM,IWORK,WORK,&W_data[n][3],compact);
+                       G_4D[n][1],TMat_NN,TMat_NM,IWORK,WORK,&W_data[n][4],compact);
       }
     }
 
@@ -113,10 +113,10 @@ struct afqmc_sys: public AFQMCInfo
     void calculate_overlaps(const WSet& W, Mat& W_data)
     {
       assert(W_data.shape()[0] >= W.shape()[0]);
-      assert(W_data.shape()[1] >= 4);
+      assert(W_data.shape()[1] >= 5);
       for(int n=0, nw=W.shape()[0]; n<nw; n++) {
-        base::Overlap<ComplexType>(trialwfn_alpha,W[n][0],TMat_NN,IWORK,&W_data[n][2]);
-        base::Overlap<ComplexType>(trialwfn_beta,W[n][1],TMat_NN,IWORK,&W_data[n][3]);
+        base::Overlap<ComplexType>(trialwfn_alpha,W[n][0],TMat_NN,IWORK,&W_data[n][3]);
+        base::Overlap<ComplexType>(trialwfn_beta,W[n][1],TMat_NN,IWORK,&W_data[n][4]);
       }
     }
 

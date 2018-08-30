@@ -30,6 +30,15 @@ __global__ void kernel_adiagApy(int N, T const alpha, T const* A, int lda, T* y,
    }
 }
 
+template<typename T>
+__global__ void kernel_adiagApy(int N, thrust::complex<T> const alpha, thrust::complex<T> const* A, int lda, thrust::complex<T>* y, int incy)
+{
+   int i = threadIdx.x + blockDim.x*blockIdx.x;
+   if (i<N) {
+     y[i*incy] += alpha*A[i*lda+i];
+   }
+}
+
 void adiagApy(int N, double const alpha, double const* A, int lda, double *y, int incy) 
 {
   int block_dim = 256;

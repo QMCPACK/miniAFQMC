@@ -24,6 +24,8 @@
 #include "Numerics/ma_blas.hpp"
 #include "Utilities/type_conversion.hpp"
 
+#include "Numerics/detail/cuda_pointers.hpp"
+
 namespace qmcplusplus
 {
 
@@ -164,14 +166,13 @@ class THCOps
       boost::multi::array_ref<ComplexType,2,pointer> Rbk(TMats.data()+cnt,{NAEA,NMO});
       boost::multi::array_ref<ComplexType,1,pointer> R1D(Rbk.origin(),{Rbk.num_elements()});
 
-      ComplexType Eav(0);  
-      cuda::fill_n(E.origin(),E.num_elements(),ComplexType(0.0));  
+      cuda::fill_n(E.origin(),E.num_elements(),1,ComplexType(0.0));  
+//      cuda::fill_n(E.origin(),E.shape()[0],E.strides()[0],ComplexType(E0));  
       if(addH1) { 
         boost::multi::array_ref<ComplexType,1,pointer> haj1D(haj.origin(),{haj.num_elements()});
         ma::product(ComplexType(1.0),G,haj1D,ComplexType(0.0),E( E.extension(0), 0));
 //        for(int i=0; i<nwalk; i++) {
 //          E[i][0] += E0;
-//          Eav+=E[i][0];
 //        }
       }
 
@@ -195,14 +196,13 @@ class THCOps
           ma::product(T(Qub),T(rotPiu),Rbk);
           //E[wi][1] = -0.5*ma::dot(R1D,G1D);
           ma::adotpby(ComplexType(-0.5),R1D,G1D,ComplexType(0.0),E[wi].origin()+1);
-//          Eav += (E[wi][1]+E[wi][2]);
         }
       } else {
         for(int wi=0; wi<nwalk; wi++) {
           { // Alpha
             boost::multi::array_cref<ComplexType,2,const_pointer> Gw(G[wi].origin(),{NAEA,nmo_});
             boost::multi::array_cref<ComplexType,1,const_pointer> G1DA(Gw.origin(),{Gw.num_elements()});
-            cuda::fill_n(Guu.origin(),Guu.num_elements(),SpC(0.0));
+            cuda::fill_n(Guu.origin(),Guu.num_elements(),1,SpC(0.0));
             Guv_Guu(Gw,Guv,Guu,T1,false);
 /*
             auto Mptr = rotMuv.origin();
@@ -237,12 +237,11 @@ class THCOps
             //E[wi][1] -= 0.5*ma::dot(R1D,G1DB);
             ma::adotpby(ComplexType(-0.5),R1D,G1DB,ComplexType(1.0),E[wi].origin()+1);
           }
-//          Eav += (E[wi][1]+E[wi][2]);
         }
       }    
-      Eav = ma::sum(E(E.extension(0),{0,3}));
+      ComplexType Eav = ma::sum(E(E.extension(0),{0,3}));
       using std::real;
-      return real(Eav)/nwalk;
+      return real(Eav)/nwalk+real(E0);
     }
 
     template<class MatA, class MatB,
@@ -293,11 +292,16 @@ class THCOps
         // Qiu[i][u] = T[u][wi] * conj(Piu[i][u])
         // v[wi][ik] = sum_u Qiu[i][u] * Piu[k][u]
         // O[nmo * nmu]
+
+        // z[i][j] = x[j] * y[i][j]
+/*
         for(int i=0; i<nmo_; i++) {
           auto p_ = Piu[i].origin();  
           for(int u=0; u<nu; u++, ++p_)
             Qiu[i][u] = Tuw[u][wi]*conj(*p_);
         }
+*/
+        ma::acAxpbB(ComplexType(1.0),Piu,Tuw(Tuw.extension(0),wi),ComplexType(0.0),Qiu);
         boost::multi::array_ref<ComplexType,2,pointer> v_(v[wi].origin(),{nmo_,nmo_});
         // this can benefit significantly from 2-D partition of work
         // O[nmo * nmo * nmu]
@@ -369,20 +373,38 @@ class THCOps
       using ma::transposed;
       ComplexType a = (walker_type==CLOSED)?ComplexType(2.0):ComplexType(1.0);
       ComplexType zero(0.0);
+      boost::multi::array_ref<ComplexType,3,pointer> cPua3D(cPua.origin(),{cPua.shape()[0],1,cPua.shape()[1]});
+      boost::multi::array_ref<ComplexType,3,pointer> T13D(T1.origin(),{T1.shape()[0],T1.shape()[1],1});
       for(int iw=0; iw<nw; ++iw) {
         boost::multi::array_cref<ComplexType,2,const_pointer> Giw(G[iw].origin(),{nel_,nmo_});
         // transposing inetermediary to make dot products faster in the next step
         ma::product(transposed(Piu),transposed(Giw),T1);
+/*
         for(int u=0; u<nu; ++u)
           Guu[u][iw] = a*ma::dot(cPua[u],T1[u]);               
-/* can be rewritten as, which will have a small effect on CPUs and will avoid multiple launches in GPU
-        ma::product(a,transposed(Piu),transposed(Giw),zero,T1);
-        gemmStridedBatched('N','N',1,1,nel_,to_address(cPua.origin()),1,nel_,
-                                            to_address(T1.origin()),nel_,nel_,
-                                            to_address(Guu.origin()),1,Guu.strides()[0],nu);
-        // or implement a general gemmStridedBatched expecting 3D objects and create them on the fly
-        gemmStridedBatched(cPua3D,T13D,Guu3D);
 */
+/*
+        for(int u=0; u<nu; ++u)
+          ma::adotpby(a,cPua[u],T1[u],ComplexType(0.0),Guu.origin()+u*Guu.strides()[0]+iw);
+*/
+// something wrong here!!!
+        boost::multi::array_ref<ComplexType,3,pointer> Guu3D(Guu.origin()+iw,{Guu.shape()[0],1,1});
+        
+        using BLAS_CPU::gemmStridedBatched;
+        using BLAS_GPU::gemmStridedBatched;
+        using detail::to_address;
+        gemmStridedBatched(
+                'N', 'N',
+                1, 1, cPua.shape()[1],
+                a,
+                cPua.origin(),1,cPua.shape()[1],
+                T1.origin(),T1.shape()[1],T1.shape()[1],
+                zero,
+                Guu.origin()+iw,1,Guu.strides()[0],
+                cPua.shape()[0] 
+        );
+// productStridedBatched doesn't work because it expects contiguous arrays, need a version that takes the strides explicitly
+//        ma::productStridedBatched(a,cPua3D,T13D,zero,Guu3D);
       }
     }  
 
