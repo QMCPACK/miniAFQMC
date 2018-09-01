@@ -88,6 +88,9 @@ namespace qmcplusplus
   using ComplexMatrix =  boost::multi::array<ComplexType,2,Alloc>;
   template< class Alloc = std::allocator<SPComplexType> >
   using SPComplexMatrix =  boost::multi::array<SPComplexType,2,Alloc>;
+
+  template<std::ptrdiff_t D, class Alloc = std::allocator<ComplexType> >
+  using ComplexArray =  boost::multi::array<ComplexType,D,Alloc>;
 /*
 namespace detail {
   inline static int* get(int* ptr) { return ptr; }

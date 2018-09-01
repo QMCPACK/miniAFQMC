@@ -858,6 +858,23 @@ namespace BLAS_CPU
 #endif
   }
 
+  template<typename T>
+  inline static void gemmBatched(char Atrans, char Btrans, int M, int N, int K,
+                          T alpha, T const** A, int lda, 
+                          T const** B, int ldb, T beta,
+                          T ** C, int ldc, int batchSize)
+  {
+#ifdef HAVE_MKL
+    gemm_batch(CblasColMajor,&Atrans,&Btrans,&M,&N,&K,
+               &alpha,A,&lda,B,&ldb,
+               &beta,C,&ldc,1,&batchSize);
+#else
+    // No batched gemm, :-( gemm loop
+    for(int i=0; i<batchSize; i++)
+        gemm(Atrans,Btrans,M,N,K,alpha,A[i],lda,B[i],ldb,beta,C[i],ldc);
+#endif
+  }
+
 }
 
 #endif

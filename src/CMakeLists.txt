@@ -131,7 +131,9 @@ ENDIF()
     Kernels/sum.cu
     Kernels/acAxpbB.cu
     Kernels/print.cu
+    Kernels/setIdentity.cu
     Kernels/zero_complex_part.cu
+    Kernels/batchedDot.cu
     ${GITREV_TMP}
     )
 

@@ -309,7 +309,7 @@ T invert(MultiArray2D&& m, MultiArray1D&& pivot, Buffer&& WORK){
 	assert(m.shape()[0] == m.shape()[1]);
 	assert(pivot.size() >= m.shape()[0]+1);
 
-	getrf(std::forward<MultiArray2D>(m), pivot);
+	getrf(std::forward<MultiArray2D>(m), pivot, WORK);
 	T detvalue = determinant_from_getrf<T>(m.shape()[0], m.origin(), m.strides()[0], pivot.origin());
 	getri(std::forward<MultiArray2D>(m), pivot, WORK);
 	return detvalue;
@@ -320,7 +320,7 @@ void invert(MultiArray2D&& m, MultiArray1D&& pivot, Buffer&& WORK, T* detvalue){
         assert(m.shape()[0] == m.shape()[1]);
         assert(pivot.size() >= m.shape()[0]+1);
 
-        getrf(std::forward<MultiArray2D>(m), pivot);
+        getrf(std::forward<MultiArray2D>(m), pivot, WORK);
         determinant_from_getrf<T>(m.shape()[0], m.origin(), m.strides()[0], pivot.origin(), detvalue);
         getri(std::forward<MultiArray2D>(m), pivot, WORK);
 }
@@ -343,21 +343,21 @@ static_assert(0,"finish implementation");
 }
 */
 
-template<class MultiArray2D, class MultiArray1D, class T = typename std::decay<MultiArray2D>::type::element>
-T determinant(MultiArray2D&& m, MultiArray1D&& pivot){
+template<class MultiArray2D, class MultiArray1D, class Buffer, class T = typename std::decay<MultiArray2D>::type::element>
+T determinant(MultiArray2D&& m, MultiArray1D&& pivot, Buffer&& WORK){
 	assert(m.shape()[0] == m.shape()[1]);
 	assert(pivot.size() >= m.shape()[0]);
         
-	getrf(std::forward<MultiArray2D>(m), std::forward<MultiArray1D>(pivot));
+	getrf(std::forward<MultiArray2D>(m), std::forward<MultiArray1D>(pivot), WORK);
 	return determinant_from_getrf<T>(m.shape()[0], m.origin(), m.strides()[0], pivot.origin());
 }
 
-template<class MultiArray2D, class MultiArray1D, class T = typename std::decay<MultiArray2D>::type::element>
-void determinant(MultiArray2D&& m, MultiArray1D&& pivot, T* detvalue){
+template<class MultiArray2D, class MultiArray1D, class Buffer, class T = typename std::decay<MultiArray2D>::type::element>
+void determinant(MultiArray2D&& m, MultiArray1D&& pivot, Buffer&& WORK, T* detvalue){
         assert(m.shape()[0] == m.shape()[1]);
         assert(pivot.size() >= m.shape()[0]);
 
-        getrf(std::forward<MultiArray2D>(m), std::forward<MultiArray1D>(pivot));
+        getrf(std::forward<MultiArray2D>(m), std::forward<MultiArray1D>(pivot), WORK);
         determinant_from_getrf<T>(m.shape()[0], m.origin(), m.strides()[0], pivot.origin(), detvalue);
 }
 

@@ -18,14 +18,11 @@
 #include<cassert>
 #include "Utilities/type_conversion.hpp"
 #include "Numerics/detail/raw_pointers.hpp"
-#ifdef HAVE_MAGMA
-#include "Numerics/detail/magma_wrapper.hpp"
-#else
 #include "Numerics/detail/lapack_cpu.hpp"
-#endif
 #include "Numerics/detail/cuda_pointers.hpp"
 #include "Numerics/detail/cublas_wrapper.hpp"
-//#include "Numerics/detail/cusolve_wrapper.hpp"
+#include "Numerics/detail/cusolver_wrapper.hpp"
+#include "Kernels/setIdentity.cuh"
 
 namespace LAPACK_GPU
 {
@@ -48,15 +45,9 @@ namespace LAPACK_GPU
                          ptrR RWORK, int &LRWORK, 
                          ptrI IWORK, int &LIWORK, int& INFO)
   {
-#ifdef HAVE_MAGMA
-    using MAGMA::hevr;
-    hevr (JOBZ,RANGE,UPLO,N,to_address(A),LDA,VL,VU,IL,IU,ABSTOL,M,to_address(W),to_address(Z),LDZ,to_address(ISUPPZ),
-           to_address(WORK),LWORK,to_address(RWORK),LRWORK,to_address(IWORK),LIWORK,INFO);
-#else
     using LAPACK_CPU::hevr;
     hevr (JOBZ,RANGE,UPLO,N,to_address(A),LDA,VL,VU,IL,IU,ABSTOL,M,to_address(W),to_address(Z),LDZ,to_address(ISUPPZ),
            to_address(WORK),LWORK,to_address(RWORK),LRWORK,to_address(IWORK),LIWORK,INFO);
-#endif
   }
 
   template<typename T,
@@ -76,68 +67,127 @@ namespace LAPACK_GPU
                          ptrR RWORK, int &LRWORK,               
                          ptrI IWORK, int &LIWORK, int& INFO)
   {
-#ifdef HAVE_MAGMA
-    using MAGMA::hevr_gpu;
-    hevr_gpu (JOBZ,RANGE,UPLO,N,to_address(A),LDA,VL,VU,IL,IU,ABSTOL,M,to_address(W),to_address(Z),LDZ,to_address(ISUPPZ),
-           to_address(WORK),LWORK,to_address(RWORK),LRWORK,to_address(IWORK),LIWORK,INFO);
-#else
     throw std::runtime_error("Error: hevr not implemented in gpu."); 
-#endif
+  }
+
+  // getrf_bufferSize
+  template<class ptr,
+           typename = typename std::enable_if_t< (ptr::memory_type != GPU_MEMORY_POINTER_TYPE) > 
+          >
+  inline static void getrf_bufferSize (const int n, const int m, ptr a, int lda, int* lwork) 
+  {
+    using LAPACK_CPU::getrf_bufferSize;
+    getrf_bufferSize(n, m, to_address(a), lda, lwork);
+  }
+
+  template<class ptr,
+           typename = typename std::enable_if_t< (ptr::memory_type == GPU_MEMORY_POINTER_TYPE) >,
+           typename = void 
+          >
+  inline static void getrf_bufferSize (const int n, const int m, ptr a, int lda, int* lwork)
+  {
+    cusolver::cusolver_getrf_bufferSize(*a.handles.cusolverDn_handle,n, m, to_address(a), lda, lwork);
   }
 
   // getrf
   template<class ptr,
+           class ptrW,  
            class ptrI,
            typename = typename std::enable_if_t< (ptr::memory_type != GPU_MEMORY_POINTER_TYPE) or
                                                  (ptrI::memory_type != GPU_MEMORY_POINTER_TYPE)
-                                               >
+            >
           >
-  inline static void getrf (const int n, const int m, ptr a, const int n0, ptrI piv, int &st) 
+  inline static void getrf (const int n, const int m, ptr const a, int lda, ptrI piv, int &st, ptrW work) 
   {
-#ifdef HAVE_MAGMA
-    using MAGMA::getrf;
-    getrf(n, m, to_address(a), n0, to_address(piv), st);
-#else
     using LAPACK_CPU::getrf;
-    getrf(n, m, to_address(a), n0, to_address(piv), st);
-#endif
+    getrf(n, m, to_address(a), lda, to_address(piv), st);
   }
 
   template<class ptr,
+           class ptrW,
            class ptrI,
            typename = typename std::enable_if_t< (ptr::memory_type == GPU_MEMORY_POINTER_TYPE) and
                                                  (ptrI::memory_type == GPU_MEMORY_POINTER_TYPE)
                                                >,
            typename = void 
           >
-  inline static void getrf (const int n, const int m, ptr a, const int n0, ptrI piv, int &st) 
+  inline static void getrf (const int n, const int m, ptr && a, int lda, ptrI && piv, int &st, ptrW work) 
   {
-#ifdef HAVE_MAGMA
-    using MAGMA::getrf_gpu;
-    getrf_gpu(n, m, to_address(a), n0, to_address(piv), st);
-#else
-    if(n!=m)
-      throw std::runtime_error("Error: LAPACK_GPU::getrf only implemented for squared matrices.\n"); 
-    std::vector<typename ptr::value_type> buff(n*n);
-    std::vector<int> Ibuff(n+1);
-    cudaMemcpy(buff.data(),to_address(a),sizeof(typename ptr::value_type)*n*n,cudaMemcpyDeviceToHost);
-    cudaMemcpy(Ibuff.data(),to_address(piv),sizeof(int)*(n+1),cudaMemcpyDeviceToHost);
-    using LAPACK_CPU::getrf;
-    getrf(n, n, buff.data(), n0, Ibuff.data(), st);
-    cudaMemcpy(to_address(a),buff.data(),sizeof(typename ptr::value_type)*n*n,cudaMemcpyHostToDevice);
-    cudaMemcpy(to_address(piv),Ibuff.data(),sizeof(int)*(n+1),cudaMemcpyHostToDevice);
-/*
-    if(n!=m)
-      throw std::runtime_error("Error: LAPACK_GPU::getrf only implemented for squared matrices.\n"); 
-    auto a_(to_address(a));
-std::cout<<" getrf n: " <<n <<std::endl;
-    if(CUBLAS_STATUS_SUCCESS != cublas::cublas_getrfBatched(*a.handles.cublas_handle, n,
-                                       &a_, n0, to_address(piv), to_address(piv)+n, 1))
+    cusolverStatus_t status = cusolver::cusolver_getrf(*a.handles.cusolverDn_handle, n, m,
+                                       to_address(a), lda, to_address(work), to_address(piv), to_address(piv)+n);
+    if(CUSOLVER_STATUS_SUCCESS != status) { 
+      int st;
+      cudaMemcpy(&st,to_address(piv)+n,sizeof(int),cudaMemcpyDeviceToHost);
+      std::cerr<<" cublas_getrf status, info: " <<status <<" " <<st <<std::endl; std::cerr.flush();
       throw std::runtime_error("Error: cublas_getrf returned error code."); 
+    }
     cudaMemcpy(&st,to_address(piv)+n,sizeof(int),cudaMemcpyDeviceToHost);
-std::cout<<" getrf status: " <<st <<std::endl;
-*/
-#endif
+
+  }
+
+  // getrfBatched
+  template<class ptr,
+           class ptrI,
+           typename = typename std::enable_if_t< (ptr::memory_type != GPU_MEMORY_POINTER_TYPE) and 
+                                                 (ptrI::memory_type != GPU_MEMORY_POINTER_TYPE)
+            >
+          >
+  inline static void getrfBatched (const int n, ptr * a, int lda, ptrI piv, ptrI info, int batchSize)
+  {
+    using Q = typename ptr::value_type;
+    Q **A_h;
+    A_h = new Q*[batchSize];
+    for(int i=0; i<batchSize; i++)
+      A_h[i] = to_address(a[i]);
+    using LAPACK_CPU::getrfBatched;
+    getrfBatched(n, A_h, lda, to_address(piv), to_address(info), batchSize);
+    delete [] A_h;
+  }
+
+  template<class ptr,
+           class ptrI,
+           typename = typename std::enable_if_t< (ptr::memory_type == GPU_MEMORY_POINTER_TYPE) and
+                                                 (ptrI::memory_type == GPU_MEMORY_POINTER_TYPE) >,
+           typename = void 
+          >
+  inline static void getrfBatched (const int n, ptr * a, int lda, ptrI piv, ptrI info, int batchSize)
+  {
+    using Q = typename ptr::value_type;
+    Q **A_d;
+    Q **A_h;
+    A_h = new Q*[batchSize];
+    for(int i=0; i<batchSize; i++) 
+      A_h[i] = to_address(a[i]);
+    cudaMalloc((void **)&A_d,  batchSize*sizeof(*A_h));
+    cudaMemcpy(A_d, A_h, batchSize*sizeof(*A_h), cudaMemcpyHostToDevice);
+    cublasStatus_t status = cublas::cublas_getrfBatched(*(a[0]).handles.cublas_handle, n, A_d, lda, 
+                                                        to_address(piv), to_address(info), batchSize); 
+    if(CUBLAS_STATUS_SUCCESS != status) 
+      throw std::runtime_error("Error: cublas_getrf returned error code.");
+    cudaFree(A_d);
+    delete [] A_h;
+  }
+
+  // getri_bufferSize
+  template<class ptr,
+           typename = typename std::enable_if_t< (ptr::memory_type != GPU_MEMORY_POINTER_TYPE)
+                                                >
+          >
+  inline static void getri_bufferSize (int n, ptr a, int lda, int* lwork)
+  {
+    using LAPACK_CPU::getri_bufferSize;
+    getri_bufferSize(n, to_address(a), lda, *lwork);
+  }
+
+  template<class ptr,
+           typename = typename std::enable_if_t< (ptr::memory_type == GPU_MEMORY_POINTER_TYPE)
+                                                >,
+           typename = void
+          >
+  inline static void getri_bufferSize (int n, ptr a, int lda, int* lwork)
+  {
+    // gpu uses getrs to invert matrix, which requires n*n workspace 
+    *lwork = n*n;
   }
 
   // getri: will fail if not called correctly, but removing checks on ptrI and ptrW for now
@@ -148,15 +198,8 @@ std::cout<<" getrf status: " <<st <<std::endl;
           >
   inline static void getri(int n, ptr a, int n0, ptrI piv, ptrW work, int& n1, int& status)
   {
-#ifdef HAVE_MAGMA
-    using MAGMA::getri;
-    using detail::to_address;
-    getri(n, to_address(a), n0, to_address(piv), to_address(work), n1, status);
-#else
     using LAPACK_CPU::getri;
-    using detail::to_address;
     getri(n, to_address(a), n0, to_address(piv), to_address(work), n1, status);
-#endif
   }
 
   // write separate query function to avoid hack!!!
@@ -166,19 +209,18 @@ std::cout<<" getrf status: " <<st <<std::endl;
            typename = typename std::enable_if_t< (ptr::memory_type == GPU_MEMORY_POINTER_TYPE)>,
            typename = void
           >
-  inline static void getri(int n, ptr a, int n0, ptrI piv, ptrW work, int& n1, int& status)
+  inline static void getri(int n, ptr a, int lda, ptrI piv, ptrW work, int& n1, int& status)
   {
-#ifdef HAVE_MAGMA
-    using MAGMA::getri_gpu;
-    getri_gpu(n, to_address(a), n0, to_address(piv), to_address(work), n1, status);
-#else
     if(n1==-1) {
       n1 = n*n;  
       status=0;  
       return;
     }
     if(n1 < n*n)
-      throw std::runtime_error("Error: cublas_getri required buffer space of n*n."); 
+      throw std::runtime_error("Error: getri<GPU_MEMORY_POINTER_TYPE> required buffer space of n*n."); 
+    if(lda != n)
+      throw std::runtime_error("Error: getri<GPU_MEMORY_POINTER_TYPE> required lda = 1."); 
+/*
     using detail::to_address;
     std::vector<typename ptr::value_type> buff(n*n);
     std::vector<typename ptr::value_type> w_(n*n);
@@ -186,21 +228,77 @@ std::cout<<" getrf status: " <<st <<std::endl;
     cudaMemcpy(buff.data(),to_address(a),sizeof(typename ptr::value_type)*n*n,cudaMemcpyDeviceToHost);
     cudaMemcpy(Ibuff.data(),to_address(piv),sizeof(int)*(n+1),cudaMemcpyDeviceToHost);
     using LAPACK_CPU::getri;
-    getri(n, buff.data(), n0, Ibuff.data(), w_.data(), n1, status);
+    getri(n, buff.data(), lda, Ibuff.data(), w_.data(), n1, status);
     cudaMemcpy(to_address(a),buff.data(),sizeof(typename ptr::value_type)*n*n,cudaMemcpyHostToDevice);
-/**
-    if(n0!=n) 
-      throw std::runtime_error("Error: cublas_getri currently requires lda==n"); 
-    auto a_(to_address(a));
-    using detail::to_address;
-    auto w_(to_address(work));
-    if(CUBLAS_STATUS_SUCCESS != cublas::cublas_getriBatched(*a.handles.cublas_handle, n,
-                   &a_, n0, to_address(piv), &w_, n, to_address(piv)+n, 1))
-      throw std::runtime_error("Error: cublas_getri returned error code."); 
-    cudaMemcpy(to_address(a),to_address(work),n*n,cudaMemcpyDeviceToDevice);
-    cudaMemcpy(&status,to_address(piv)+n,sizeof(int),cudaMemcpyDeviceToHost);
 */
-#endif
+
+    kernels::setIdentity(n,to_address(work),n);
+    if(CUSOLVER_STATUS_SUCCESS != cusolver::cusolver_getrs(*a.handles.cusolverDn_handle, CUBLAS_OP_N, n, n,
+                   to_address(a), lda, to_address(piv), to_address(work), n, to_address(piv)+n))    
+      throw std::runtime_error("Error: cusolver_getrs returned error code."); 
+    cudaMemcpy(to_address(a),to_address(work),n*n*sizeof(typename ptr::value_type),cudaMemcpyDeviceToDevice);
+    cudaMemcpy(&status,to_address(piv)+n,sizeof(int),cudaMemcpyDeviceToHost);
+
+  }
+
+  // getriBatched
+  template<class ptr,
+           class ptrI,
+           typename = typename std::enable_if_t< (ptr::memory_type != GPU_MEMORY_POINTER_TYPE) and
+                                                 (ptrI::memory_type != GPU_MEMORY_POINTER_TYPE)
+            >
+          >
+  inline static void getriBatched (int n, ptr * a, int lda, ptrI piv, ptr * c, int lwork, ptrI info, int batchSize)
+  {
+    using Q = typename ptr::value_type;
+    Q **A_h, **C_h;
+    A_h = new Q*[batchSize];
+    C_h = new Q*[batchSize];
+    for(int i=0; i<batchSize; i++) {
+      A_h[i] = to_address(a[i]);
+      C_h[i] = to_address(c[i]);
+    }
+    using LAPACK_CPU::getriBatched;
+    getriBatched(n, to_address(a), lda, to_address(piv), C_h, lwork, to_address(info), batchSize);
+    delete [] A_h;
+    delete [] C_h;
+  }
+
+  template<class ptr,
+           class ptrI,
+           typename = typename std::enable_if_t< (ptr::memory_type == GPU_MEMORY_POINTER_TYPE) and
+                                                 (ptrI::memory_type == GPU_MEMORY_POINTER_TYPE)
+            >,
+           typename = void 
+          >
+  inline static void getriBatched (int n, ptr * a, int lda, ptrI piv, ptr * c, int lwork, ptrI info, int batchSize)
+  {
+    assert(lda == n);
+    assert(lwork >= n*n);
+    using Q = typename ptr::value_type;
+    Q **A_d, **C_d;
+    Q **A_h, **C_h;
+    A_h = new Q*[batchSize];
+    C_h = new Q*[batchSize];
+    for(int i=0; i<batchSize; i++) {
+      A_h[i] = to_address(a[i]);
+      C_h[i] = to_address(c[i]);
+    }
+    cudaMalloc((void **)&A_d,  batchSize*sizeof(*A_h));
+    cudaMalloc((void **)&C_d,  batchSize*sizeof(*C_h));
+    cudaMemcpy(A_d, A_h, batchSize*sizeof(*A_h), cudaMemcpyHostToDevice);
+    cudaMemcpy(C_d, C_h, batchSize*sizeof(*C_h), cudaMemcpyHostToDevice);
+    cublasStatus_t status = cublas::cublas_getriBatched(*(a[0]).handles.cublas_handle, n, A_d, lda,
+                                                        to_address(piv), C_d, n, to_address(info), batchSize);
+    if(CUBLAS_STATUS_SUCCESS != status)
+      throw std::runtime_error("Error: cublas_getri returned error code.");
+    for(int i=0; i<batchSize; i++) {
+      cudaMemcpy(A_h[i], C_h[i], n*n*sizeof(Q), cudaMemcpyHostToDevice);
+    }
+    cudaFree(A_d);
+    cudaFree(C_d);
+    delete [] A_h;
+    delete [] C_h;
   }
 
   // geqrf
@@ -209,13 +307,8 @@ std::cout<<" getrf status: " <<st <<std::endl;
           >
   inline static void geqrf(int M, int N, ptr A, const int LDA, ptr TAU, ptr WORK, int &LWORK, int& INFO) 
   {
-#ifdef HAVE_MAGMA
-    using MAGMA::geqrf;
-    geqrf(M, N, to_address(A), LDA, to_address(TAU), to_address(WORK), LWORK, INFO);
-#else
     using LAPACK_CPU::geqrf;
     geqrf(M, N, to_address(A), LDA, to_address(TAU), to_address(WORK), LWORK, INFO);
-#endif
   }
 
   template<class ptr,
@@ -224,12 +317,7 @@ std::cout<<" getrf status: " <<st <<std::endl;
           >
   inline static void geqrf(int M, int N, ptr A, const int LDA, ptr TAU, ptr WORK, int &LWORK, int& INFO) 
   {
-#ifdef HAVE_MAGMA
-    using MAGMA::geqrf_gpu;
-    geqrf_gpu(M, N, to_address(A), LDA, to_address(TAU), to_address(WORK), LWORK, INFO);
-#else
     throw std::runtime_error("Error: geqrf not implemented in gpu.");
-#endif
   }
 
 }

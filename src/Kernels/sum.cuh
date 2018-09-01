@@ -12,6 +12,9 @@
 //    Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
 
+#ifndef AFQMC_SUM_KERNELS_HPP
+#define AFQMC_SUM_KERNELS_HPP
+
 #include <complex>
 
 namespace kernels
@@ -28,3 +31,5 @@ float sum(int m, int n, float const* x, int lda);
 std::complex<float> sum(int m, int n, std::complex<float> const* x, int lda);
 
 }
+
+#endif

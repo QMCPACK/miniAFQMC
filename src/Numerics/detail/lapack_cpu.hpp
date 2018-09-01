@@ -168,29 +168,103 @@ namespace LAPACK_CPU
     }
   }
 
+  inline static
+  void getrf_bufferSize (const int n, const int m, float* a, const int lda, int *lwork) { *lwork = 0; } 
+  inline static
+  void getrf_bufferSize (const int n, const int m, double* a, const int lda, int *lwork) { *lwork = 0; } 
+  inline static
+  void getrf_bufferSize (const int n, const int m, std::complex<float>* a, const int lda, int *lwork) { *lwork = 0; } 
+  inline static
+  void getrf_bufferSize (const int n, const int m, std::complex<double>* a, const int lda, int *lwork) { *lwork = 0; } 
+
   void static getrf(
-	const int &n, const int &m, double *a, const int &n0, int *piv, int &st)
+	const int &n, const int &m, double *a, const int &n0, int *piv, int &st, double* work=nullptr)
   {
 	dgetrf(n, m, a, n0, piv, st);
   }
 
   void static getrf(
-	const int &n, const int &m, float *a, const int &n0, int *piv, int &st)
+	const int &n, const int &m, float *a, const int &n0, int *piv, int &st, float* work=nullptr)
   {
 	sgetrf(n, m, a, n0, piv, st);
   }
 
-  void static getrf(
-	const int &n, const int &m, std::complex<double> *a, const int &n0, int *piv, int &st)
+  void static getrf(const int &n, const int &m,  
+	std::complex<double> *a, const int &n0, int *piv, int &st, std::complex<double>* work=nullptr)
   {
 	zgetrf(n, m, a, n0, piv, st);
   }
 
-  void static getrf(
-	const int &n, const int &m, std::complex<float> *a, const int &n0, int *piv, int &st)
+  void static getrf(const int &n, const int &m,
+	std::complex<float> *a, const int &n0, int *piv, int &st, std::complex<float>* work=nullptr)
   {
 	cgetrf(n, m, a, n0, piv, st);
   }
+
+  inline static void getrfBatched (const int n, float ** a, int lda, int * piv, int * info, int batchSize)
+  {
+    for(int i=0; i<batchSize; i++)
+      getrf(n,n,a[i],lda,piv+i*n,*(info+i));
+  }
+
+  inline static void getrfBatched (const int n, double ** a, int lda, int * piv, int * info, int batchSize)
+  {
+    for(int i=0; i<batchSize; i++)
+      getrf(n,n,a[i],lda,piv+i*n,*(info+i));
+  }
+
+  inline static void getrfBatched (const int n, std::complex<double> ** a, int lda, int * piv, int * info, int batchSize)
+  {
+    for(int i=0; i<batchSize; i++)
+      getrf(n,n,a[i],lda,piv+i*n,*(info+i));
+  }
+
+  inline static void getrfBatched (const int n, std::complex<float> ** a, int lda, int * piv, int * info, int batchSize)
+  {
+    for(int i=0; i<batchSize; i++)
+      getrf(n,n,a[i],lda,piv+i*n,*(info+i));
+  }
+
+  inline static
+  void getri_bufferSize (int n, float* restrict a, int lda, int& lwork)
+  {
+    float work;
+    int status;
+    lwork = -1;
+    sgetri(n, a, lda, nullptr, &work, lwork, status);
+    lwork = int(work); 
+  }
+
+  inline static
+  void getri_bufferSize (int n, double* restrict a, int lda, int& lwork)
+  {
+    double work;
+    int status;
+    lwork = -1;
+    dgetri(n, a, lda, nullptr, &work, lwork, status);
+    lwork = int(work);
+  }
+
+  inline static
+  void getri_bufferSize (int n, std::complex<float>* restrict a, int lda, int& lwork)
+  {
+    std::complex<float> work;
+    int status;
+    lwork = -1;
+    cgetri(n, a, lda, nullptr, &work, lwork, status);
+    lwork = int(real(work));
+  }
+
+  inline static
+  void getri_bufferSize (int n, std::complex<double>* restrict a, int lda, int& lwork)
+  {
+    std::complex<double> work;
+    int status;
+    lwork = -1;
+    zgetri(n, a, lda, nullptr, &work, lwork, status);
+    lwork = int(real(work));
+  }
+
 
   void static getri(int n, float* restrict a, int n0, int const* restrict piv, float* restrict work, int& n1, int& status)
   {
@@ -218,6 +292,30 @@ namespace LAPACK_CPU
         bool query = (n1==-1);
 	zgetri(n, a, n0, piv, work, n1, status);
         if(query) n1 = int(real(work[0]));
+  }
+
+  inline static void getriBatched (int n, float ** a, int lda, int * piv, float ** work, int& lwork, int * info, int batchSize)
+  {
+    for(int i=0; i<batchSize; i++)
+      getri(n,a[i],lda,piv+i*n,work[i],lwork,*(info+i));
+  }
+
+  inline static void getriBatched (int n, double ** a, int lda, int * piv, double ** work, int& lwork, int * info, int batchSize)
+  {
+    for(int i=0; i<batchSize; i++)
+      getri(n,a[i],lda,piv+i*n,work[i],lwork,*(info+i));
+  }
+
+  inline static void getriBatched (int n, std::complex<float> ** a, int lda, int * piv, std::complex<float> ** work, int& lwork, int * info, int batchSize)
+  {
+    for(int i=0; i<batchSize; i++)
+      getri(n,a[i],lda,piv+i*n,work[i],lwork,*(info+i));
+  }
+
+  inline static void getriBatched (int n, std::complex<double> ** a, int lda, int * piv, std::complex<double> ** work, int& lwork, int * info, int batchSize)
+  {
+    for(int i=0; i<batchSize; i++)
+      getri(n,a[i],lda,piv+i*n,work[i],lwork,*(info+i));
   }
 
   void static geqrf(int M, int N, std::complex<double> *A, const int LDA, std::complex<double> *TAU, std::complex<double> *WORK, int LWORK, int& INFO)

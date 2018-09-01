@@ -58,7 +58,7 @@ struct afqmc_sys: public AFQMCInfo
     ComplexMatrix<Alloc> trialwfn_beta;
     
     afqmc_sys() = delete;
-    afqmc_sys(int nmo_, int na, Alloc alloc_ = Alloc{}):
+    afqmc_sys(int nmo_, int na, Alloc alloc_ = Alloc{}, int nbatch = 32):
       AFQMCInfo(nmo_,na,na),
       allocator_(alloc_),
       iallocator_(alloc_),
@@ -68,21 +68,26 @@ struct afqmc_sys: public AFQMCInfo
       NAEA(na),  
       WORK( {0}, alloc_ ),
 // hack for status problem in getr?
-      IWORK({NMO+1}, iallocator_ ),
+      IWORK({nbatch*(NMO+1)}, iallocator_ ),
       TAU( {NMO}, alloc_ ),
       TMat_NN( {NAEA,NAEA}, alloc_ ),
       TMat_NM( {NAEA,NMO}, alloc_ ),
       TMat_MN( {NMO,NAEA}, alloc_ ),
       TMat_MM( {NMO,NMO}, alloc_ ),
+      TMat3D_NN( {nbatch,NAEA,NAEA}, alloc_ ),
+      TMat3D_NM( {nbatch,NAEA,NMO}, alloc_ ),
       Gcloc( {0,0}, alloc_ )
     {
-      std::size_t buff = ma::getri_optimal_workspace_size(TMat_NN);
-      buff = std::max(buff,std::size_t(ma::geqrf_optimal_workspace_size(TMat_NM)));
-      buff = std::max(buff,std::size_t(ma::getrf_optimal_workspace_size(TMat_NN)));
-      buff = std::max(buff,std::size_t(ma::gqr_optimal_workspace_size(TMat_NM)));
-      buff = std::max(buff,std::size_t(ma::gelqf_optimal_workspace_size(TMat_MN)));
-      buff = std::max(buff,std::size_t(ma::glq_optimal_workspace_size(TMat_MN)));
+      std::size_t buff = nbatch*ma::getri_optimal_workspace_size(TMat_NN);
+      buff = std::max(buff,nbatch*std::size_t(ma::geqrf_optimal_workspace_size(TMat_NM)));
+      buff = std::max(buff,nbatch*std::size_t(ma::getrf_optimal_workspace_size(TMat_NN)));
+      buff = std::max(buff,nbatch*std::size_t(ma::gqr_optimal_workspace_size(TMat_NM)));
+#ifdef HAVE_LQ_FACTORIZATION
+      buff = std::max(buff,nbatch*std::size_t(ma::gelqf_optimal_workspace_size(TMat_MN)));
+      buff = std::max(buff,nbatch*std::size_t(ma::glq_optimal_workspace_size(TMat_MN)));
+#endif
       WORK.reextent( {buff} );
+// only getrf is batched right now, which doesn't use buffer space
     }
 
     ~afqmc_sys() {}
@@ -91,7 +96,7 @@ struct afqmc_sys: public AFQMCInfo
     template< class WSet, 
               class Mat 
             >
-    void calculate_mixed_density_matrix(const WSet& W, Mat& W_data, Mat& G, bool compact=true)
+    void calculate_mixed_density_matrix(WSet& W, Mat& W_data, Mat& G, bool compact=true)
     {
       int nwalk = W.shape()[0];
       assert(G.num_elements() >= 2*NAEA*NMO*nwalk);
@@ -101,6 +106,7 @@ struct afqmc_sys: public AFQMCInfo
       assert(W_data.shape()[1] >= 5);
       int N_ = compact?NAEA:NMO;
       boost::multi::array_ref<ComplexType,4,pointer> G_4D(G.origin(), {nwalk,2,N_,NMO}); 
+/*
       for(int n=0; n<nwalk; n++) {
         base::MixedDensityMatrix<ComplexType>(trialwfn_alpha,W[n][0],
                        G_4D[n][0],TMat_NN,TMat_NM,IWORK,WORK,&W_data[n][3],compact);
@@ -108,17 +114,22 @@ struct afqmc_sys: public AFQMCInfo
         base::MixedDensityMatrix<ComplexType>(trialwfn_beta,W[n][1],
                        G_4D[n][1],TMat_NN,TMat_NM,IWORK,WORK,&W_data[n][4],compact);
       }
+*/
+      batched::MixedDensityMatrix(trialwfn_alpha,trialwfn_beta,W,G_4D,TMat3D_NN,TMat3D_NM,IWORK,WORK,W_data(W_data.extension(0),{3,5}));
     }
 
     template<class WSet, class Mat>
-    void calculate_overlaps(const WSet& W, Mat& W_data)
+    void calculate_overlaps(WSet& W, Mat& W_data)
     {
       assert(W_data.shape()[0] >= W.shape()[0]);
       assert(W_data.shape()[1] >= 5);
+/*
       for(int n=0, nw=W.shape()[0]; n<nw; n++) {
         base::Overlap<ComplexType>(trialwfn_alpha,W[n][0],TMat_NN,IWORK,WORK,&W_data[n][3]);
         base::Overlap<ComplexType>(trialwfn_beta,W[n][1],TMat_NN,IWORK,WORK,&W_data[n][4]);
       }
+*/
+      batched::Overlap(trialwfn_alpha,trialwfn_beta,W,TMat3D_NN,IWORK,WORK,W_data(W_data.extension(0),{3,5}));
     }
 
     template<class WSet, 
@@ -203,6 +214,9 @@ struct afqmc_sys: public AFQMCInfo
     ComplexMatrix<Alloc> TMat_NM;
     ComplexMatrix<Alloc> TMat_MN;
     ComplexMatrix<Alloc> TMat_MM;
+
+    ComplexArray<3,Alloc> TMat3D_NN;
+    ComplexArray<3,Alloc> TMat3D_NM;
 
     //! storage for contraction of 2-electron integrals with density matrix
     ComplexMatrix<Alloc> Gcloc;

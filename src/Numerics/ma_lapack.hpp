@@ -32,8 +32,20 @@ namespace ma{
 double const& real(double const& d){return d;}
 float const& real(float const& f){return f;}
 
-template<class MultiArray2D, class Array1D>
-MultiArray2D getrf(MultiArray2D&& m, Array1D& pivot){
+template<class MultiArray2D>
+int getrf_optimal_workspace_size(MultiArray2D & A){
+        assert(A.strides()[0] > 0);
+        assert(A.strides()[1] == 1);
+
+        int res;
+        using LAPACK_CPU::getrf_bufferSize;
+        using LAPACK_GPU::getrf_bufferSize;
+        getrf_bufferSize(A.shape()[1], A.shape()[0],A.origin(),A.strides()[0],&res);
+        return res;
+}
+
+template<class MultiArray2D, class Array1D, class Buffer>
+MultiArray2D getrf(MultiArray2D&& m, Array1D& pivot, Buffer&& WORK){
 	assert(m.strides()[0] >= std::max(std::size_t(1), std::size_t(m.shape()[1])));
 	assert(m.strides()[1] == 1);
 	assert(pivot.size() >= std::min(m.shape()[1], m.shape()[0]+1));
@@ -43,8 +55,9 @@ MultiArray2D getrf(MultiArray2D&& m, Array1D& pivot){
         using LAPACK_GPU::getrf;
 	getrf(
 		m.shape()[1], m.shape()[0], m.origin(), m.strides()[0], 
-		pivot.data(), 
-		status
+		pivot.origin(), 
+		status,
+                WORK.origin()
 	);
 	assert(status==0);
 	return std::forward<MultiArray2D>(m);
@@ -52,19 +65,12 @@ MultiArray2D getrf(MultiArray2D&& m, Array1D& pivot){
 
 template<class MultiArray2D>
 int getri_optimal_workspace_size(MultiArray2D & A){
-	typename MultiArray2D::element WORK;
-        int piv;
-	int status = -1;
+        assert(A.strides()[1] == 1);
+        assert(A.shape()[0] == A.shape()[1]);
         int lwork = -1; 
-        using LAPACK_CPU::getri;
-        using LAPACK_GPU::getri;
-        getri(
-		A.shape()[0], A.origin(), A.strides()[0], 
-	        &piv, 
-		&WORK, lwork, 
-		status
-	);
-	assert(status == 0);
+        using LAPACK_CPU::getri_bufferSize;
+        using LAPACK_GPU::getri_bufferSize;
+        getri_bufferSize(A.shape()[0], A.origin(), A.strides()[0],&lwork);
 	return lwork;
 }
 

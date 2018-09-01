@@ -110,7 +110,7 @@ inline void test_cuda_blas_3(int M, int K, int N, int nloop, int ndev)
   Timer timer;
 
   std::default_random_engine generator;
-  std::uniform_real_distribution<Type> distribution(0.0,1.0);
+  std::uniform_real_distribution<double> distribution(0.0,1.0);
 
   cublasHandle_t cublas_handle;
   cublasXtHandle_t cublasXt_handle;
@@ -195,7 +195,7 @@ inline void time_cuda_blas_3(int M, int K, int N, int nloop, int ndev)
   Timer timer;
 
   std::default_random_engine generator;
-  std::uniform_real_distribution<Type> distribution(0.0,1.0);
+  std::uniform_real_distribution<double> distribution(0.0,1.0);
 
   cublasHandle_t cublas_handle;
   cublasXtHandle_t cublasXt_handle;

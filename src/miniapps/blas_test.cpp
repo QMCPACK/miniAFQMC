@@ -101,7 +101,7 @@ int main(int argc, char **argv)
     time_cuda_gemm_batched<cuDoubleComplex>(M,K,N,nloop,ndev,nbatch);
     //time_cuda_gemm_batched<std::complex<double>>(M,K,N,nloop,ndev,nbatch);
   else {
-    time_cuda_blas_3<double>(M,K,N,nloop,ndev); 
+    time_cuda_blas_3<std::complex<double> >(M,K,N,nloop,ndev); 
     test_cuda_blas_3<double>(M,K,N,nloop,ndev); 
   }
 

@@ -36,7 +36,7 @@
 #include <getopt.h>
 #include "io/hdf_archive.h"
 
-#include "AFQMC/afqmc_sys.hpp"
+#include "AFQMC/afqmc_sys_batched.hpp"
 #include "Matrix/initialize_serial.hpp"
 #include "Matrix/peek.hpp"
 #include "AFQMC/THCOps.hpp"
@@ -112,6 +112,7 @@ int main(int argc, char **argv)
   int nwalk=16;
   int northo = 10;
   int ndev=1;
+  int nbatch=32;
   const double dt = 0.005;  
   const double sqrtdt = std::sqrt(dt);  
 
@@ -126,7 +127,7 @@ int main(int argc, char **argv)
 
   char *g_opt_arg;
   int opt;
-  while ((opt = getopt(argc, argv, "thvi:s:w:o:f:d:")) != -1)
+  while ((opt = getopt(argc, argv, "thvi:s:w:o:f:d:b:")) != -1)
   {
     switch (opt)
     {
@@ -146,6 +147,9 @@ int main(int argc, char **argv)
     case 'd': // the number of sub steps for drift/diffusion
       ndev = atoi(optarg);
       break;
+    case 'b': // the number of batches 
+      nbatch = atoi(optarg);
+      break;
     case 'f':
       init_file = std::string(optarg);
       break;    
@@ -153,6 +157,8 @@ int main(int argc, char **argv)
       break;
     }
   }
+
+  nbatch = std::min(nbatch,2*nwalk);
 
   // using Unified Memory allocator
   using Alloc = cuda::cuda_gpu_allocator<ComplexType>;
@@ -206,7 +212,7 @@ int main(int argc, char **argv)
   std::tie(NMO,NAEA,NAEB) = afqmc::peek(dump);
 
   // Main AFQMC object. Control access to several algorithmic functions.
-  base::afqmc_sys<Alloc> AFQMCSys(NMO,NAEA,um_alloc);
+  base::afqmc_sys<Alloc> AFQMCSys(NMO,NAEA,um_alloc,nbatch);
   ComplexMatrix<Alloc> Propg1({NMO,NMO}, um_alloc);
 
   THCOps THC(afqmc::Initialize<THCOps,base::afqmc_sys<Alloc>>(dump,dt,AFQMCSys,Propg1));

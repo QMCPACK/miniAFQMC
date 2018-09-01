@@ -22,20 +22,51 @@ namespace kernels
 {
 
 template<typename T>
+__global__ void kernel_print( T const* p, int n)
+{
+  printf("D: %d ",n);
+  for(int i=0; i<n; i++)
+    printf("%g ",*(p+i));
+}
+
+template<>
+__global__ void kernel_print( int const* p, int n)
+{
+  printf("int: %d ",n);
+  for(int i=0; i<n; i++)
+    printf("%d ",*(p+i));
+}
+
+template<typename T>
 __global__ void kernel_print( thrust::complex<T> const* p, int n) 
 {
+  printf("Z: %d ",n);
   for(int i=0; i<n; i++)
     printf("(%g, %g) ",(p+i)->real(),(p+i)->imag());
 }
 
+void print(std::string str, double const* p, int n)
+{
+  std::cout<<str <<"D n: " <<n <<" "; 
+  kernel_print<<<1,1>>>(p, n);
+  cudaDeviceSynchronize ();
+  std::cout<<std::endl;
+}
+
+void print(std::string str, int const* p, int n)
+{
+  std::cout<<str <<"I n: " <<n <<" "; 
+  kernel_print<<<1,1>>>(p, n);
+  cudaDeviceSynchronize ();
+  std::cout<<std::endl;
+}
+
 void print(std::string str, std::complex<double> const* p, int n)
 {
-  std::cout<<str <<" "; std::cout.flush();
+  std::cout<<str <<" Z n: " <<n <<" "; 
   kernel_print<<<1,1>>>( reinterpret_cast<thrust::complex<double> const*>(p), n);
   cudaDeviceSynchronize ();
-  std::cout.flush();
   std::cout<<std::endl;
-  std::cout.flush();
 }
 
 }

@@ -363,7 +363,7 @@ namespace cublas {
   // Extensions
   inline cublasStatus_t cublas_getrfBatched(cublasHandle_t handle,
                                    int n,
-                                   float *Aarray[],
+                                   float **Aarray,
                                    int lda,
                                    int *PivotArray,
                                    int *infoArray,
@@ -377,10 +377,9 @@ namespace cublas {
 
   inline cublasStatus_t cublas_getrfBatched(cublasHandle_t handle,
                                    int n,
-                                   double *Aarray[],
+                                   double **Aarray,
                                    int lda,
                                    int *PivotArray,
-                                   double *Carray[],
                                    int ldc,
                                    int *infoArray,
                                    int batchSize)
@@ -393,7 +392,7 @@ namespace cublas {
 
   inline cublasStatus_t cublas_getrfBatched(cublasHandle_t handle,
                                    int n,
-                                   std::complex<double> *Aarray[],
+                                   std::complex<double> **Aarray,
                                    int lda,
                                    int *PivotArray,
                                    int *infoArray,
@@ -409,7 +408,7 @@ namespace cublas {
 
   inline cublasStatus_t cublas_getrfBatched(cublasHandle_t handle,
                                    int n,
-                                   std::complex<float> *Aarray[],
+                                   std::complex<float> **Aarray,
                                    int lda,
                                    int *PivotArray,
                                    int *infoArray,
@@ -425,10 +424,10 @@ namespace cublas {
 
   inline cublasStatus_t cublas_getriBatched(cublasHandle_t handle,
                                    int n,
-                                   float *Aarray[],
+                                   float **Aarray,
                                    int lda,
                                    int *PivotArray,
-                                   float *Carray[],
+                                   float **Carray,
                                    int ldc,
                                    int *infoArray,
                                    int batchSize)
@@ -441,10 +440,10 @@ namespace cublas {
 
   inline cublasStatus_t cublas_getriBatched(cublasHandle_t handle,
                                    int n,
-                                   double *Aarray[],
+                                   double **Aarray,
                                    int lda,
                                    int *PivotArray,
-                                   double *Carray[],
+                                   double **Carray,
                                    int ldc,
                                    int *infoArray,
                                    int batchSize)
@@ -457,10 +456,10 @@ namespace cublas {
 
   inline cublasStatus_t cublas_getriBatched(cublasHandle_t handle,
                                    int n,
-                                   std::complex<double> *Aarray[],
+                                   std::complex<double> **Aarray,
                                    int lda,
                                    int *PivotArray,
-                                   std::complex<double> *Carray[],
+                                   std::complex<double> **Carray,
                                    int ldc,
                                    int *infoArray,
                                    int batchSize)
@@ -475,10 +474,10 @@ namespace cublas {
 
   inline cublasStatus_t cublas_getriBatched(cublasHandle_t handle,
                                    int n,
-                                   std::complex<float> *Aarray[],
+                                   std::complex<float> **Aarray,
                                    int lda,
                                    int *PivotArray,
-                                   std::complex<float> *Carray[],
+                                   std::complex<float> **Carray,
                                    int ldc,
                                    int *infoArray,
                                    int batchSize)
@@ -629,6 +628,81 @@ namespace cublas {
     cudaDeviceSynchronize ();
     return sucess;
   }
+
+  inline cublasStatus_t cublas_gemmBatched(cublasHandle_t handle,
+                          char Atrans, char Btrans, int M, int N, int K,
+                          float alpha,
+                          float ** A, int lda, 
+                          float ** B, int ldb, 
+                          float beta,
+                          float ** C, int ldc, int batchSize)
+  {
+    cublasStatus_t sucess =
+                cublasSgemmBatched(handle,
+                           cublasOperation(Atrans),cublasOperation(Btrans),
+                           M,N,K,&alpha,A,lda,B,ldb,&beta,C,ldc,batchSize);
+    cudaDeviceSynchronize ();
+    return sucess;
+  }
+
+  inline cublasStatus_t cublas_gemmBatched(cublasHandle_t handle,
+                          char Atrans, char Btrans, int M, int N, int K,
+                          double alpha,
+                          double ** A, int lda, 
+                          double ** B, int ldb, 
+                          double beta,
+                          double ** C, int ldc, int batchSize)
+  {
+    cublasStatus_t sucess =
+                cublasDgemmBatched(handle,
+                           cublasOperation(Atrans),cublasOperation(Btrans),
+                           M,N,K,&alpha,A,lda,B,ldb,&beta,C,ldc,batchSize);
+    cudaDeviceSynchronize ();
+    return sucess;
+  }
+
+  inline cublasStatus_t cublas_gemmBatched(cublasHandle_t handle,
+                          char Atrans, char Btrans, int M, int N, int K,
+                          std::complex<float> alpha,
+                          std::complex<float> ** A, int lda, 
+                          std::complex<float> ** B, int ldb, 
+                          std::complex<float> beta,
+                          std::complex<float> ** C, int ldc, int batchSize)
+  {
+    cublasStatus_t sucess =
+                cublasCgemmBatched(handle,
+                        cublasOperation(Atrans),cublasOperation(Btrans),M,N,K,
+                        reinterpret_cast<cuComplex *>(&alpha),
+                        reinterpret_cast<cuComplex **>(A),lda,
+                        reinterpret_cast<cuComplex **>(B),ldb,
+                        reinterpret_cast<cuComplex *>(&beta),
+                        reinterpret_cast<cuComplex **>(C),ldc,batchSize);
+    cudaDeviceSynchronize ();
+    return sucess;
+  }
+
+  inline cublasStatus_t cublas_gemmBatched(cublasHandle_t handle,
+                          char Atrans, char Btrans, int M, int N, int K,
+                          std::complex<double> alpha,
+                          std::complex<double> ** A, int lda,
+                          std::complex<double> ** B, int ldb,
+                          std::complex<double> beta,
+                          std::complex<double> ** C, int ldc, int batchSize)
+  {
+    cublasStatus_t sucess =
+                cublasZgemmBatched(handle,
+                        cublasOperation(Atrans),cublasOperation(Btrans),M,N,K,
+                        reinterpret_cast<cuDoubleComplex *>(&alpha),
+                        reinterpret_cast<cuDoubleComplex **>(A),lda,
+                        reinterpret_cast<cuDoubleComplex **>(B),ldb,
+                        reinterpret_cast<cuDoubleComplex *>(&beta),
+                        reinterpret_cast<cuDoubleComplex **>(C),ldc,batchSize);
+    cudaDeviceSynchronize ();
+    return sucess;
+  }
+
+
+
 
 
 }

@@ -499,6 +499,82 @@ namespace BLAS_GPU
                beta,to_address(C),ldc,strideC,batchSize);
   }
 
+  template<class T,
+           class ptrA,
+           class ptrB,
+           class ptrC,
+           typename = typename std::enable_if_t<(ptrA::memory_type != CPU_OUTOFCARS_POINTER_TYPE)
+                                            and (ptrB::memory_type != CPU_OUTOFCARS_POINTER_TYPE)
+                                            and (ptrC::memory_type != CPU_OUTOFCARS_POINTER_TYPE)
+                                               >
+          >
+  inline static void gemmBatched(char Atrans, char Btrans, int M, int N, int K,
+                          T const alpha, ptrA const* A, int lda, 
+                          ptrB const* B, int ldb, T beta,
+                          ptrC * C, int ldc, int batchSize)
+  {
+    using Q = typename ptrA::value_type;
+    Q **A_d, **B_d, **C_d;
+    Q **A_h, **B_h, **C_h;
+    A_h = new Q*[batchSize];
+    B_h = new Q*[batchSize];
+    C_h = new Q*[batchSize];
+    for(int i=0; i<batchSize; i++) {
+      A_h[i] = to_address(A[i]);
+      B_h[i] = to_address(B[i]);
+      C_h[i] = to_address(C[i]);
+    }
+    cudaMalloc((void **)&A_d,  batchSize*sizeof(*A_h));
+    cudaMalloc((void **)&B_d,  batchSize*sizeof(*B_h));
+    cudaMalloc((void **)&C_d,  batchSize*sizeof(*C_h));
+    cudaMemcpy(A_d, A_h, batchSize*sizeof(*A_h), cudaMemcpyHostToDevice);
+    cudaMemcpy(B_d, B_h, batchSize*sizeof(*B_h), cudaMemcpyHostToDevice);
+    cudaMemcpy(C_d, C_h, batchSize*sizeof(*C_h), cudaMemcpyHostToDevice);
+    cublas::cublas_gemmBatched(*(A[0]).handles.cublas_handle,Atrans,Btrans,M,N,K,
+               alpha,A_d,lda,B_d,ldb,beta,C_d,ldc,batchSize);
+    cudaFree(A_d);
+    cudaFree(B_d);
+    cudaFree(C_d);
+    delete [] A_h;
+    delete [] B_h;
+    delete [] C_h;
+  }
+
+  template<class T,
+           class ptrA,
+           class ptrB,
+           class ptrC,
+           typename = typename std::enable_if_t<(ptrA::memory_type == CPU_OUTOFCARS_POINTER_TYPE)
+                                            and (ptrB::memory_type == CPU_OUTOFCARS_POINTER_TYPE)
+                                            and (ptrC::memory_type == CPU_OUTOFCARS_POINTER_TYPE)
+                                               >,
+           typename = void
+          >
+  inline static void gemmBatched(char Atrans, char Btrans, int M, int N, int K,
+                          T const alpha, ptrA const* A, int lda, 
+                          ptrB const* B, int ldb, T beta,
+                          ptrC * C, int ldc, int batchSize)
+  {
+    using Q = typename ptrA::value_type;
+    Q **A_d;
+    Q **B_d;
+    Q **C_d;
+    A_d = new Q*[batchSize];
+    B_d = new Q*[batchSize];
+    C_d = new Q*[batchSize];
+    for(int i=0; i<batchSize; i++) {
+      A_d[i] = to_address(A[i]);
+      B_d[i] = to_address(B[i]);
+      C_d[i] = to_address(C[i]);
+    }
+    using BLAS_CPU::gemmBatched;
+    gemmBatched(Atrans,Btrans,M,N,K,
+               alpha,A_d,lda,B_d,ldb,beta,C_d,ldc,batchSize);
+    delete [] A_d;
+    delete [] B_d;
+    delete [] C_d;
+  }
+
 }
 
 #endif

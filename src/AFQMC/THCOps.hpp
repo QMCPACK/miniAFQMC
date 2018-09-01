@@ -18,6 +18,7 @@
 
 #include<fstream>
 
+#include <Utilities/NewTimer.h>
 #include "Configuration.h"
 #include "type_traits/scalar_traits.h"
 #include "Numerics/ma_operations.hpp"
@@ -25,6 +26,7 @@
 #include "Utilities/type_conversion.hpp"
 
 #include "Numerics/detail/cuda_pointers.hpp"
+#include "Kernels/batchedDot.cuh"
 
 namespace qmcplusplus
 {
@@ -118,6 +120,8 @@ class THCOps
       size_t nel = ((walker_type==COLLINEAR)?(NAEA+NAEB):(NAEA));  
       size_t memory_needs = rnu*rnv + rnu + rnv + size_t(NAEA)*std::max(rnu,rnv) + size_t(2*NAEA*NMO); 
       TMats.reextent( {memory_needs} );
+
+      setup_timers(Timers, THCTimerNames, timer_level_coarse);
     }
 
     ~THCOps() {}
@@ -203,39 +207,57 @@ class THCOps
             boost::multi::array_cref<ComplexType,2,const_pointer> Gw(G[wi].origin(),{NAEA,nmo_});
             boost::multi::array_cref<ComplexType,1,const_pointer> G1DA(Gw.origin(),{Gw.num_elements()});
             cuda::fill_n(Guu.origin(),Guu.num_elements(),1,SpC(0.0));
+            Timers[Timer_E1]->start();
             Guv_Guu(Gw,Guv,Guu,T1,false);
+            Timers[Timer_E1]->stop();
 /*
             auto Mptr = rotMuv.origin();
             auto Gptr = Guv.origin();
             for(size_t k=0, kend=nu*nv; k<kend; ++k, ++Gptr, ++Mptr)
               (*Gptr) *= (*Mptr);
 */
+            Timers[Timer_E3]->start();
             ma::axty(ComplexType(1.0),rotMuv,Guv);  
+            Timers[Timer_E3]->stop();
+            Timers[Timer_E4]->start();
             ma::product(Guv,rotcPua( rotcPua.extension(0), {0,NAEA}), Qub);
             // using this for now, which should not be much worse
+            Timers[Timer_E4]->stop();
+            Timers[Timer_E5]->start();
             ma::product(T(Qub),T(rotPiu),Rbk);
             //E[wi][1] = -0.5*ma::dot(R1D,G1DA);
             ma::adotpby(ComplexType(-0.5),R1D,G1DA,ComplexType(0.0),E[wi].origin()+1);
+            Timers[Timer_E5]->stop();
           }
           {  // beta
             boost::multi::array_cref<ComplexType,2,const_pointer> Gw(G[wi].origin()+NAEA*NMO,{NAEB,nmo_});
             boost::multi::array_cref<ComplexType,1,const_pointer> G1DB(Gw.origin(),{Gw.num_elements()});
+            Timers[Timer_E1]->start();
             Guv_Guu(Gw,Guv,Guu,T1,true);
+            Timers[Timer_E1]->stop();
+            Timers[Timer_E2]->start();
             ma::product(rotMuv,Guu,Tuu);
             //E[wi][2] = 0.5*ma::dot(Guu,Tuu);
             ma::adotpby(ComplexType(0.5),Guu,Tuu,ComplexType(0.0),E[wi].origin()+2);
+            Timers[Timer_E2]->stop();
 /*
             auto Mptr = rotMuv.origin();
             auto Gptr = Guv.origin();
             for(size_t k=0, kend=nu*nv; k<kend; ++k, ++Gptr, ++Mptr)
               (*Gptr) *= (*Mptr);
 */
+            Timers[Timer_E3]->start();
             ma::axty(ComplexType(1.0),rotMuv,Guv);  
+            Timers[Timer_E3]->stop();
+            Timers[Timer_E4]->start();
             ma::product(Guv,rotcPua( rotcPua.extension(0), {NAEA,NAEA+NAEB} ),Qub);
+            Timers[Timer_E4]->stop();
             // using this for now, which should not be much worse
+            Timers[Timer_E5]->start();
             ma::product(T(Qub),T(rotPiu),Rbk);
             //E[wi][1] -= 0.5*ma::dot(R1D,G1DB);
             ma::adotpby(ComplexType(-0.5),R1D,G1DB,ComplexType(1.0),E[wi].origin()+1);
+            Timers[Timer_E5]->stop();
           }
         }
       }    
@@ -286,7 +308,9 @@ class THCOps
                                                  {X.shape()[0],2*X.shape()[1]});
       boost::multi::array_ref<RealType,2,real_pointer> Tuw_R(pointer_cast<real_type>(Tuw.origin()),
                                                  {nu,2*nwalk});
+      Timers[Timer_vHS1]->start();
       ma::product(Luv_R,X_R,Tuw_R);
+      Timers[Timer_vHS1]->stop();
       boost::multi::array_ref<ComplexType,2,pointer> Qiu(TMats.data()+nwalk*nu,{nmo_,nu});
       for(int wi=0; wi<nwalk; wi++) {
         // Qiu[i][u] = T[u][wi] * conj(Piu[i][u])
@@ -301,11 +325,15 @@ class THCOps
             Qiu[i][u] = Tuw[u][wi]*conj(*p_);
         }
 */
+        Timers[Timer_vHS2]->start();
         ma::acAxpbB(ComplexType(1.0),Piu,Tuw(Tuw.extension(0),wi),ComplexType(0.0),Qiu);
+        Timers[Timer_vHS2]->stop();
         boost::multi::array_ref<ComplexType,2,pointer> v_(v[wi].origin(),{nmo_,nmo_});
         // this can benefit significantly from 2-D partition of work
         // O[nmo * nmo * nmu]
+        Timers[Timer_vHS3]->start();
         ma::product(a,Qiu,T(Piu),c,v_);
+        Timers[Timer_vHS3]->stop();
       }
     }
 
@@ -349,7 +377,9 @@ class THCOps
                                                {nu,2*nwalk});
       boost::multi::array_ref<RealType,2,real_pointer> v_R(pointer_cast<real_type>(v.origin()),
                                                {v.shape()[0],2*v.shape()[1]});
+      Timers[Timer_vbias3]->start();
       ma::product(a,T(Luv_R),Guu_R,c,v_R);
+      Timers[Timer_vbias3]->stop();
     }
 
     int number_of_cholesky_vectors() const { return 2*Luv.shape()[1]; } 
@@ -378,16 +408,15 @@ class THCOps
       for(int iw=0; iw<nw; ++iw) {
         boost::multi::array_cref<ComplexType,2,const_pointer> Giw(G[iw].origin(),{nel_,nmo_});
         // transposing inetermediary to make dot products faster in the next step
+        Timers[Timer_vbias1]->start();
         ma::product(transposed(Piu),transposed(Giw),T1);
+        Timers[Timer_vbias1]->stop();
 /*
         for(int u=0; u<nu; ++u)
           Guu[u][iw] = a*ma::dot(cPua[u],T1[u]);               
 */
+        Timers[Timer_vbias2]->start();
 /*
-        for(int u=0; u<nu; ++u)
-          ma::adotpby(a,cPua[u],T1[u],ComplexType(0.0),Guu.origin()+u*Guu.strides()[0]+iw);
-*/
-// something wrong here!!!
         boost::multi::array_ref<ComplexType,3,pointer> Guu3D(Guu.origin()+iw,{Guu.shape()[0],1,1});
         
         using BLAS_CPU::gemmStridedBatched;
@@ -403,8 +432,10 @@ class THCOps
                 Guu.origin()+iw,1,Guu.strides()[0],
                 cPua.shape()[0] 
         );
-// productStridedBatched doesn't work because it expects contiguous arrays, need a version that takes the strides explicitly
-//        ma::productStridedBatched(a,cPua3D,T13D,zero,Guu3D);
+*/
+        kernels::batchedDot(cPua.shape()[0], cPua.shape()[1], a, to_address(cPua.origin()), cPua.shape()[1], to_address(T1.origin()), T1.shape()[1], 
+                    ComplexType(0.0), to_address(Guu.origin())+iw, Guu.shape()[1]);
+        Timers[Timer_vbias2]->stop();
       }
     }  
 
@@ -494,6 +525,36 @@ class THCOps
     // Sp_G needs: nel_*nmo_
     // vbias needs: nwalk*nu + nel_*nu 
     SpCVector TMats; 
+
+    enum THCTimers
+    {
+      Timer_vbias1,
+      Timer_vbias2,
+      Timer_vbias3,
+      Timer_vHS1,
+      Timer_vHS2,
+      Timer_vHS3,
+      Timer_E1,
+      Timer_E2,
+      Timer_E3,
+      Timer_E4,
+      Timer_E5
+    };
+
+    TimerNameList_t<THCTimers> THCTimerNames = {
+      {Timer_vbias1, "vbias_Guu"},
+      {Timer_vbias2, "vbias_dot"},
+      {Timer_vbias3, "vbias_prod"},
+      {Timer_vHS1, "vHS_Tuw"},
+      {Timer_vHS2, "vHS_acAxpbB"},
+      {Timer_vHS3, "vHS_prod"},
+      {Timer_E1, "E_Guv"},
+      {Timer_E2, "E_EJ"},
+      {Timer_E3, "E_axty"},
+      {Timer_E4, "E_Qub"},
+      {Timer_E5, "E_Rbk"},
+    };
+    TimerList_t Timers;
 
 };
 
