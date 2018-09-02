@@ -26,6 +26,7 @@
 #include <vector>
 #include <map>
 #include <complex>
+#include <Utilities/OhmmsInfo.h>
 #include <Message/Communicate.h>
 
 #define byRows   999
@@ -88,6 +89,8 @@ namespace qmcplusplus
   using ComplexMatrix =  boost::multi::array<ComplexType,2,Alloc>;
   template< class Alloc = std::allocator<SPComplexType> >
   using SPComplexMatrix =  boost::multi::array<SPComplexType,2,Alloc>;
+  template< class Ptr = ComplexType* >
+  using ComplexMatrix_ref =  boost::multi::array_ref<ComplexType,2,Ptr>;
 
   template<std::ptrdiff_t D, class Alloc = std::allocator<ComplexType> >
   using ComplexArray =  boost::multi::array<ComplexType,D,Alloc>;
@@ -103,7 +106,8 @@ namespace detail {
   inline static std::complex<double>* get(std::complex<double>* ptr) { return ptr; }
 }
 */
-inline std::ostream &app_log() { return std::cout; }
+inline std::ostream &app_log() { return OhmmsInfo::Log->getStream(); } 
+//inline std::ostream &app_log() { return std::cout; }
 
 inline std::ostream &app_error()
 {

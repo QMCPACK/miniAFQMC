@@ -68,6 +68,8 @@ class THCOps
            SpCMatrix&& pau_,
            ValueType e0_,
            Allocator alloc_ = Allocator{},  
+           int nu0_=0,
+           int rotnu0_=0,      
            bool verbose=false ):
                 allocator_(alloc_),
                 NMO(nmo_),NAEA(naea_),NAEB(naeb_),
@@ -80,6 +82,8 @@ class THCOps
                 Piu(std::move(piu_)),
                 cPua(std::move(pau_)),
                 E0(e0_),
+                nu0(nu0_),
+                rotnu0(rotnu0_),
                 TMats( {0}, allocator_)
     {
       // simplifying limitation for the miniapp  
@@ -161,7 +165,8 @@ class THCOps
       boost::multi::array_ref<ComplexType,1,pointer> Guu(TMats.data()+cnt,{nv});
       cnt+=Guu.num_elements();
       // T1[nel_][nv]
-      boost::multi::array_ref<ComplexType,2,pointer> T1(TMats.data()+cnt,{NAEA,nv});
+      //boost::multi::array_ref<ComplexType,2,pointer> T1(TMats.data()+cnt,{NAEA,nv});
+      boost::multi::array_ref<ComplexType,2,pointer> T1(TMats.data()+cnt,{nv,NAEA});
       // Qub[nu][nel_]: using same space as T1 
       boost::multi::array_ref<ComplexType,2,pointer> Qub(TMats.data()+cnt,{nu,NAEA});
       cnt+=std::max(Qub.num_elements(), T1.num_elements());
@@ -187,7 +192,7 @@ class THCOps
           Guv_Guu(Gw,Guv,Guu,T1,false);
           ma::product(rotMuv,Guu,Tuu);
           //E[wi][2] = 0.5*ma::dot(Guu,Tuu);
-          ma::adotpby(ComplexType(0.5),Guu,Tuu,ComplexType(0.0),E[wi].origin()+2);
+          ma::adotpby(ComplexType(0.5),Guu({rotnu0,rotnu0+nu}),Tuu,ComplexType(0.0),E[wi].origin()+2);
 /*
           auto Mptr = rotMuv.origin();  
           auto Gptr = Guv.origin();  
@@ -197,7 +202,7 @@ class THCOps
           ma::axty(ComplexType(1.0),rotMuv,Guv);  
           ma::product(Guv,rotcPua,Qub);
           // using this for now, which should not be much worse
-          ma::product(T(Qub),T(rotPiu),Rbk);
+          ma::product(T(Qub),T(rotPiu(rotPiu.extension(0),{rotnu0,rotnu0+nu})),Rbk);
           //E[wi][1] = -0.5*ma::dot(R1D,G1D);
           ma::adotpby(ComplexType(-0.5),R1D,G1D,ComplexType(0.0),E[wi].origin()+1);
         }
@@ -224,7 +229,7 @@ class THCOps
             // using this for now, which should not be much worse
             Timers[Timer_E4]->stop();
             Timers[Timer_E5]->start();
-            ma::product(T(Qub),T(rotPiu),Rbk);
+            ma::product(T(Qub),T(rotPiu(rotPiu.extension(0),{rotnu0,rotnu0+nu})),Rbk);
             //E[wi][1] = -0.5*ma::dot(R1D,G1DA);
             ma::adotpby(ComplexType(-0.5),R1D,G1DA,ComplexType(0.0),E[wi].origin()+1);
             Timers[Timer_E5]->stop();
@@ -238,7 +243,7 @@ class THCOps
             Timers[Timer_E2]->start();
             ma::product(rotMuv,Guu,Tuu);
             //E[wi][2] = 0.5*ma::dot(Guu,Tuu);
-            ma::adotpby(ComplexType(0.5),Guu,Tuu,ComplexType(0.0),E[wi].origin()+2);
+            ma::adotpby(ComplexType(0.5),Guu({rotnu0,rotnu0+nu}),Tuu,ComplexType(0.0),E[wi].origin()+2);
             Timers[Timer_E2]->stop();
 /*
             auto Mptr = rotMuv.origin();
@@ -254,7 +259,7 @@ class THCOps
             Timers[Timer_E4]->stop();
             // using this for now, which should not be much worse
             Timers[Timer_E5]->start();
-            ma::product(T(Qub),T(rotPiu),Rbk);
+            ma::product(T(Qub),T(rotPiu(rotPiu.extension(0),{rotnu0,rotnu0+nu})),Rbk);
             //E[wi][1] -= 0.5*ma::dot(R1D,G1DB);
             ma::adotpby(ComplexType(-0.5),R1D,G1DB,ComplexType(1.0),E[wi].origin()+1);
             Timers[Timer_E5]->stop();
@@ -263,7 +268,7 @@ class THCOps
       }    
       ComplexType Eav = ma::sum(E(E.extension(0),{0,3}));
       using std::real;
-      return real(Eav)/nwalk+real(E0);
+      return real(Eav)/nwalk + ((addH1)?real(E0):0.0);
     }
 
     template<class MatA, class MatB,
@@ -461,25 +466,39 @@ class THCOps
       assert(Guv.shape()[0] == nu);
       assert(Guv.shape()[1] == nv);
 
+      using ma::T;
       // sync first
       int nel_ = G.shape()[0]; 
       ComplexType scl = (walker_type==CLOSED)?ComplexType(2.0):ComplexType(1.0);
       assert(G.shape()[1] == size_t(nmo_));
-      assert(T1.shape()[0] == size_t(nel_));
-      assert(T1.shape()[1] == size_t(nv));
+      assert(T1.shape()[1] == size_t(nel_));
+      assert(T1.shape()[0] == size_t(nv));
 
       using ma::transposed;
-      ma::product(G,rotPiu,T1);
+      ma::product(T(rotPiu),T(G),T1);
       // This operation might benefit from a 2-D work distribution 
       if(beta)
-        ma::product(scl, rotcPua( rotcPua.extension(0), {NAEA,NAEA+NAEB}),
-                  T1, zero, Guv);
+        ma::product(scl, rotcPua( {rotnu0,rotnu0+nu}, {NAEA,NAEA+NAEB}),
+                  T(T1), zero, Guv);
       else
-        ma::product(scl, rotcPua( rotcPua.extension(0), {0,NAEA}),
-                  T1, zero, Guv);
+        ma::product(scl, rotcPua( {rotnu0,rotnu0+nu}, {0,NAEA}),
+                  T(T1), zero, Guv);
 //      for(int v=0; v<nv; ++v) 
 //        Guu[v] += Guv[v][v];  
-      ma::adiagApy(ComplexType(1.0),Guv,Guu);  
+//      ma::adiagApy(ComplexType(1.0),Guv,Guu);  
+// easier to just get all from dot products
+
+      if(beta)  
+        kernels::batchedDot(rotcPua.shape()[0], NAEB, scl, 
+                    to_address(rotcPua.origin()+NAEA), rotcPua.shape()[1], 
+                    to_address(T1.origin()), T1.shape()[1],
+                    ComplexType(1.0), to_address(Guu.origin()), 1);
+      else
+        kernels::batchedDot(rotcPua.shape()[0], NAEA, scl, 
+                    to_address(rotcPua.origin()), rotcPua.shape()[1], 
+                    to_address(T1.origin()), T1.shape()[1],
+                    ComplexType(1.0), to_address(Guu.origin()), 1);
+
     }
 
   protected:
@@ -518,6 +537,9 @@ class THCOps
     /************************************************/
      
     ValueType E0;
+
+    // offsets in partitioning over nmu
+    int nu0, rotnu0;
 
     // Allocate large array for temporary work
     // energy needs: nu*nv + nv + nu  + nel_*max(nv,nu) + nel_*nmo

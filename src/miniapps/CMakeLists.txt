@@ -17,6 +17,9 @@ TARGET_LINK_LIBRARIES(blas_test qmcutil ${QMC_UTIL_LIBS} ${MPI_LIBRARY})
 ADD_EXECUTABLE(miniafqmc_cuda_gpu miniafqmc_cuda_gpu.cpp)
 TARGET_LINK_LIBRARIES(miniafqmc_cuda_gpu qmcutil ${QMC_UTIL_LIBS} ${MPI_LIBRARY})
 
+ADD_EXECUTABLE(miniafqmc_cuda_gpu_mpi miniafqmc_cuda_gpu_mpi.cpp)
+TARGET_LINK_LIBRARIES(miniafqmc_cuda_gpu_mpi qmcutil ${QMC_UTIL_LIBS} ${MPI_LIBRARY})
+
 ADD_EXECUTABLE(miniafqmc_cuda_gpu_batched miniafqmc_cuda_gpu_batched.cpp)
 TARGET_LINK_LIBRARIES(miniafqmc_cuda_gpu_batched qmcutil ${QMC_UTIL_LIBS} ${MPI_LIBRARY})
 

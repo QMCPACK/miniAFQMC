@@ -15,6 +15,7 @@
 #ifndef AFQMC_CUDA_GPU_POINTERS_HPP
 #define AFQMC_CUDA_GPU_POINTERS_HPP
 
+#include "Configuration.h"
 #include<cassert>
 #include <cuda_runtime.h>
 #include "cublas_v2.h"
@@ -63,6 +64,7 @@ struct cuda_gpu_ptr{
   }
 };
 
+static size_t TotalGPUAlloc=0;
   
 /*
  * Incomplete!!! Need to fix construct and destroy
@@ -89,8 +91,13 @@ template<class T> struct cuda_gpu_allocator{
   cuda_gpu_ptr<T> allocate(size_type n, const void* hint = 0){
     if(n == 0) return cuda_gpu_ptr<T>{};
     T* p;
-    if(cudaSuccess != cudaMalloc ((void**)&p,n*sizeof(T)))
+    TotalGPUAlloc += n*sizeof(T)/1024.0/1024.0; 
+//qmcplusplus::app_log()<<" allocating on gpu, Total: " <<n*sizeof(T)/1024.0/1024.0 
+//<<" / " <<TotalGPUAlloc <<" MB \n"; 
+    if(cudaSuccess != cudaMalloc ((void**)&p,n*sizeof(T))) {
+      std::cerr<<" Error allocating " <<n*sizeof(T)/1024.0/1024.0 <<" MBs on GPU." <<std::endl;
       throw std::runtime_error("Error: cudaMalloc returned error code."); 
+    }
     return cuda_gpu_ptr<T>{p,handles_};
   }
   void deallocate(cuda_gpu_ptr<T> ptr, size_type){

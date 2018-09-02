@@ -138,7 +138,8 @@ struct container_proxy<boost::multi_array_ref<T,2> >
   }
   inline pointer data()
   {
-    return scalar_traits<T>::get_address(ref.origin());
+    using detail::to_address;
+    return scalar_traits<T>::get_address(to_address(ref.origin()));
   }
   inline void resize(size_t n)
   {
@@ -153,13 +154,13 @@ struct container_proxy<boost::multi_array_ref<T,2> >
 
 };
 
-template<typename T>
-struct container_proxy<boost::multi::array<T,2> >
+template<typename T, class Alloc>
+struct container_proxy<boost::multi::array<T,2,Alloc> >
 {
   enum {DIM=scalar_traits<T>::DIM};
   typedef typename container_proxy<T>::pointer pointer;
-  boost::multi::array<T,2>& ref;
-  inline container_proxy(boost::multi::array<T,2>& a):ref(a) {}
+  boost::multi::array<T,2,Alloc>& ref;
+  inline container_proxy(boost::multi::array<T,2,Alloc>& a):ref(a) {}
   inline size_t size() const
   {
     return ref.num_elements()*DIM;
@@ -171,13 +172,13 @@ struct container_proxy<boost::multi::array<T,2> >
   }
   inline void resize(size_t n)
   {
-    APP_ABORT(" Error: Can not resize container_proxy<boost::multi::array_ref<T,D> >. \n");
+    APP_ABORT(" Error: Can not resize container_proxy<boost::multi::array<T,D,Alloc> >. \n");
   }
   template<typename I>
   inline void resize(I* n, int d)
   {
     if(d < 2)
-      APP_ABORT(" Error: Inconsistent dimension in container_proxy<boost::multi::array_ref<T,D> >::resize(I*,int). \n");
+      APP_ABORT(" Error: Inconsistent dimension in container_proxy<boost::multi::array<T,D,Alloc> >::resize(I*,int). \n");
     ref.reextent({n[0],n[1]});
   }
 };

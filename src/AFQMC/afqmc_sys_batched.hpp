@@ -73,11 +73,14 @@ struct afqmc_sys: public AFQMCInfo
       TMat_NN( {NAEA,NAEA}, alloc_ ),
       TMat_NM( {NAEA,NMO}, alloc_ ),
       TMat_MN( {NMO,NAEA}, alloc_ ),
-      TMat_MM( {NMO,NMO}, alloc_ ),
       TMat3D_NN( {nbatch,NAEA,NAEA}, alloc_ ),
       TMat3D_NM( {nbatch,NAEA,NMO}, alloc_ ),
+      TMat3D_MN( {nbatch,NMO,NAEA}, alloc_ ),
+      TMat3D_MN2( {nbatch,NMO,NAEA}, alloc_ ),
       Gcloc( {0,0}, alloc_ )
     {
+      if(nbatch%2==1)
+        APP_ABORT(" Error: nbatch%2==1.\n");
       std::size_t buff = nbatch*ma::getri_optimal_workspace_size(TMat_NN);
       buff = std::max(buff,nbatch*std::size_t(ma::geqrf_optimal_workspace_size(TMat_NM)));
       buff = std::max(buff,nbatch*std::size_t(ma::getrf_optimal_workspace_size(TMat_NN)));
@@ -104,7 +107,7 @@ struct afqmc_sys: public AFQMCInfo
       assert(G.shape()[1] >= 2*NAEA*NMO);
       assert(W_data.shape()[0] >= nwalk);
       assert(W_data.shape()[1] >= 5);
-      int N_ = compact?NAEA:NMO;
+      int N_ = NAEA; // compact?NAEA:NMO;
       boost::multi::array_ref<ComplexType,4,pointer> G_4D(G.origin(), {nwalk,2,N_,NMO}); 
 /*
       for(int n=0; n<nwalk; n++) {
@@ -136,24 +139,44 @@ struct afqmc_sys: public AFQMCInfo
              class MatA,
              class MatB
             >
-    void propagate(WSet& W, const MatA& Propg, const MatB& vHS)
+    void propagate(WSet& W, MatA& Propg, MatB& vHS)
     {
       assert(vHS.shape()[1] == NMO*NMO);  
+      using Type = typename std::decay<MatB>::type::element;
+/*
       using Type = typename std::decay<MatB>::type::element;
       boost::multi::array_cref<Type,3,const_pointer> V(vHS.origin(), {vHS.shape()[0],NMO,NMO});
       // re-interpretting matrices to avoid new temporary space  
       boost::multi::array_ref<Type,2,pointer> T1(TMat_NM.origin(), {NMO,NAEA});
       boost::multi::array_ref<Type,2,pointer> T2(TMat_MM.origin(), {NMO,NAEA});
       for(int nw=0, nwalk=W.shape()[0]; nw<nwalk; nw++) {
-
         ma::product(Propg,W[nw][0],TMat_MN);
-        base::apply_expM(V[nw],TMat_MN,T1,T2,6);
+        ::apply_expM(V[nw],TMat_MN,T1,T2,6);
         ma::product(Propg,TMat_MN,W[nw][0]);
 
         ma::product(Propg,W[nw][1],TMat_MN);
         base::apply_expM(V[nw],TMat_MN,T1,T2,6);
         ma::product(Propg,TMat_MN,W[nw][1]);
-
+      }
+*/
+      // assumes collinear for now
+      boost::multi::array_ref<Type,2,pointer> Tp1(TMat_NM.origin(), {NMO,NAEA});
+      boost::multi::array_ref<Type,2,pointer> Tp2(TMat_MN.origin(), {NMO,NAEA});
+      int nbatch = TMat3D_NM.shape()[0];
+      int nterms = W.shape()[0]*W.shape()[1];
+      int nloop = (nterms + nbatch - 1)/nbatch;
+      for(int i=0, ndone=0; i<nloop; i++,ndone+=nbatch) {  
+        int ni = std::min(nbatch,nterms-ndone);
+        boost::multi::array_ref<Type,3,pointer> W3D(W.origin() + ndone * W.strides()[1] , 
+                                  {ni,W.shape()[2],W.shape()[3]});
+        boost::multi::array_ref<Type,3,pointer> V(vHS.origin() + (ndone/2) * vHS.strides()[0] , 
+                                  {ni/2,NMO,NMO});
+        boost::multi::array_ref<Type,3,pointer> T1(TMat3D_NM.origin(), 
+                                                        {ni,NMO,NAEA});
+        
+        batched::applyP1(Propg,W3D,T1);
+        batched::apply_expM(V,T1,TMat3D_MN,TMat3D_MN2,6); 
+        batched::applyP1(Propg,T1,W3D);
       }
 
     }    
@@ -213,10 +236,11 @@ struct afqmc_sys: public AFQMCInfo
     ComplexMatrix<Alloc> TMat_NN;
     ComplexMatrix<Alloc> TMat_NM;
     ComplexMatrix<Alloc> TMat_MN;
-    ComplexMatrix<Alloc> TMat_MM;
 
     ComplexArray<3,Alloc> TMat3D_NN;
     ComplexArray<3,Alloc> TMat3D_NM;
+    ComplexArray<3,Alloc> TMat3D_MN;
+    ComplexArray<3,Alloc> TMat3D_MN2;
 
     //! storage for contraction of 2-electron integrals with density matrix
     ComplexMatrix<Alloc> Gcloc;
