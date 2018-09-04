@@ -50,10 +50,6 @@
 #include "cublasXt.h"
 #include "cusolverDn.h"
 #include <curand.h>
-#ifdef HAVE_MAGMA
-#include "magma_v2.h"
-#include "magma_lapack.h" // if you need BLAS & LAPACK
-#endif
 
 #include "Numerics/detail/cuda_pointers.hpp"
 #include "Kernels/zero_complex_part.cuh"
@@ -101,6 +97,8 @@ void print_help()
 
 int main(int argc, char **argv)
 {
+
+  OhmmsInfo("miniafqmc_cuda_gpu_batched",0);
 
 #ifndef QMC_COMPLEX
   std::cerr<<" Error: Please compile complex executable, QMC_COMPLEX=1. " <<std::endl;
@@ -180,18 +178,9 @@ int main(int argc, char **argv)
   curand_check(curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_DEFAULT),"curandCreateGenerator");
   curand_check(curandSetPseudoRandomGeneratorSeed(gen,1234ULL),"curandSetPseudoRandomGeneratorSeed");
   
-#ifdef HAVE_MAGMA
-#else
   cuda::gpu_handles handles{&cublas_handle,&cublasXt_handle,&cusolverDn_handle};
-#endif
 
   Alloc um_alloc(handles);
-
-  Random.init(0, 1, iseed);
-  int ip = 0;
-  PrimeNumberSet<uint32_t> myPrimes;
-  // create generator within the thread
-  RandomGenerator<RealType> random_th(myPrimes[ip]);
 
   TimerManager.set_timer_threshold(timer_level_coarse);
   TimerList_t Timers;
@@ -212,7 +201,7 @@ int main(int argc, char **argv)
   std::tie(NMO,NAEA,NAEB) = afqmc::peek(dump);
 
   // Main AFQMC object. Control access to several algorithmic functions.
-  base::afqmc_sys<Alloc> AFQMCSys(NMO,NAEA,um_alloc,nbatch);
+  base::afqmc_sys<Alloc> AFQMCSys(NMO,NAEA,um_alloc,um_alloc,nbatch);
   ComplexMatrix<Alloc> Propg1({NMO,NMO}, um_alloc);
 
   THCOps THC(afqmc::Initialize<THCOps,base::afqmc_sys<Alloc>>(dump,dt,AFQMCSys,Propg1));
@@ -270,6 +259,13 @@ int main(int argc, char **argv)
   // initialize overlaps and energy
   AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc);
   RealType Eav = THC.energy(W_data,Gc);
+
+  {
+    size_t free_,tot_;
+    cudaMemGetInfo(&free_,&tot_);
+    qmcplusplus::app_log()<<"\n GPU Memory Available,  Total in MB: "
+                          <<free_/1024.0/1024.0 <<" " <<tot_/1024.0/1024.0 <<std::endl;
+  }
 
   std::cout<<"\n";
   std::cout<<"***********************************************************\n";

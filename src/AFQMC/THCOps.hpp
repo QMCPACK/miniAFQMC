@@ -34,7 +34,7 @@ namespace qmcplusplus
 namespace afqmc
 {
 
-template< class Alloc >
+template< class Alloc, class Alloc_ooc = Alloc>
 class THCOps
 {
 #if defined(AFQMC_SP) 
@@ -47,12 +47,16 @@ class THCOps
   using CMatrix = boost::multi::array<ComplexType,2,Alloc>;
   using SpCVector = boost::multi::array<SpC,1,Alloc>;
   using SpCMatrix = boost::multi::array<SpC,2,Alloc>;
+  using SpCMatrix_ooc = boost::multi::array<SpC,2,Alloc_ooc>;
+  //using SpCMatrix_ooc = boost::multi::array<SpC,2,Alloc>;
   using Allocator = Alloc;  
   using pointer = typename Alloc::pointer;  
   using const_pointer = typename Alloc::const_pointer;  
   using real_type = typename Alloc::template rebind<SPRealType>::other::value_type;
   using const_real_type = typename Alloc::template rebind<SPRealType>::other::value_type const;
-  using real_pointer = typename Alloc::template rebind<SPRealType>::other::pointer;
+  using real_pointer = typename Alloc:: template rebind<SPRealType>::other::pointer;
+  using real_pointer_ooc = typename Alloc_ooc:: template rebind<SPRealType>::other::pointer;
+  //using real_pointer_ooc = typename Alloc:: template rebind<SPRealType>::other::pointer;
   using real_const_pointer = typename Alloc::template rebind<SPRealType>::other::const_pointer;
 
   public:
@@ -63,7 +67,7 @@ class THCOps
            SpCMatrix&& rotmuv_,
            SpCMatrix&& rotpiu_,
            SpCMatrix&& rotpau_,
-           SpCMatrix&& luv_,
+           SpCMatrix_ooc&& luv_,
            SpCMatrix&& piu_,
            SpCMatrix&& pau_,
            ValueType e0_,
@@ -112,6 +116,7 @@ class THCOps
         assert(Piu.shape()[0]==NMO);
         assert(rotPiu.shape()[0]==NMO);
       }
+
       // Allocate large array for temporary work
       // energy needs: nu*nv + nv + nu  + nel_*max(nv,nu) + nel_*nmo
       // vHS needs: nu*nwalk + nu*nmo_
@@ -126,6 +131,15 @@ class THCOps
       TMats.reextent( {memory_needs} );
 
       setup_timers(Timers, THCTimerNames, timer_level_coarse);
+
+      app_log()<<"\n THC allocations per task in MB: \n"
+        <<"   - Muv: " <<rotMuv.num_elements()*sizeof(ComplexType)/1024.0/1024.0 <<"\n" 
+        <<"   - rPiu: " <<rotPiu.num_elements()*sizeof(ComplexType)/1024.0/1024.0 <<"\n" 
+        <<"   - rPua: " <<rotcPua.num_elements()*sizeof(ComplexType)/1024.0/1024.0 <<"\n" 
+        <<"   - Luv: " <<Luv.num_elements()*sizeof(ComplexType)/1024.0/1024.0 <<"\n" 
+        <<"   - Piu: " <<Piu.num_elements()*sizeof(ComplexType)/1024.0/1024.0 <<"\n" 
+        <<"   - Pua: " <<cPua.num_elements()*sizeof(ComplexType)/1024.0/1024.0 <<"\n" 
+        <<"   - TMat: " <<TMats.num_elements()*sizeof(ComplexType)/1024.0/1024.0 <<std::endl;
     }
 
     ~THCOps() {}
@@ -135,6 +149,8 @@ class THCOps
 
     THCOps(THCOps&& other) = default;
     THCOps& operator=(THCOps&& other) = default; 
+
+    double getE0() const { return real(E0); }
 
     template<class Mat, class MatB>
     RealType energy(Mat&& E, MatB const& G, bool addH1=true) {
@@ -307,7 +323,7 @@ class THCOps
       // O[nwalk * nmu * nmu]
       // reinterpret as RealType matrices with 2x the columns
       using detail::pointer_cast;
-      boost::multi::array_ref<RealType,2,real_pointer> Luv_R(pointer_cast<real_type>(Luv.origin()),
+      boost::multi::array_ref<RealType,2,real_pointer_ooc> Luv_R(pointer_cast<real_type>(Luv.origin()),
                                                  {Luv.shape()[0],2*Luv.shape()[1]});
       boost::multi::array_cref<RealType,2,real_const_pointer> X_R(pointer_cast<const_real_type>(X.origin()),
                                                  {X.shape()[0],2*X.shape()[1]});
@@ -376,7 +392,7 @@ class THCOps
       Guu_from_compact(G,Guu,T1);
       // reinterpret as RealType matrices with 2x the columns
       using detail::pointer_cast;
-      boost::multi::array_ref<RealType,2,real_pointer> Luv_R(pointer_cast<real_type>(Luv.origin()),
+      boost::multi::array_ref<RealType,2,real_pointer_ooc> Luv_R(pointer_cast<real_type>(Luv.origin()),
                                                {Luv.shape()[0],2*Luv.shape()[1]});
       boost::multi::array_ref<RealType,2,real_pointer> Guu_R(pointer_cast<real_type>(Guu.origin()),
                                                {nu,2*nwalk});
@@ -527,7 +543,7 @@ class THCOps
     /************************************************/
     // Following 3 used in calculation of vbias and vHS
     // Cholesky factorization of Muv 
-    SpCMatrix Luv;
+    SpCMatrix_ooc Luv;
 
     // Orbitals at interpolating points
     SpCMatrix Piu;

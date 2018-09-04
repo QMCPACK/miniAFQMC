@@ -45,7 +45,9 @@ private:
 public:
 //	explicit array(array const&){}
 	template<class Array, typename = decltype(std::declval<Array>().extensions())>
-	array(Array&& other) : array(other.extensions(),other.allocator_){
+	array(Array&& other) : 
+                array_ref<T, D, typename array::element_ptr>(nullptr, other.extensions()),
+                allocator_(std::move(other.allocator_)) { 
 		array::operator=(std::forward<Array>(other));
 	}
 	explicit array(extensions_type e = {}) : 

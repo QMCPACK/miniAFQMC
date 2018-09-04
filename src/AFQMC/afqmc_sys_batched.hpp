@@ -40,7 +40,8 @@ namespace base
  * 
  * This version works on a single memory space, e.g. CPU, GPU, Managed Memory, etc, based on the allocator. 
  */
-template<class AllocType // = std::allocator<ComplexType>
+template<class AllocType, // = std::allocator<ComplexType>
+         class AllocType_ooc = AllocType 
         >
 struct afqmc_sys: public AFQMCInfo
 {
@@ -51,17 +52,25 @@ struct afqmc_sys: public AFQMCInfo
     using pointer = typename Alloc::pointer; 
     using const_pointer = typename Alloc::const_pointer; 
     using IAlloc = typename Alloc::template rebind<int>::other;; 
+    using Alloc_ooc = AllocType_ooc; 
+    using pointer_ooc = typename Alloc_ooc::pointer; 
+    using const_pointer_ooc = typename Alloc_ooc::const_pointer; 
+    using IAlloc_ooc = typename Alloc_ooc::template rebind<int>::other;; 
     Alloc allocator_;
     IAlloc iallocator_;
+    Alloc_ooc allocator_ooc_;
+    IAlloc_ooc iallocator_ooc_;
 
     ComplexMatrix<Alloc> trialwfn_alpha;
     ComplexMatrix<Alloc> trialwfn_beta;
     
     afqmc_sys() = delete;
-    afqmc_sys(int nmo_, int na, Alloc alloc_ = Alloc{}, int nbatch = 32):
+    afqmc_sys(int nmo_, int na, Alloc alloc_ = Alloc{}, Alloc_ooc alloc_ooc_ = Alloc_ooc{}, int nbatch = 32):
       AFQMCInfo(nmo_,na,na),
       allocator_(alloc_),
       iallocator_(alloc_),
+      allocator_ooc_(alloc_ooc_),
+      iallocator_ooc_(alloc_ooc_),
       trialwfn_alpha( {nmo_,na}, alloc_ ), 
       trialwfn_beta( {nmo_,na}, alloc_ ), 
       NMO(nmo_),
@@ -70,9 +79,6 @@ struct afqmc_sys: public AFQMCInfo
 // hack for status problem in getr?
       IWORK({nbatch*(NMO+1)}, iallocator_ ),
       TAU( {NMO}, alloc_ ),
-      TMat_NN( {NAEA,NAEA}, alloc_ ),
-      TMat_NM( {NAEA,NMO}, alloc_ ),
-      TMat_MN( {NMO,NAEA}, alloc_ ),
       TMat3D_NN( {nbatch,NAEA,NAEA}, alloc_ ),
       TMat3D_NM( {nbatch,NAEA,NMO}, alloc_ ),
       TMat3D_MN( {nbatch,NMO,NAEA}, alloc_ ),
@@ -81,16 +87,20 @@ struct afqmc_sys: public AFQMCInfo
     {
       if(nbatch%2==1)
         APP_ABORT(" Error: nbatch%2==1.\n");
-      std::size_t buff = nbatch*ma::getri_optimal_workspace_size(TMat_NN);
-      buff = std::max(buff,nbatch*std::size_t(ma::geqrf_optimal_workspace_size(TMat_NM)));
-      buff = std::max(buff,nbatch*std::size_t(ma::getrf_optimal_workspace_size(TMat_NN)));
-      buff = std::max(buff,nbatch*std::size_t(ma::gqr_optimal_workspace_size(TMat_NM)));
+      std::size_t buff = nbatch*ma::getri_optimal_workspace_size(TMat3D_NN[0]);
+      buff = std::max(buff,nbatch*std::size_t(ma::geqrf_optimal_workspace_size(TMat3D_NM[0])));
+      buff = std::max(buff,nbatch*std::size_t(ma::getrf_optimal_workspace_size(TMat3D_NN[0])));
+      buff = std::max(buff,nbatch*std::size_t(ma::gqr_optimal_workspace_size(TMat3D_NM[0])));
 #ifdef HAVE_LQ_FACTORIZATION
-      buff = std::max(buff,nbatch*std::size_t(ma::gelqf_optimal_workspace_size(TMat_MN)));
-      buff = std::max(buff,nbatch*std::size_t(ma::glq_optimal_workspace_size(TMat_MN)));
+      buff = std::max(buff,nbatch*std::size_t(ma::gelqf_optimal_workspace_size(TMat3D_MN[0])));
+      buff = std::max(buff,nbatch*std::size_t(ma::glq_optimal_workspace_size(TMat3D_MN[0])));
 #endif
       WORK.reextent( {buff} );
-// only getrf is batched right now, which doesn't use buffer space
+      app_log()<<"\n afqmc_sys allocation per task in MB (nbatch=" <<nbatch <<") \n"
+        <<"   - NN: " <<TMat3D_NN.num_elements()*sizeof(ComplexType)/1024.0/1024.0 <<"\n"
+        <<"   - NM: " <<TMat3D_NM.num_elements()*sizeof(ComplexType)/1024.0/1024.0 <<"\n"
+        <<"   - MN: " <<2*TMat3D_MN.num_elements()*sizeof(ComplexType)/1024.0/1024.0 <<"\n"
+        <<"   - WORK: " <<WORK.num_elements()*sizeof(ComplexType)/1024.0/1024.0 <<std::endl;
     }
 
     ~afqmc_sys() {}
@@ -109,15 +119,6 @@ struct afqmc_sys: public AFQMCInfo
       assert(W_data.shape()[1] >= 5);
       int N_ = NAEA; // compact?NAEA:NMO;
       boost::multi::array_ref<ComplexType,4,pointer> G_4D(G.origin(), {nwalk,2,N_,NMO}); 
-/*
-      for(int n=0; n<nwalk; n++) {
-        base::MixedDensityMatrix<ComplexType>(trialwfn_alpha,W[n][0],
-                       G_4D[n][0],TMat_NN,TMat_NM,IWORK,WORK,&W_data[n][3],compact);
-
-        base::MixedDensityMatrix<ComplexType>(trialwfn_beta,W[n][1],
-                       G_4D[n][1],TMat_NN,TMat_NM,IWORK,WORK,&W_data[n][4],compact);
-      }
-*/
       batched::MixedDensityMatrix(trialwfn_alpha,trialwfn_beta,W,G_4D,TMat3D_NN,TMat3D_NM,IWORK,WORK,W_data(W_data.extension(0),{3,5}));
     }
 
@@ -126,12 +127,6 @@ struct afqmc_sys: public AFQMCInfo
     {
       assert(W_data.shape()[0] >= W.shape()[0]);
       assert(W_data.shape()[1] >= 5);
-/*
-      for(int n=0, nw=W.shape()[0]; n<nw; n++) {
-        base::Overlap<ComplexType>(trialwfn_alpha,W[n][0],TMat_NN,IWORK,WORK,&W_data[n][3]);
-        base::Overlap<ComplexType>(trialwfn_beta,W[n][1],TMat_NN,IWORK,WORK,&W_data[n][4]);
-      }
-*/
       batched::Overlap(trialwfn_alpha,trialwfn_beta,W,TMat3D_NN,IWORK,WORK,W_data(W_data.extension(0),{3,5}));
     }
 
@@ -143,25 +138,7 @@ struct afqmc_sys: public AFQMCInfo
     {
       assert(vHS.shape()[1] == NMO*NMO);  
       using Type = typename std::decay<MatB>::type::element;
-/*
-      using Type = typename std::decay<MatB>::type::element;
-      boost::multi::array_cref<Type,3,const_pointer> V(vHS.origin(), {vHS.shape()[0],NMO,NMO});
-      // re-interpretting matrices to avoid new temporary space  
-      boost::multi::array_ref<Type,2,pointer> T1(TMat_NM.origin(), {NMO,NAEA});
-      boost::multi::array_ref<Type,2,pointer> T2(TMat_MM.origin(), {NMO,NAEA});
-      for(int nw=0, nwalk=W.shape()[0]; nw<nwalk; nw++) {
-        ma::product(Propg,W[nw][0],TMat_MN);
-        ::apply_expM(V[nw],TMat_MN,T1,T2,6);
-        ma::product(Propg,TMat_MN,W[nw][0]);
-
-        ma::product(Propg,W[nw][1],TMat_MN);
-        base::apply_expM(V[nw],TMat_MN,T1,T2,6);
-        ma::product(Propg,TMat_MN,W[nw][1]);
-      }
-*/
       // assumes collinear for now
-      boost::multi::array_ref<Type,2,pointer> Tp1(TMat_NM.origin(), {NMO,NAEA});
-      boost::multi::array_ref<Type,2,pointer> Tp2(TMat_MN.origin(), {NMO,NAEA});
       int nbatch = TMat3D_NM.shape()[0];
       int nterms = W.shape()[0]*W.shape()[1];
       int nloop = (nterms + nbatch - 1)/nbatch;
@@ -233,10 +210,6 @@ struct afqmc_sys: public AFQMCInfo
     //! TMat_AB: Temporary Matrix of dimension [AxB]
     //! N: NAEA
     //! M: NMO
-    ComplexMatrix<Alloc> TMat_NN;
-    ComplexMatrix<Alloc> TMat_NM;
-    ComplexMatrix<Alloc> TMat_MN;
-
     ComplexArray<3,Alloc> TMat3D_NN;
     ComplexArray<3,Alloc> TMat3D_NM;
     ComplexArray<3,Alloc> TMat3D_MN;

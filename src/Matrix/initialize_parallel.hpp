@@ -267,9 +267,9 @@ inline THCOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, Comple
   dump.pop();
   dump.pop();
 
-  return THCOps(NMO,NAEA,NAEA,COLLINEAR,std::move(haj),std::move(rotMuv),
+  return std::move(THCOps(NMO,NAEA,NAEA,COLLINEAR,std::move(haj),std::move(rotMuv),
                 std::move(rotPiu),std::move(rotcPua),std::move(Luv),std::move(Piu),
-                std::move(cPua),E0,alloc,nmu0,rotnmu0);
+                std::move(cPua),E0,alloc,nmu0,rotnmu0));
 } 
 
 }  // afqmc

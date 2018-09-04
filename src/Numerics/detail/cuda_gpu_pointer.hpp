@@ -64,7 +64,7 @@ struct cuda_gpu_ptr{
   }
 };
 
-static size_t TotalGPUAlloc=0;
+//static size_t TotalGPUAlloc=0;
   
 /*
  * Incomplete!!! Need to fix construct and destroy
@@ -91,9 +91,11 @@ template<class T> struct cuda_gpu_allocator{
   cuda_gpu_ptr<T> allocate(size_type n, const void* hint = 0){
     if(n == 0) return cuda_gpu_ptr<T>{};
     T* p;
-    TotalGPUAlloc += n*sizeof(T)/1024.0/1024.0; 
+//    TotalGPUAlloc += n*sizeof(T)/1024.0/1024.0; 
+//size_t free_,tot_; 
+//cudaMemGetInfo(&free_,&tot_);
 //qmcplusplus::app_log()<<" allocating on gpu, Total: " <<n*sizeof(T)/1024.0/1024.0 
-//<<" / " <<TotalGPUAlloc <<" MB \n"; 
+//<<" / " <<TotalGPUAlloc <<"  free/tot:" <<free_/1024.0/1024.0 <<" " <<tot_/1024.0/1024.0 <<" MB \n"; 
     if(cudaSuccess != cudaMalloc ((void**)&p,n*sizeof(T))) {
       std::cerr<<" Error allocating " <<n*sizeof(T)/1024.0/1024.0 <<" MBs on GPU." <<std::endl;
       throw std::runtime_error("Error: cudaMalloc returned error code."); 
@@ -102,6 +104,9 @@ template<class T> struct cuda_gpu_allocator{
   }
   void deallocate(cuda_gpu_ptr<T> ptr, size_type){
     cudaFree(ptr.impl_); 
+//size_t free_,tot_; 
+//cudaMemGetInfo(&free_,&tot_);
+//qmcplusplus::app_log()<<" after cudaFree: " <<TotalGPUAlloc <<"  free/tot:" <<free_/1024.0/1024.0 <<" " <<tot_/1024.0/1024.0 <<" MB \n"; 
   }
   bool operator==(cuda_gpu_allocator const& other) const{
     return (handles_ == other.handles_); 

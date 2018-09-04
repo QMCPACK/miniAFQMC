@@ -37,17 +37,21 @@ namespace afqmc
 {
 
 template<class THCOps,
-         class af_sys 
+         class af_sys
             >
 inline THCOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, ComplexMatrix<typename af_sys::Alloc>& Propg1)
 {
   // the allocator of af_sys must be consistent with Alloc, otherwise LA operations will not work 
   using Alloc = typename af_sys::Alloc;
+  using Alloc_ooc = typename af_sys::Alloc_ooc;
   using SpAlloc = typename Alloc::template rebind<SPComplexType>::other;
+  using SpAlloc_ooc = typename Alloc_ooc::template rebind<SPComplexType>::other;
   using stdAlloc = std::allocator<ComplexType>; 
   using stdSpAlloc = std::allocator<SPComplexType>; 
   Alloc& alloc(sys.allocator_); 
   SpAlloc spc_alloc(alloc); 
+  Alloc_ooc& alloc_ooc(sys.allocator_ooc_); 
+  SpAlloc_ooc spc_alloc_ooc(alloc_ooc); 
   
 
   int NMO, NAEA, NAEB;
@@ -107,9 +111,12 @@ inline THCOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, Comple
   SPComplexMatrix<SpAlloc> rotMuv( {rotnmu,rotnmu},spc_alloc );   // Muv in half-rotated basis   
   SPComplexMatrix<SpAlloc> rotPiu( {NMO,rotnmu},spc_alloc );   // Interpolating orbitals in half-rotated basis 
   SPComplexMatrix<SpAlloc> rotcPua( {rotnmu,NAEA+NAEB},spc_alloc ); // (half-rotated) Interpolating orbitals in half-rotated basis   
-  SPComplexMatrix<SpAlloc> Luv( {nmu,nmu},spc_alloc );      // Cholesky decomposition of Muv 
   SPComplexMatrix<SpAlloc> Piu( {NMO,nmu},spc_alloc );      // Interpolating orbitals 
   SPComplexMatrix<SpAlloc> cPua( {nmu,NAEA+NAEB},spc_alloc );     // (half-rotated) Interpolating orbitals 
+
+  // (Possibly) Out-of-core data
+  SPComplexMatrix<SpAlloc_ooc> Luv( {nmu,nmu},spc_alloc_ooc );      // Cholesky decomposition of Muv 
+  //SPComplexMatrix<SpAlloc> Luv( {nmu,nmu},spc_alloc );      // Cholesky decomposition of Muv 
 
   // read Half transformed first
   /***************************************/

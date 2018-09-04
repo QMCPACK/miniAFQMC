@@ -33,7 +33,7 @@ double const& real(double const& d){return d;}
 float const& real(float const& f){return f;}
 
 template<class MultiArray2D>
-int getrf_optimal_workspace_size(MultiArray2D & A){
+int getrf_optimal_workspace_size(MultiArray2D && A){
         assert(A.strides()[0] > 0);
         assert(A.strides()[1] == 1);
 
@@ -64,7 +64,7 @@ MultiArray2D getrf(MultiArray2D&& m, Array1D& pivot, Buffer&& WORK){
 }
 
 template<class MultiArray2D>
-int getri_optimal_workspace_size(MultiArray2D & A){
+int getri_optimal_workspace_size(MultiArray2D && A){
         assert(A.strides()[1] == 1);
         assert(A.shape()[0] == A.shape()[1]);
         int lwork = -1; 

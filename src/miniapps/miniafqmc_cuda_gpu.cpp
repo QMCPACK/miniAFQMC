@@ -107,6 +107,8 @@ int main(int argc, char **argv)
   exit(1);
 #endif
 
+  OhmmsInfo("miniafqmc_cuda_gpu",0);
+
   int nsteps=10;
   int nsubsteps=10; 
   int nwalk=16;
@@ -181,12 +183,6 @@ int main(int argc, char **argv)
 
   Alloc um_alloc(handles);
 
-  Random.init(0, 1, iseed);
-  int ip = 0;
-  PrimeNumberSet<uint32_t> myPrimes;
-  // create generator within the thread
-  RandomGenerator<RealType> random_th(myPrimes[ip]);
-
   TimerManager.set_timer_threshold(timer_level_coarse);
   TimerList_t Timers;
   setup_timers(Timers, MiniQMCTimerNames, timer_level_coarse);
@@ -206,7 +202,7 @@ int main(int argc, char **argv)
   std::tie(NMO,NAEA,NAEB) = afqmc::peek(dump);
 
   // Main AFQMC object. Control access to several algorithmic functions.
-  base::afqmc_sys<Alloc> AFQMCSys(NMO,NAEA,um_alloc);
+  base::afqmc_sys<Alloc> AFQMCSys(NMO,NAEA,um_alloc,um_alloc);
   ComplexMatrix<Alloc> Propg1({NMO,NMO}, um_alloc);
 
   THCOps THC(afqmc::Initialize<THCOps,base::afqmc_sys<Alloc>>(dump,dt,AFQMCSys,Propg1));
@@ -264,6 +260,13 @@ int main(int argc, char **argv)
   // initialize overlaps and energy
   AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc);
   RealType Eav = THC.energy(W_data,Gc);
+
+  {
+    size_t free_,tot_;
+    cudaMemGetInfo(&free_,&tot_);
+    qmcplusplus::app_log()<<"\n GPU Memory Available,  Total in MB: "
+                          <<free_/1024.0/1024.0 <<" " <<tot_/1024.0/1024.0 <<std::endl;
+  }
 
   std::cout<<"\n";
   std::cout<<"***********************************************************\n";

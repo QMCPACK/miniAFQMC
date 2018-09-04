@@ -28,6 +28,9 @@
  */
 // clang-format on
 #include <random>
+#include <string>
+#include <unistd.h>
+#include <stdint.h>
 
 #include <Configuration.h>
 #include <Utilities/PrimeNumberSet.h>
@@ -52,13 +55,11 @@
 #include "cublasXt.h"
 #include "cusolverDn.h"
 #include <curand.h>
-#ifdef HAVE_MAGMA
-#include "magma_v2.h"
-#include "magma_lapack.h" // if you need BLAS & LAPACK
-#endif
+#include "nccl.h"
 
 #include "Numerics/detail/cuda_pointers.hpp"
 #include "Kernels/zero_complex_part.cuh"
+#include "Kernels/sum.cuh"
 #include "Kernels/print.cuh"
 
 using namespace qmcplusplus;
@@ -79,7 +80,8 @@ enum MiniQMCTimers
   comm_reduce,
   comm_allreduce,
   comm_bcast,
-  Timer_copyn
+  Timer_copyn,
+  Timer0
 };
 
 TimerNameList_t<MiniQMCTimers> MiniQMCTimerNames = {
@@ -98,6 +100,7 @@ TimerNameList_t<MiniQMCTimers> MiniQMCTimerNames = {
     {comm_allreduce, "Comm_allreduce"},
     {comm_bcast, "Comm_bcast"},
     {Timer_copyn, "GcX_copy_n"},
+    {Timer0, "axpy"},
 };
 
 void print_help()
@@ -113,6 +116,24 @@ void print_help()
   printf("-t                If set to no, do not use half-rotated transposed Cholesky matrix to calculate bias potential (default yes).\n"); 
   printf("-v                Verbose output\n");
 }
+
+#define NCCLCHECK(cmd) do {                         \
+  ncclResult_t r = cmd;                             \
+  if (r!= ncclSuccess) {                            \
+    printf("Failed, NCCL error %s:%d '%s'\n",             \
+        __FILE__,__LINE__,ncclGetErrorString(r));   \
+    exit(EXIT_FAILURE);                             \
+  }                                                 \
+} while(0)
+
+template<class MatA, class MatB, class MatC, class THCOps>
+double distributed_energy_v1(ncclComm_t& nccl_comm, cudaStream_t& s, int rank, int nnodes, 
+                        MPI_Request &req_Gsend, MPI_Request& req_Grecv,
+                        MatA& Gwork, MatB& Grecv, THCOps& THC, MatC& E);
+
+template<class MatA, class MatB, class MatC, class THCOps>
+double distributed_energy_v2(ncclComm_t& nccl_comm, cudaStream_t& s, int rank, int nnodes,
+                        MatA& Gwork, MatB& Grecv, THCOps& THC, MatC& E);
 
 int main(int argc, char **argv)
 {
@@ -136,7 +157,11 @@ int main(int argc, char **argv)
     MPI_Abort(comm,1);  
   }
 
-  cuda::cuda_check(cudaSetDevice(rank),"cudaSetDevice()");
+  cuda::cuda_check(cudaSetDevice(node_rank),"cudaSetDevice()");
+
+  char hostname[1024];
+  gethostname(hostname, 1024);
+  std::cout<<" rank ,hostname: " <<rank <<" " <<node_rank <<" " <<hostname <<std::endl;
 
   OhmmsInfo("miniafqmc_cuda_gpu_mpi",rank);
   
@@ -205,6 +230,7 @@ int main(int argc, char **argv)
   using CMatrix_ref = ComplexMatrix_ref<Alloc::pointer>;
   using CVector = ComplexVector<Alloc>;
   using cuda::cublas_check;
+  using cuda::cuda_check;
   using cuda::curand_check;
   using cuda::cusolver_check;
 
@@ -221,11 +247,21 @@ int main(int argc, char **argv)
   curand_check(curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_DEFAULT),"curandCreateGenerator");
   // replicated RNG string for now to keep things deterministic and independent of # of cores
   curand_check(curandSetPseudoRandomGeneratorSeed(gen,1234ULL),"curandSetPseudoRandomGeneratorSeed");
-  
-#ifdef HAVE_MAGMA
-#else
+
+  // setup nccl
+  ncclComm_t nccl_comm;
+  // NOTE: using multiple streams allows you to overlap communication and computation
+  // try it later
+  cudaStream_t s;
+  cuda_check(cudaStreamCreate(&s),"cudaStreamCreate(&s)");
+  {
+    ncclUniqueId id;
+    if (rank == 0) ncclGetUniqueId(&id);
+    MPI_Bcast((void *)&id, sizeof(id), MPI_BYTE, 0, comm);
+    NCCLCHECK(ncclCommInitRank(&nccl_comm, nproc, id, rank));  
+  }
+
   cuda::gpu_handles handles{&cublas_handle,&cublasXt_handle,&cusolverDn_handle};
-#endif
 
   Alloc um_alloc(handles);
 
@@ -252,6 +288,10 @@ int main(int argc, char **argv)
   CMatrix Propg1({NMO,NMO}, um_alloc);
 
   THCOps THC(afqmc::Initialize<THCOps,base::afqmc_sys<Alloc>>(dump,dt,AFQMCSys,Propg1,comm));
+
+  double E0 = THC.getE0();
+
+  dump.close();
 
   RealType Eshift = 0;
   int nchol = THC.number_of_cholesky_vectors();            // number of cholesky vectors  
@@ -285,9 +325,15 @@ int main(int argc, char **argv)
   CMatrix_ref X( GcX.origin() + Gc.num_elements(), {nchol,nwalk} ); // X(n,nw) = rand(n,nw) ( + vbias(n,nw)) 
   CMatrix vHSwork( {nwalk,NMO*NMO}, um_alloc );  // Hubbard-Stratonovich potential
 
-  // temporary buffer space since Reduce and Allreduce don't seem to work with gpu pointers yet
-  std::vector<ComplexType> buffer( std::max(nwalk*NMO*NMO,nwalk*(NAK+nchol)) );
+  // distributed Energy
+  // doesn't seem to work with CUDA memory
+  MPI_Request req_Gsend, req_Grecv;
+  MPI_Send_init(to_address(Gc.origin()),Gc.num_elements()*sizeof(ComplexType),MPI_CHAR,
+                  (rank==0)?(nproc-1):(rank-1),1234,comm,&req_Gsend);
+  MPI_Recv_init(to_address(Gwork.origin()),Gwork.num_elements()*sizeof(ComplexType),MPI_CHAR,
+                  (rank+1)%nproc,1234,comm,&req_Grecv);
 
+  CMatrix Etot( {nwalk*nproc,3}, um_alloc );
   WalkerContainer<Alloc> W( {nwalk,2,NMO,NAEA}, um_alloc );
   /* 
     0: E1, 
@@ -314,16 +360,15 @@ int main(int argc, char **argv)
 
   // initialize overlaps and energy
   AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc);
-  RealType Eav_, Eav;
-  Eav_ = Eav = THC.energy(W_data,Gc,root);
-  MPI_Reduce(&Eav_,&Eav,1,MPI_DOUBLE,MPI_SUM,0,comm);
+  //RealType Eav = E0 + distributed_energy_v1(nccl_comm,s,rank,nproc,req_Gsend,req_Grecv,Gc,Gwork,THC,Etot);
+  RealType Eav = E0 + distributed_energy_v2(nccl_comm,s,rank,nproc,Gc,Gwork,THC,Etot);
 
   if(rank==0) {
-    size_t free_,tot_;
+    size_t free_,tot_; 
     cudaMemGetInfo(&free_,&tot_);
-    qmcplusplus::app_log()<<"\n GPU Memory Available,  Total in MB: "
+    qmcplusplus::app_log()<<"\n GPU Memory Available,  Total in MB: " 
                           <<free_/1024.0/1024.0 <<" " <<tot_/1024.0/1024.0 <<std::endl;
-  }
+  } 
 
   app_log()<<"\n";
   app_log()<<"***********************************************************\n";
@@ -364,21 +409,18 @@ int main(int argc, char **argv)
           cuda::copy_n(randNums.origin(),randNums.num_elements(),X.origin());
         }
         Timers[Timer_copyn]->stop();
-        MPI_Bcast(to_address(GcX.origin()),GcX.num_elements(),MPI_DOUBLE_COMPLEX,np,comm); 
+        NCCLCHECK(ncclBcast(to_address(GcX.origin()),2*GcX.num_elements(),ncclDouble,np,nccl_comm,s));
+        cuda_check(cudaStreamSynchronize(s),"cudaStreamSynchronize(s)");
         Timers[comm_bcast]->stop();
 
         Timers[Timer_vbias]->start();
         THC.vbias(Gc,vbias,sqrtdt);
         Timers[Timer_vbias]->stop();
         Timers[comm_vbias]->start();
-//        MPI_Allreduce(MPI_IN_PLACE, to_address(vbias.origin()), vbias.num_elements(), MPI_DOUBLE_COMPLEX,
-//                      MPI_SUM,comm);  
-        cuda::copy_n(vbias.origin(),vbias.num_elements(),buffer.data()); 
-        Timers[comm_allreduce]->start();
-        MPI_Allreduce(MPI_IN_PLACE, buffer.data(), vbias.num_elements(), MPI_DOUBLE_COMPLEX,
-                      MPI_SUM,comm);  
-        Timers[comm_allreduce]->stop();
-        cuda::copy_n(buffer.data(),vbias.num_elements(),vbias.origin()); 
+        NCCLCHECK(ncclAllReduce((const void*)to_address(vbias.origin()), 
+                                (void*)to_address(vbias.origin()), 2*vbias.num_elements(), 
+                                ncclDouble, ncclSum, nccl_comm, s));
+        cuda_check(cudaStreamSynchronize(s),"cudaStreamSynchronize(s)");
         Timers[comm_vbias]->stop();
 
         // 2. calculate X and weight
@@ -392,20 +434,15 @@ int main(int argc, char **argv)
         THC.vHS(X,vHSwork,sqrtdt);
         Timers[Timer_vHS]->stop();
 
+        // try a separate stream for this later and move sync to end of the loop
         Timers[comm_vhs]->start();
-        // This could be non-blocking in principle
-//        MPI_Reduce(to_address(vHSwork.origin()),to_address(vHS.origin()),vHS.num_elements(),
-//                   MPI_DOUBLE_COMPLEX,MPI_SUM,np,comm);
-        cuda::copy_n(vHSwork.origin(),vHSwork.num_elements(),buffer.data()); 
-        Timers[comm_reduce]->start();
-        if(rank==np) {
-          MPI_Reduce(MPI_IN_PLACE, buffer.data(), vHSwork.num_elements(), MPI_DOUBLE_COMPLEX,
-                      MPI_SUM,np,comm);  
-          cuda::copy_n(buffer.data(),vHS.num_elements(),vHS.origin()); 
-        } else
-          MPI_Reduce(buffer.data(), NULL, vHSwork.num_elements(), MPI_DOUBLE_COMPLEX,
-                      MPI_SUM,np,comm);  
-        Timers[comm_reduce]->stop();
+        if(rank==np)
+          NCCLCHECK(ncclReduce(to_address(vHSwork.origin()), to_address(vHS.origin()), 
+                               2*vHSwork.num_elements(), ncclDouble, ncclSum, np, nccl_comm, s));
+        else
+          NCCLCHECK(ncclReduce(to_address(vHSwork.origin()), NULL, 
+                               2*vHSwork.num_elements(), ncclDouble, ncclSum, np, nccl_comm, s));
+        cuda_check(cudaStreamSynchronize(s),"cudaStreamSynchronize(s)");
         Timers[comm_vhs]->stop();
 
       }  
@@ -433,8 +470,8 @@ int main(int argc, char **argv)
     // Calculate energy
     Timers[Timer_eloc]->start();
     AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc);
-    Eav_ = Eav = THC.energy(W_data,Gc,root);
-    MPI_Reduce(&Eav_,&Eav,1,MPI_DOUBLE,MPI_SUM,0,comm);
+    //Eav = E0 + distributed_energy_v1(nccl_comm,s,rank,nproc,req_Gsend,req_Grecv,Gc,Gwork,THC,Etot);
+    Eav = E0 + distributed_energy_v2(nccl_comm,s,rank,nproc,Gc,Gwork,THC,Etot);
     app_log()<<step <<"   " <<Eav <<"\n";
     Timers[Timer_eloc]->stop();
 
@@ -453,3 +490,63 @@ int main(int argc, char **argv)
 
   return 0;
 }
+
+template<class MatA, class MatB, class MatC, class THCOps>
+double distributed_energy_v1(ncclComm_t& nccl_comm, cudaStream_t& s, int rank, int nnodes, 
+                        MPI_Request &req_Gsend, MPI_Request& req_Grecv,
+                        MatA& Gwork, MatB& Grecv, THCOps& THC, MatC& E)
+{
+  MPI_Status st;
+  int nwalk = Gwork.shape()[0];
+
+  for(int k=0; k<nnodes; k++) {
+
+    // wait for G from node behind you, copy to Gwork  
+    if(k>0) {
+      MPI_Wait(&req_Grecv,&st);
+      MPI_Wait(&req_Gsend,&st);     // need to wait for Gsend in order to overwrite Gwork  
+      cuda::copy_n(Grecv.origin(),Gwork.num_elements(),Gwork.origin());
+    }
+
+    // post send/recv messages with nodes ahead and behind you
+    if(k < nnodes-1) {
+      MPI_Start(&req_Gsend);
+      MPI_Start(&req_Grecv);
+    }
+
+    // calculate your contribution of the local enery to the set of walkers in Gwork
+    int q = (k+rank)%nnodes;
+    THC.energy( E({q*nwalk,(q+1)*nwalk},{0,3}), Gwork, k==0);
+  }
+  if(nnodes>1)
+    NCCLCHECK(ncclAllReduce(to_address(E.origin()),
+                          to_address(E.origin()), E.num_elements(),
+                          ncclDouble, ncclSum, nccl_comm, s));
+  return real(kernels::sum(E.num_elements(),to_address(E.origin()),1))/double(nnodes*nwalk);
+}
+
+template<class MatA, class MatB, class MatC, class THCOps>
+double distributed_energy_v2(ncclComm_t& nccl_comm, cudaStream_t& s, int rank, int nnodes,
+                        MatA& Gc, MatB& Gwork, THCOps& THC, MatC& E)
+{
+  int nwalk = Gwork.shape()[0];
+  for(int k=0; k<nnodes; k++) {
+
+    if(rank==k)
+      cuda::copy_n(Gc.origin(),Gc.num_elements(),Gwork.origin());
+    NCCLCHECK(ncclBcast(to_address(Gwork.origin()),2*Gwork.num_elements(),ncclDouble,k,nccl_comm,s));
+    cuda::cuda_check(cudaStreamSynchronize(s),"cudaStreamSynchronize(s)");
+
+    THC.energy( E({k*nwalk,(k+1)*nwalk},{0,3}), Gwork, k==rank);
+  }
+  if(nnodes>1) {
+    NCCLCHECK(ncclAllReduce(to_address(E.origin()),
+                          to_address(E.origin()), 2*E.num_elements(),
+                          ncclDouble, ncclSum, nccl_comm, s));
+    cuda::cuda_check(cudaStreamSynchronize(s),"cudaStreamSynchronize(s)");
+  }
+  return real(kernels::sum(E.num_elements(),to_address(E.origin()),1))/double(nnodes*nwalk);
+}
+
+
+

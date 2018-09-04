@@ -40,28 +40,37 @@ namespace base
  * 
  * This version works on a single memory space, e.g. CPU, GPU, Managed Memory, etc, based on the allocator. 
  */
-template<class AllocType // = std::allocator<ComplexType>
+template<class AllocType, // = std::allocator<ComplexType>
+         class AllocType_ooc = AllocType 
         >
 struct afqmc_sys: public AFQMCInfo
 {
 
   public:
 
-    using Alloc = AllocType; 
-    using pointer = typename Alloc::pointer; 
-    using const_pointer = typename Alloc::const_pointer; 
-    using IAlloc = typename Alloc::template rebind<int>::other;; 
+    using Alloc = AllocType;
+    using pointer = typename Alloc::pointer;
+    using const_pointer = typename Alloc::const_pointer;
+    using IAlloc = typename Alloc::template rebind<int>::other;;
+    using Alloc_ooc = AllocType_ooc;
+    using pointer_ooc = typename Alloc_ooc::pointer;
+    using const_pointer_ooc = typename Alloc_ooc::const_pointer;
+    using IAlloc_ooc = typename Alloc_ooc::template rebind<int>::other;;
     Alloc allocator_;
     IAlloc iallocator_;
+    Alloc_ooc allocator_ooc_;
+    IAlloc_ooc iallocator_ooc_;
 
     ComplexMatrix<Alloc> trialwfn_alpha;
     ComplexMatrix<Alloc> trialwfn_beta;
     
     afqmc_sys() = delete;
-    afqmc_sys(int nmo_, int na, Alloc alloc_ = Alloc{}):
+    afqmc_sys(int nmo_, int na, Alloc alloc_ = Alloc{}, Alloc_ooc alloc_ooc_ = Alloc_ooc{}):
       AFQMCInfo(nmo_,na,na),
       allocator_(alloc_),
       iallocator_(alloc_),
+      allocator_ooc_(alloc_ooc_),
+      iallocator_ooc_(alloc_ooc_),
       trialwfn_alpha( {nmo_,na}, alloc_ ), 
       trialwfn_beta( {nmo_,na}, alloc_ ), 
       NMO(nmo_),

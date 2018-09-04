@@ -36,7 +36,7 @@
 #include <getopt.h>
 #include "io/hdf_archive.h"
 
-#include "AFQMC/afqmc_sys.hpp"
+#include "AFQMC/afqmc_sys_batched.hpp"
 #include "Matrix/initialize_serial.hpp"
 #include "Matrix/peek.hpp"
 #include "AFQMC/THCOps.hpp"
@@ -49,40 +49,40 @@
 #include "cublas_v2.h"
 #include "cublasXt.h"
 #include "cusolverDn.h"
+#include <curand.h>
 #ifdef HAVE_MAGMA
 #include "magma_v2.h"
 #include "magma_lapack.h" // if you need BLAS & LAPACK
 #endif
 
 #include "Numerics/detail/cuda_pointers.hpp"
+#include "Kernels/zero_complex_part.cuh"
 
 using namespace qmcplusplus;
 
 enum MiniQMCTimers
 {
   Timer_Total,
+  Timer_eloc,
   Timer_DM,
-  Timer_vbias,
-  Timer_vHS,
-  Timer_X,
   Timer_Propg,
-  Timer_extra,
   Timer_ovlp,
-  Timer_ortho,
-  Timer_eloc
+  Timer_vHS,
+  Timer_vbias,
+  Timer_X,
+  Timer_ortho
 };
 
 TimerNameList_t<MiniQMCTimers> MiniQMCTimerNames = {
     {Timer_Total, "Total"},
-    {Timer_DM, "Mixed Density Matrix"},
-    {Timer_vbias, "Bias Potential"},
-    {Timer_vHS, "H-S Potential"},
-    {Timer_X, "Sigma"},
-    {Timer_Propg, "Propagation"},
-    {Timer_extra, "Other"},
-    {Timer_ovlp, "Overlap"},
-    {Timer_ortho, "Orthgonalization"},
-    {Timer_eloc, "Local Energy"}
+    {Timer_eloc, "Energy"},
+    {Timer_DM, "G_for_vbias"},
+    {Timer_Propg, "Propagate"},
+    {Timer_ovlp, "PseudoEnergy"},
+    {Timer_vHS, "vHS"},
+    {Timer_vbias, "vbias"},
+    {Timer_X, "X"},
+    {Timer_ortho, "Ortho"}
 };
 
 void print_help()
@@ -102,6 +102,8 @@ void print_help()
 int main(int argc, char **argv)
 {
 
+  OhmmsInfo("miniafqmc_cuda_outofcore",0);
+
 #ifndef QMC_COMPLEX
   std::cerr<<" Error: Please compile complex executable, QMC_COMPLEX=1. " <<std::endl;
   exit(1);
@@ -112,6 +114,7 @@ int main(int argc, char **argv)
   int nwalk=16;
   int northo = 10;
   int ndev=1;
+  int nbatch=32;
   const double dt = 0.005;  
   const double sqrtdt = std::sqrt(dt);  
 
@@ -126,7 +129,7 @@ int main(int argc, char **argv)
 
   char *g_opt_arg;
   int opt;
-  while ((opt = getopt(argc, argv, "thvi:s:w:o:f:d:")) != -1)
+  while ((opt = getopt(argc, argv, "thvi:s:w:o:f:d:b:")) != -1)
   {
     switch (opt)
     {
@@ -146,6 +149,9 @@ int main(int argc, char **argv)
     case 'd': // the number of sub steps for drift/diffusion
       ndev = atoi(optarg);
       break;
+    case 'b': // the number of batches 
+      nbatch = atoi(optarg);
+      break;
     case 'f':
       init_file = std::string(optarg);
       break;    
@@ -154,10 +160,14 @@ int main(int argc, char **argv)
     }
   }
 
+  nbatch = std::min(nbatch,2*nwalk);
+
   // using Unified Memory allocator
-  using Alloc = cuda::cuda_ooc_allocator<ComplexType>;
-  using THCOps = afqmc::THCOps<Alloc>;
+  using Alloc = cuda::cuda_gpu_allocator<ComplexType>;
+  using Alloc_ooc = cuda::cuda_ooc_allocator<ComplexType>;
+  using THCOps = afqmc::THCOps<Alloc,Alloc_ooc>;
   using cuda::cublas_check;
+  using cuda::curand_check;
   using cuda::cusolver_check;
 
   cublasHandle_t cublas_handle;
@@ -169,19 +179,17 @@ int main(int argc, char **argv)
   cublas_check(cublasXtDeviceSelect(cublasXt_handle, ndev, devID), "cublasXtDeviceSelect");
   cublas_check(cublasXtSetPinningMemMode(cublasXt_handle, CUBLASXT_PINNING_ENABLED), "cublasXtSetPinningMemMode");
   cusolver_check(cusolverDnCreate (& cusolverDn_handle ), "cusolverDnCreate");
-
+  curandGenerator_t gen;
+  curand_check(curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_DEFAULT),"curandCreateGenerator");
+  curand_check(curandSetPseudoRandomGeneratorSeed(gen,1234ULL),"curandSetPseudoRandomGeneratorSeed");
+  
 #ifdef HAVE_MAGMA
 #else
   cuda::gpu_handles handles{&cublas_handle,&cublasXt_handle,&cusolverDn_handle};
 #endif
 
   Alloc um_alloc(handles);
-
-  Random.init(0, 1, iseed);
-  int ip = 0;
-  PrimeNumberSet<uint32_t> myPrimes;
-  // create generator within the thread
-  RandomGenerator<RealType> random_th(myPrimes[ip]);
+  Alloc_ooc ooc_alloc(handles);
 
   TimerManager.set_timer_threshold(timer_level_coarse);
   TimerList_t Timers;
@@ -202,10 +210,10 @@ int main(int argc, char **argv)
   std::tie(NMO,NAEA,NAEB) = afqmc::peek(dump);
 
   // Main AFQMC object. Control access to several algorithmic functions.
-  base::afqmc_sys<Alloc> AFQMCSys(NMO,NAEA,um_alloc);
+  base::afqmc_sys<Alloc,Alloc_ooc> AFQMCSys(NMO,NAEA,um_alloc,ooc_alloc,nbatch);
   ComplexMatrix<Alloc> Propg1({NMO,NMO}, um_alloc);
 
-  THCOps THC(afqmc::Initialize<THCOps>(dump,dt,AFQMCSys,Propg1));
+  THCOps THC(afqmc::Initialize<THCOps,base::afqmc_sys<Alloc,Alloc_ooc>>(dump,dt,AFQMCSys,Propg1));
 
   RealType Eshift = 0;
   int nchol = THC.number_of_cholesky_vectors();            // number of cholesky vectors  
@@ -231,28 +239,47 @@ int main(int argc, char **argv)
   ComplexMatrix<Alloc> vHS( {nwalk,NMO*NMO}, um_alloc );        // Hubbard-Stratonovich potential
   ComplexMatrix<Alloc> Gc( {nwalk,NAK}, um_alloc );           // compact density matrix for energy evaluation
   ComplexMatrix<Alloc> X( {nchol,nwalk}, um_alloc );         // X(n,nw) = rand(n,nw) ( + vbias(n,nw)) 
-  ComplexVector<Alloc> hybridW( {nwalk}, um_alloc );         // stores weight factors
   ComplexVector<Alloc> eloc( {nwalk}, um_alloc );         // stores local energies
 
+std::cout<<" here 0 " <<std::endl;
   WalkerContainer<Alloc> W( {nwalk,2,NMO,NAEA}, um_alloc );
-  // 0: eloc, 1: weight, 2: ovlp_up, 3: ovlp_down, 4: w_eloc, 5: old_w_eloc, 6: old_ovlp_alpha, 7: old_ovlp_beta
-  ComplexMatrix<Alloc> W_data( {nwalk,8}, um_alloc );
+  /* 
+    0: E1, 
+    1: EXX,
+    2: EJ, 
+    3: ovlp_up, 
+    4: ovlp_down, 
+  */
+  ComplexMatrix<Alloc> W_data( {nwalk,5}, um_alloc );
   // initialize walkers to trial wave function
-  for(int n=0; n<nwalk; n++)
-    for(int nm=0; nm<NMO; nm++)
-      for(int na=0; na<NAEA; na++) {
-        using std::conj;
-        W[n][0][nm][na] = conj(AFQMCSys.trialwfn_alpha[nm][na]);
-        W[n][1][nm][na] = conj(AFQMCSys.trialwfn_beta[nm][na]);
-      }
+  {
+    // conj(A) = H( T(A) ) (avoids cuda kernels)
+    // trick to avoid kernels
+    using ma::H;
+    using ma::T;
+    ComplexMatrix<Alloc> PsiT( {NAEA,NMO}, um_alloc );
+    ma::transform(T(AFQMCSys.trialwfn_alpha),PsiT);
+    for(int n=0; n<nwalk; n++)
+      ma::transform(H(PsiT),W[n][0]);
+    ma::transform(T(AFQMCSys.trialwfn_beta),PsiT);
+    for(int n=0; n<nwalk; n++)
+      ma::transform(H(PsiT),W[n][1]);
+  }
 
-  // set weights to 1
-  for(int n=0; n<nwalk; n++)
-    W_data[n][1] = ComplexType(1.);
+std::cout<<" here 1 " <<std::endl;
 
   // initialize overlaps and energy
   AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc);
+std::cout<<" here 2 " <<std::endl;
   RealType Eav = THC.energy(W_data,Gc);
+std::cout<<" here 3 " <<std::endl;
+
+  {
+    size_t free_,tot_;
+    cudaMemGetInfo(&free_,&tot_);
+    qmcplusplus::app_log()<<"\n GPU Memory Available,  Total in MB: "
+                          <<free_/1024.0/1024.0 <<" " <<tot_/1024.0/1024.0 <<std::endl;
+  }
 
   std::cout<<"\n";
   std::cout<<"***********************************************************\n";
@@ -281,14 +308,13 @@ int main(int argc, char **argv)
       // 2. calculate X and weight
       //  X(chol,nw) = rand + i*vbias(chol,nw)
       Timers[Timer_X]->start();
-      // write version based on dressed pointer, and call cudaRNG for gpu pointers
-      random_th.generate_normal(to_address(X.origin()),X.num_elements());
-      std::fill(hybridW.begin(),hybridW.end(),ComplexType(0.));
-      for(int n=0; n<nchol; n++)
-        for(int nw=0; nw<nwalk; nw++) {
-          hybridW[nw] -= im*vbias[n][nw]*(X[n][nw]+halfim*vbias[n][nw]);
-          X[n][nw] += im*vbias[n][nw];
-        }
+      // hack to get "complex" valued real random numbers 
+      curand_check(curandGenerateNormalDouble(gen,
+                        reinterpret_cast<double*>(to_address(X.origin())),2*X.num_elements(),0.0,1.0),
+                                          "curandGenerateNormalDouble");
+      // hack hack hack!!!
+      kernels::zero_complex_part(X.num_elements(),to_address(X.origin()));
+      ma::axpy(im,vbias,X);
       Timers[Timer_X]->stop();
 
       // 3. calculate vHS
@@ -302,51 +328,26 @@ int main(int argc, char **argv)
       AFQMCSys.propagate(W,Propg1,vHS);
       Timers[Timer_Propg]->stop();
 
-      // 5. update overlaps
-      Timers[Timer_extra]->start();
-      for(int nw=0; nw<nwalk; nw++) {
-        W_data[nw][5] = W_data[nw][4];
-        W_data[nw][6] = W_data[nw][2];
-        W_data[nw][7] = W_data[nw][3];
-      }
-      Timers[Timer_extra]->stop();
-      Timers[Timer_ovlp]->start();
-      AFQMCSys.calculate_overlaps(W,W_data);
-      Timers[Timer_ovlp]->stop();
-
-      // 6. adjust weights and walker data      
-      Timers[Timer_extra]->start();
-      RealType et = 0.;
-      for(int nw=0; nw<nwalk; nw++) {
-        ComplexType ratioOverlaps = W_data[nw][2]*W_data[nw][3]/(W_data[nw][6]*W_data[nw][7] );
-        RealType scale = std::max(0.0,std::cos( std::arg( ratioOverlaps )) );
-        W_data[nw][4] = -( hybridW[nw] + std::log(ratioOverlaps) )/dt;
-        W_data[nw][1] *= ComplexType(scale*std::exp( -dt*(0.5*( W_data[nw][4].real() + W_data[nw][5].real() ) - Eshift) ),0.0);
-        et += W_data[nw][4].real();
-      }
-
-      // decide what to do with Eshift later
-      Eshift = et/nwalk;
-      Timers[Timer_extra]->stop();
-
+      // 5. Orthogonalize if needed 
       if(step_tot > 0 && step_tot%northo == 0) {
         Timers[Timer_ortho]->start();
         AFQMCSys.orthogonalize(W);
         Timers[Timer_ortho]->stop();
-        Timers[Timer_ovlp]->start();
-        AFQMCSys.calculate_overlaps(W,W_data);
-        Timers[Timer_ovlp]->stop();
       }
+
+      // 6. Update overlaps 
+      Timers[Timer_ovlp]->start();
+      AFQMCSys.calculate_overlaps(W,W_data);
+      Timers[Timer_ovlp]->stop();
 
     }
 
+    // Calculate energy
     Timers[Timer_eloc]->start();
     AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc);
     Eav = THC.energy(W_data,Gc);
     std::cout<<step <<"   " <<Eav <<"\n";
     Timers[Timer_eloc]->stop();
-
-    // Branching in real code would happen here!!!
 
   }
   Timers[Timer_Total]->stop();

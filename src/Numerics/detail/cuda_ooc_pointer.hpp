@@ -87,13 +87,19 @@ template<class T> struct cuda_ooc_allocator{
 
   cuda_ooc_ptr<T> allocate(size_type n, const void* hint = 0){
     if(n == 0) return cuda_ooc_ptr<T>{};
-    T* p = new T[n];
-    cudaHostRegister(p,sizeof(T)*n,cudaHostRegisterPortable);
+    T* p; // = new T[n];
+    // what is the difference between cudaHostAlloc and cudaMallocHost???
+    if(cudaSuccess != cudaMallocHost ((void**)&p,n*sizeof(T))) {
+      std::cerr<<" Error allocating " <<n*sizeof(T)/1024.0/1024.0 <<" MBs with cudaMallocHost." <<std::endl;
+      throw std::runtime_error("Error: cudaMalloc returned error code.");
+    }
+    //cuda_check(cudaHostRegister(p,sizeof(T)*n,cudaHostRegisterDefault),"cudaHostRegister");
     return cuda_ooc_ptr<T>{p,handles_};
   }
   void deallocate(cuda_ooc_ptr<T> ptr, size_type){
-    cudaHostUnregister(ptr.impl_);
-    delete [] ptr.impl_; // is this correct when a single element is allocated??? 
+    //cuda_check(cudaHostUnregister(ptr.impl_),"cudaHostUnregister");
+    cudaFree(ptr.impl_);
+    //delete [] ptr.impl_; // is this correct when a single element is allocated??? 
   }
   bool operator==(cuda_ooc_allocator const& other) const{
     return (handles_ == other.handles_);

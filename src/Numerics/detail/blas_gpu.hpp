@@ -154,11 +154,8 @@ namespace BLAS_GPU
                           T beta,
                           ptrC && y, int incy)
   {
-#ifdef HAVE_MAGMA
-#else
     using BLAS_CPU::gemv;
     gemv(Atrans,M,N,alpha,to_address(A),lda,to_address(x),incx,beta,to_address(y),incy);
-#endif    
 /*
     const char Btrans('N');
     const int one(1);
