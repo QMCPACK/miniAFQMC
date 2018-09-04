@@ -241,7 +241,6 @@ int main(int argc, char **argv)
   ComplexMatrix<Alloc> X( {nchol,nwalk}, um_alloc );         // X(n,nw) = rand(n,nw) ( + vbias(n,nw)) 
   ComplexVector<Alloc> eloc( {nwalk}, um_alloc );         // stores local energies
 
-std::cout<<" here 0 " <<std::endl;
   WalkerContainer<Alloc> W( {nwalk,2,NMO,NAEA}, um_alloc );
   /* 
     0: E1, 
@@ -266,13 +265,9 @@ std::cout<<" here 0 " <<std::endl;
       ma::transform(H(PsiT),W[n][1]);
   }
 
-std::cout<<" here 1 " <<std::endl;
-
   // initialize overlaps and energy
   AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc);
-std::cout<<" here 2 " <<std::endl;
   RealType Eav = THC.energy(W_data,Gc);
-std::cout<<" here 3 " <<std::endl;
 
   {
     size_t free_,tot_;
