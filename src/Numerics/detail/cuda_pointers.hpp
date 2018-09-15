@@ -17,6 +17,7 @@
 
 #include "Numerics/detail/raw_pointers.hpp"
 #ifdef QMC_CUDA 
+#include <algorithm>
 #include <cuda_runtime.h>
 #include "Utilities/type_conversion.hpp"
 #include "Numerics/detail/cuda_gpu_pointer.hpp"
@@ -26,6 +27,7 @@
 
 #include "Kernels/fill_n.cuh"
 #include "Kernels/print.cuh"
+#include "Kernels/copy_n_cast.cuh"
 
 namespace cuda {
 
@@ -34,25 +36,22 @@ namespace cuda {
  * NEED A is_cuda_pointer predicate!!!!
  */
 template<class ptrA, class Size, class ptrB, 
-         typename = typename std::enable_if_t<not std::is_pointer<ptrA>::value>, 
-         typename = typename std::enable_if_t<not std::is_pointer<ptrB>::value> 
-        > 
+         typename = typename std::enable_if_t<(not std::is_pointer<ptrA>::value) and
+                                  (not std::is_pointer<ptrB>::value)> > 
 ptrB copy_n(ptrA const A, Size n, ptrB B) {
   if(cudaSuccess != cudaMemcpy(to_address(B),to_address(A),n*sizeof(typename ptrA::value_type),cudaMemcpyDefault))
    throw std::runtime_error("Error: cudaMemcpy returned error code.");
   return B+n; 
 }  
 template<class T, class Size, class ptrA,
-         typename = typename std::enable_if_t<not std::is_pointer<ptrA>::value> 
->
+         typename = typename std::enable_if_t<(not std::is_pointer<ptrA>::value)> > 
 T* copy_n(ptrA const A, Size n, T* B) {
   if(cudaSuccess != cudaMemcpy(B,to_address(A),n*sizeof(typename ptrA::value_type),cudaMemcpyDefault))
    throw std::runtime_error("Error: cudaMemcpy returned error code.");
   return B+n;
 }
 template<class T, class Size, class ptrB,
-         typename = typename std::enable_if_t<not std::is_pointer<ptrB>::value> 
->
+         typename = typename std::enable_if_t<(not std::is_pointer<ptrB>::value)> >
 ptrB copy_n(T const* A, Size n, ptrB B) {
   if(cudaSuccess != cudaMemcpy(to_address(B),A,n*sizeof(T),cudaMemcpyDefault))
    throw std::runtime_error("Error: cudaMemcpy returned error code.");
@@ -63,7 +62,63 @@ T* copy_n(T const* A, Size n, T* B) {
   return std::copy_n(A,n,B);    
 }
 
+// array casting ( e.g. change precision) 
+template<class ptrA, class ptrB, class Size,
+     typename = typename std::enable_if_t< (ptrA::memory_type != GPU_MEMORY_POINTER_TYPE) and
+                                           (ptrB::memory_type != GPU_MEMORY_POINTER_TYPE) > >   
+ptrB copy_n_cast(ptrA const A, Size n, ptrB B) {
+  using T = typename ptrA::value_type;
+  using Q = typename ptrB::value_type;
+  for(Size i=0; i<n; i++, ++A, ++B)
+    *B = static_cast<Q>(*A);
+  return B;
+}
+template<class ptrA, class ptrB, class Size,
+     typename = typename std::enable_if_t< (ptrA::memory_type == GPU_MEMORY_POINTER_TYPE) and
+                                           (ptrB::memory_type == GPU_MEMORY_POINTER_TYPE) >,
+     typename = void    >  
+ptrB copy_n_cast(ptrA const A, Size n, ptrB B) {
+  kernels::copy_n_cast(to_address(A),n,to_address(B));
+  return B;
+}
 
+template<class Q, class ptrA, class Size,
+     typename = typename std::enable_if_t< (ptrA::memory_type != GPU_MEMORY_POINTER_TYPE)> > 
+Q* copy_n_cast(ptrA const A, Size n, Q * B) {
+  for(Size i=0; i<n; i++, ++A, ++B)
+    *B = static_cast<Q>(*A);
+  return B;
+}
+template<class Q, class ptrA, class Size,
+     typename = typename std::enable_if_t< (ptrA::memory_type == GPU_MEMORY_POINTER_TYPE)>,
+     typename = void    >
+Q* copy_n_cast(ptrA const A, Size n, Q * B) {
+  throw std::runtime_error(" Error: copy_n_cast(gpu_ptr,n,T*) is disabled."); 
+  return B;
+}
+
+template<class T, class ptrB, class Size,
+     typename = typename std::enable_if_t< (ptrB::memory_type != GPU_MEMORY_POINTER_TYPE)> >
+ptrB copy_n_cast(T * A, Size n, ptrB B) {
+  using Q = typename ptrB::value_type;
+  for(Size i=0; i<n; i++, ++A, ++B)
+    *B = static_cast<Q>(*A);
+  return B;
+}
+template<class T, class ptrB, class Size,
+     typename = typename std::enable_if_t< (ptrB::memory_type == GPU_MEMORY_POINTER_TYPE)>, 
+     typename = void    >  
+ptrB copy_n_cast(T * A, Size n, ptrB B) {
+  throw std::runtime_error(" Error: copy_n_cast(gpu_ptr,n,T*) is disabled.");  
+  return B;
+}
+
+template<class T, class Q, class Size>
+Q* copy_n_cast(T const* A, Size n, Q* B) {
+  for(Size i=0; i<n; i++, A++, B++)
+    *B = static_cast<Q>(*A);
+  return B;
+}
 
 
 /* fill_n */

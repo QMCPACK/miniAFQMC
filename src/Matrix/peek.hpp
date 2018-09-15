@@ -30,7 +30,7 @@ namespace qmcplusplus
 namespace afqmc
 {
 
-inline std::tuple<int,int,int> peek(hdf_archive& dump)
+inline std::tuple<int,int,int,WALKER_TYPES> peek(hdf_archive& dump)
 {
   int NMO, NAEA, NAEB;
 
@@ -61,6 +61,7 @@ inline std::tuple<int,int,int> peek(hdf_archive& dump)
   NMO = dims[0];
   NAEA = dims[1];
   NAEB = dims[2];
+  WALKER_TYPES wtype = WALKER_TYPES(dims[4]);
   if(NAEA!=NAEB) {
     app_error()<<" Error in initialize: NAEA != NAEB. \n"; 
     APP_ABORT("");
@@ -70,7 +71,7 @@ inline std::tuple<int,int,int> peek(hdf_archive& dump)
   dump.pop();
   dump.pop();
 
-  return std::tuple<int,int,int>{NMO,NAEA,NAEB};
+  return std::tuple<int,int,int,WALKER_TYPES>{NMO,NAEA,NAEB,wtype};
   
 }
 

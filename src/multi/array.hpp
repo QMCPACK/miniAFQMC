@@ -44,12 +44,20 @@ private:
 	using alloc_traits = std::allocator_traits<allocator_type>;
 public:
 //	explicit array(array const&){}
-	template<class Array, typename = decltype(std::declval<Array>().extensions())>
-	array(Array&& other) : 
-                array_ref<T, D, typename array::element_ptr>(nullptr, other.extensions()),
-                allocator_(std::move(other.allocator_)) { 
-		array::operator=(std::forward<Array>(other));
-	}
+        array(array const& other) : array(other.extensions(), other.get_allocator()){
+                using std::copy_n;
+                copy_n(other.data(), other.num_elements(), data());
+        }
+        array(array&& other) :
+                array_ref<T, D, typename array::element_ptr>{
+                        std::move(other.data_),
+                        other.extensions()
+                },
+                allocator_{std::move(other.allocator_)}
+        {
+                other.data_ = 0;
+                other.layout_t<D>::operator=({});
+        }
 	explicit array(extensions_type e = {}) : 
 		array_ref<T, D, typename array::element_ptr>(nullptr, e), allocator_{}
 	{

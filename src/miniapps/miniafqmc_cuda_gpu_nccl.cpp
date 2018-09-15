@@ -41,7 +41,7 @@
 
 #include "mpi.h"
 
-#include "AFQMC/afqmc_sys_batched.hpp"
+#include "AFQMC/afqmc_sys.hpp"
 #include "Matrix/initialize_parallel.hpp"
 #include "Matrix/peek.hpp"
 #include "AFQMC/THCOps.hpp"
@@ -175,7 +175,6 @@ int main(int argc, char **argv)
   int nwalk=16;
   int northo = 10;
   int ndev=1;
-  int nbatch=32;
   const double dt = 0.005;  
   const double sqrtdt = std::sqrt(dt);  
 
@@ -190,7 +189,7 @@ int main(int argc, char **argv)
 
   char *g_opt_arg;
   int opt;
-  while ((opt = getopt(argc, argv, "thvi:s:w:o:f:d:b:")) != -1)
+  while ((opt = getopt(argc, argv, "thvi:s:w:o:f:d:")) != -1)
   {
     switch (opt)
     {
@@ -207,9 +206,6 @@ int main(int argc, char **argv)
     case 'o': // the number of sub steps for drift/diffusion
       northo = atoi(optarg);
       break;
-    case 'b': // the number of batches 
-      nbatch = atoi(optarg);
-      break;
     case 'd': // the number of sub steps for drift/diffusion
       ndev = atoi(optarg);
       break;
@@ -220,8 +216,6 @@ int main(int argc, char **argv)
       break;
     }
   }
-
-  nbatch = std::min(nbatch,2*nwalk);
 
   // using Unified Memory allocator
   using Alloc = cuda::cuda_gpu_allocator<ComplexType>;
@@ -280,11 +274,12 @@ int main(int argc, char **argv)
   int NMO;
   int NAEA;
   int NAEB;
+  WALKER_TYPES walker_type;
 
-  std::tie(NMO,NAEA,NAEB) = afqmc::peek(dump);
+  std::tie(NMO,NAEA,NAEB,walker_type) = afqmc::peek(dump);
 
   // Main AFQMC object. Control access to several algorithmic functions.
-  base::afqmc_sys<Alloc> AFQMCSys(NMO,NAEA,um_alloc,um_alloc,nbatch);
+  base::afqmc_sys<Alloc> AFQMCSys(NMO,NAEA,walker_type,um_alloc,um_alloc);
   CMatrix Propg1({NMO,NMO}, um_alloc);
 
   THCOps THC(afqmc::Initialize<THCOps,base::afqmc_sys<Alloc>>(dump,dt,AFQMCSys,Propg1,comm));
@@ -295,7 +290,8 @@ int main(int argc, char **argv)
 
   RealType Eshift = 0;
   int nchol = THC.number_of_cholesky_vectors();            // number of cholesky vectors  
-  int NAK = 2*NAEA*NMO;               // dimensions of linearized "compacted" green function
+  int nspin = (walker_type==COLLINEAR)?2:1;
+  int NAK = nspin*NAEA*NMO;               // dimensions of linearized "compacted" green function
 
   app_log()<<"\n";
   app_log()<<"***********************************************************\n";
@@ -308,7 +304,8 @@ int main(int argc, char **argv)
   app_log()<<"  Execution details: \n"
            <<"    nsteps: " <<nsteps <<"\n"
            <<"    nsubsteps: " <<nsubsteps <<"\n" 
-           <<"    nwalk: " <<nwalk <<"\n"
+           <<"    nwalk_per_node: " <<nwalk <<"\n"
+           <<"    nnodes: " <<nproc <<"\n"
            <<"    northo: " <<northo <<"\n"
            <<"    verbose: " <<std::boolalpha <<verbose <<"\n"
            <<"    # Chol Vectors: " <<nchol <<std::endl;
@@ -317,7 +314,6 @@ int main(int argc, char **argv)
   CMatrix vHS( {nwalk,NMO*NMO}, um_alloc );  // Hubbard-Stratonovich potential
   CMatrix Gc( {nwalk,NAK}, um_alloc ); // compact density matrix for energy evaluation 
   CMatrix randNums( {nchol,nwalk}, um_alloc ); // X(n,nw) = rand(n,nw) ( + vbias(n,nw)) 
-  CVector eloc( {nwalk}, um_alloc );         // stores local energies
 
   // work space
   CVector GcX( {nwalk*(NAK+nchol)}, um_alloc ); // combined storage for Gc and X  
@@ -334,7 +330,7 @@ int main(int argc, char **argv)
                   (rank+1)%nproc,1234,comm,&req_Grecv);
 
   CMatrix Etot( {nwalk*nproc,3}, um_alloc );
-  WalkerContainer<Alloc> W( {nwalk,2,NMO,NAEA}, um_alloc );
+  WalkerContainer<Alloc> W( {nwalk,nspin,NMO,NAEA}, um_alloc );
   /* 
     0: E1, 
     1: EXX,
@@ -342,7 +338,7 @@ int main(int argc, char **argv)
     3: ovlp_up, 
     4: ovlp_down, 
   */
-  CMatrix W_data( {nwalk,5}, um_alloc );
+  CMatrix W_data( {nwalk,3+nspin}, um_alloc );
   // initialize walkers to trial wave function
   {
     // conj(A) = H( T(A) ) (avoids cuda kernels)
@@ -353,9 +349,11 @@ int main(int argc, char **argv)
     ma::transform(T(AFQMCSys.trialwfn_alpha),PsiT);
     for(int n=0; n<nwalk; n++)
       ma::transform(H(PsiT),W[n][0]);
-    ma::transform(T(AFQMCSys.trialwfn_beta),PsiT);
-    for(int n=0; n<nwalk; n++)
-      ma::transform(H(PsiT),W[n][1]);
+    if(nspin>1) {
+      ma::transform(T(AFQMCSys.trialwfn_beta),PsiT);
+      for(int n=0; n<nwalk; n++)
+        ma::transform(H(PsiT),W[n][1]);
+    }
   }
 
   // initialize overlaps and energy

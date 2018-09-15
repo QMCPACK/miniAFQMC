@@ -2,8 +2,8 @@ PROJECT(miniapps)
 
 if(QMC_BUILD_LEVEL GREATER 4)
 
-ADD_EXECUTABLE(miniafqmc_base miniafqmc_base.cpp)
-TARGET_LINK_LIBRARIES(miniafqmc_base qmcutil ${QMC_UTIL_LIBS} ${MPI_LIBRARY})
+#ADD_EXECUTABLE(miniafqmc_base miniafqmc_base.cpp)
+#TARGET_LINK_LIBRARIES(miniafqmc_base qmcutil ${QMC_UTIL_LIBS} ${MPI_LIBRARY})
 
 ADD_EXECUTABLE(blas_test blas_test.cpp)
 TARGET_LINK_LIBRARIES(blas_test qmcutil ${QMC_UTIL_LIBS} ${MPI_LIBRARY})
@@ -19,6 +19,9 @@ TARGET_LINK_LIBRARIES(miniafqmc_cuda_gpu_mpi qmcutil ${QMC_UTIL_LIBS} ${MPI_LIBR
 
 ADD_EXECUTABLE(miniafqmc_cuda_gpu_nccl miniafqmc_cuda_gpu_nccl.cpp)
 TARGET_LINK_LIBRARIES(miniafqmc_cuda_gpu_nccl qmcutil ${QMC_UTIL_LIBS} ${MPI_LIBRARY})
+
+ADD_EXECUTABLE(miniafqmc_cuda_gpu_batched_nccl miniafqmc_cuda_gpu_batched_nccl.cpp)
+TARGET_LINK_LIBRARIES(miniafqmc_cuda_gpu_batched_nccl qmcutil ${QMC_UTIL_LIBS} ${MPI_LIBRARY})
 
 ADD_EXECUTABLE(miniafqmc_cuda_gpu_batched miniafqmc_cuda_gpu_batched.cpp)
 TARGET_LINK_LIBRARIES(miniafqmc_cuda_gpu_batched qmcutil ${QMC_UTIL_LIBS} ${MPI_LIBRARY})

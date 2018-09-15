@@ -63,16 +63,18 @@ struct afqmc_sys: public AFQMCInfo
 
     ComplexMatrix<Alloc> trialwfn_alpha;
     ComplexMatrix<Alloc> trialwfn_beta;
+    WALKER_TYPES walker_type;
     
     afqmc_sys() = delete;
-    afqmc_sys(int nmo_, int na, Alloc alloc_ = Alloc{}, Alloc_ooc alloc_ooc_ = Alloc_ooc{}, int nbatch = 32):
+    afqmc_sys(int nmo_, int na, WALKER_TYPES wtype, Alloc alloc_ = Alloc{}, Alloc_ooc alloc_ooc_ = Alloc_ooc{}, int nbatch = 32):
       AFQMCInfo(nmo_,na,na),
+      walker_type(wtype),
       allocator_(alloc_),
       iallocator_(alloc_),
       allocator_ooc_(alloc_ooc_),
       iallocator_ooc_(alloc_ooc_),
       trialwfn_alpha( {nmo_,na}, alloc_ ), 
-      trialwfn_beta( {nmo_,na}, alloc_ ), 
+      trialwfn_beta( {((wtype==COLLINEAR)?(nmo_):(0)),na}, alloc_ ), 
       NMO(nmo_),
       NAEA(na),  
       WORK( {0}, alloc_ ),
@@ -111,23 +113,31 @@ struct afqmc_sys: public AFQMCInfo
             >
     void calculate_mixed_density_matrix(WSet& W, Mat& W_data, Mat& G, bool compact=true)
     {
+      int nspin = (walker_type==COLLINEAR?2:1);
       int nwalk = W.shape()[0];
-      assert(G.num_elements() >= 2*NAEA*NMO*nwalk);
+      assert(G.num_elements() >= nspin*NAEA*NMO*nwalk);
       assert(G.shape()[0] == nwalk);
-      assert(G.shape()[1] >= 2*NAEA*NMO);
+      assert(G.shape()[1] >= nspin*NAEA*NMO);
       assert(W_data.shape()[0] >= nwalk);
-      assert(W_data.shape()[1] >= 5);
+      assert(W_data.shape()[1] >= 3+nspin);
       int N_ = NAEA; // compact?NAEA:NMO;
-      boost::multi::array_ref<ComplexType,4,pointer> G_4D(G.origin(), {nwalk,2,N_,NMO}); 
-      batched::MixedDensityMatrix(trialwfn_alpha,trialwfn_beta,W,G_4D,TMat3D_NN,TMat3D_NM,IWORK,WORK,W_data(W_data.extension(0),{3,5}));
+      boost::multi::array_ref<ComplexType,4,pointer> G_4D(G.origin(), {nwalk,nspin,N_,NMO}); 
+      if(nspin==1) 
+        batched::MixedDensityMatrix(trialwfn_alpha,W,G_4D,TMat3D_NN,TMat3D_NM,IWORK,WORK,W_data(W_data.extension(0),{3,5}));
+      else
+        batched::MixedDensityMatrix(trialwfn_alpha,trialwfn_beta,W,G_4D,TMat3D_NN,TMat3D_NM,IWORK,WORK,W_data(W_data.extension(0),{3,5}));
     }
 
     template<class WSet, class Mat>
     void calculate_overlaps(WSet& W, Mat& W_data)
     {
+      int nspin = (walker_type==COLLINEAR?2:1);
       assert(W_data.shape()[0] >= W.shape()[0]);
       assert(W_data.shape()[1] >= 5);
-      batched::Overlap(trialwfn_alpha,trialwfn_beta,W,TMat3D_NN,IWORK,WORK,W_data(W_data.extension(0),{3,5}));
+      if(nspin==1) 
+        batched::Overlap(trialwfn_alpha,W,TMat3D_NN,IWORK,WORK,W_data(W_data.extension(0),{3,5}));
+      else  
+        batched::Overlap(trialwfn_alpha,trialwfn_beta,W,TMat3D_NN,IWORK,WORK,W_data(W_data.extension(0),{3,5}));
     }
 
     template<class WSet, 
@@ -136,6 +146,7 @@ struct afqmc_sys: public AFQMCInfo
             >
     void propagate(WSet& W, MatA& Propg, MatB& vHS)
     {
+      int nspin = (walker_type==COLLINEAR?2:1);
       assert(vHS.shape()[1] == NMO*NMO);  
       using Type = typename std::decay<MatB>::type::element;
       // assumes collinear for now
@@ -161,6 +172,7 @@ struct afqmc_sys: public AFQMCInfo
     template<class WSet>
     void orthogonalize(WSet& W)
     {
+      int nspin = (walker_type==COLLINEAR?2:1);
       for(int i=0; i<W.shape()[0]; i++) {
 
 /*
@@ -173,14 +185,16 @@ struct afqmc_sys: public AFQMCInfo
         for(int r=0; r<NMO; r++)
           for(int c=0; c<NAEA; c++)
             W[i][0][r][c] = TMat_NM[c][r];   
-        for(int r=0; r<NMO; r++)
-          for(int c=0; c<NAEA; c++)
-            TMat_NM[c][r] = W[i][1][r][c];
-        ma::geqrf(TMat_NM,TAU,WORK);
-        ma::gqr(TMat_NM,TAU,WORK);
-        for(int r=0; r<NMO; r++)
-          for(int c=0; c<NAEA; c++)
-            W[i][1][r][c] = TMat_NM[c][r];
+        if(nspin>1) {
+          for(int r=0; r<NMO; r++)
+            for(int c=0; c<NAEA; c++)
+              TMat_NM[c][r] = W[i][1][r][c];
+          ma::geqrf(TMat_NM,TAU,WORK);
+          ma::gqr(TMat_NM,TAU,WORK);
+          for(int r=0; r<NMO; r++)
+            for(int c=0; c<NAEA; c++)
+              W[i][1][r][c] = TMat_NM[c][r];
+        }    
 */
 
 // No QR right now
@@ -188,8 +202,10 @@ struct afqmc_sys: public AFQMCInfo
 /*
         ma::gelqf(W[i][0],TAU,WORK);
         ma::glq(W[i][0],TAU,WORK);
-        ma::gelqf(W[i][1],TAU,WORK);
-        ma::glq(W[i][1],TAU,WORK);
+        if(nspin>1) {
+          ma::gelqf(W[i][1],TAU,WORK);
+          ma::glq(W[i][1],TAU,WORK);
+        }
 */
 
       }

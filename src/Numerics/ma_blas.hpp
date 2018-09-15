@@ -47,6 +47,7 @@ dot(MultiArray1Dx&& x, MultiArray1Dy&& y){
 
 // my blas extension
 template<class T,
+         class Q,
          class MultiArray1Dx,
          class MultiArray1Dy,
          class ptr,
@@ -54,7 +55,7 @@ template<class T,
          typename = typename std::enable_if<std::decay<MultiArray1Dy>::type::dimensionality == 1>::type
 >
 MultiArray1Dy
-adotpby(T const alpha, MultiArray1Dx const& x, MultiArray1Dy const& y, T const beta, ptr res){
+adotpby(T const alpha, MultiArray1Dx const& x, MultiArray1Dy const& y, Q const beta, ptr res){
         assert(x.size() == y.size());
         using BLAS_CPU::adotpby;
         using BLAS_GPU::adotpby;

@@ -281,7 +281,7 @@ namespace BLAS_GPU
   }
 
   // dot extension 
-  template<class T,
+  template<class T, class Q,
            class ptrA,
            class ptrB,
            class ptrC,
@@ -290,12 +290,12 @@ namespace BLAS_GPU
                                                  (ptrC::memory_type != CPU_OUTOFCARS_POINTER_TYPE) 
                                                >
           >
-  inline static void adotpby(int const n, T const alpha, ptrA const& x, int const incx, ptrB const& y, int const incy, T const beta, ptrC result)
+  inline static void adotpby(int const n, T const alpha, ptrA const& x, int const incx, ptrB const& y, int const incy, Q const beta, ptrC result)
   {
     kernels::adotpby(n,alpha,to_address(x),incx,to_address(y),incy,beta,to_address(result));
   }
 
-  template<class T,
+  template<class T, class Q,
            class ptrA,
            class ptrB,
            class ptrC,
@@ -305,7 +305,7 @@ namespace BLAS_GPU
                                                >,
            typename = void
           >
-  inline static void adotpby(int const n, T const alpha, ptrA const& x, int const incx, ptrB const& y, int const incy, T const beta, ptrC result)
+  inline static void adotpby(int const n, T const alpha, ptrA const& x, int const incx, ptrB const& y, int const incy, Q const beta, ptrC result)
   {
     using BLAS_CPU::adotpby;
     adotpby(n,alpha,to_address(x),incx,to_address(y),incy,beta,to_address(result));

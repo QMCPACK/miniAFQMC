@@ -41,6 +41,17 @@ void adotpby(int N, std::complex<float> const alpha,
                     std::complex<float> const* y, int const incy,
                     std::complex<float> const beta, std::complex<float>* res);
 
+void adotpby(int N, float const alpha, float const* x, int const incx,
+                    float const* y, int const incy,
+                    double const beta, double* res);
+
+void adotpby(int N, std::complex<float> const alpha,
+                    std::complex<float> const* x, int const incx,
+                    std::complex<float> const* y, int const incy,
+                    std::complex<double> const beta, std::complex<double>* res);
+
+
+
 }
 
 #endif

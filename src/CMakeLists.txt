@@ -134,6 +134,7 @@ ENDIF()
     Kernels/setIdentity.cu
     Kernels/zero_complex_part.cu
     Kernels/batchedDot.cu
+    Kernels/copy_n_cast.cu
     ${GITREV_TMP}
     )
 

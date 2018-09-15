@@ -121,14 +121,15 @@ inline THCOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, Comple
     std::tie(nmu0,nmuN) = FairDivideBoundary(size_t(rank),gnmu,size_t(nproc));
     nmu = nmuN-nmu0;
   }
+  int NEL = (sys.walker_type == COLLINEAR)?2*NAEA:NAEA;
 
   using Matrix = SPComplexMatrix<SpAlloc>;
   SPComplexMatrix<SpAlloc> rotMuv( {rotnmu,grotnmu},spc_alloc );   // Muv in half-rotated basis   
   SPComplexMatrix<SpAlloc> rotPiu( {NMO,grotnmu},spc_alloc );   // Interpolating orbitals in half-rotated basis 
-  SPComplexMatrix<SpAlloc> rotcPua( {grotnmu,NAEA+NAEB},spc_alloc ); // (half-rotated) Interpolating orbitals in half-rotated basis   
+  SPComplexMatrix<SpAlloc> rotcPua( {grotnmu,NEL},spc_alloc ); // (half-rotated) Interpolating orbitals in half-rotated basis   
   SPComplexMatrix<SpAlloc> Luv( {nmu,gnmu},spc_alloc );      // Cholesky decomposition of Muv 
   SPComplexMatrix<SpAlloc> Piu( {NMO,nmu},spc_alloc );      // Interpolating orbitals 
-  SPComplexMatrix<SpAlloc> cPua( {nmu,NAEA+NAEB},spc_alloc );     // (half-rotated) Interpolating orbitals 
+  SPComplexMatrix<SpAlloc> cPua( {nmu,NEL},spc_alloc );     // (half-rotated) Interpolating orbitals 
 
   // read Half transformed first
   /***************************************/
@@ -185,7 +186,7 @@ inline THCOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, Comple
       cuda::copy_n(buff.origin(),buff.num_elements(),sys.trialwfn_alpha.origin());
       dump.pop();
     }
-    if(walker_type == 2) {
+    if(sys.walker_type == COLLINEAR) {
       if(!dump.push(std::string("PsiT_1"),false)) {
         app_error()<<" Error in WavefunctionFactory: Group PsiT not found. \n";
         APP_ABORT("");
@@ -193,8 +194,7 @@ inline THCOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, Comple
       ComplexMatrix<stdAlloc> buff(hdfcsr2ma<ComplexMatrix<stdAlloc>,stdAlloc>(dump,NMO,NAEA,stdAlloc{}));
       cuda::copy_n(buff.origin(),buff.num_elements(),sys.trialwfn_beta.origin());
       dump.pop();
-    } else 
-      cuda::copy_n(sys.trialwfn_alpha.origin(),sys.trialwfn_alpha.num_elements(),sys.trialwfn_beta.origin());
+    } 
   }
 
   /***************************************/
@@ -215,11 +215,25 @@ inline THCOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, Comple
   using ma::H;
   using ma::T;
   // cPua = H(Piu) * conj(A)
+#ifdef MIXED_PRECISION
+  SPComplexMatrix<SpAlloc> psiA({NMO,NAEA},spc_alloc );
+  cuda::copy_n_cast(sys.trialwfn_alpha.origin(),sys.trialwfn_alpha.num_elements(),psiA.origin());
+  ma::product(H(Piu),psiA,cPua( cPua.extension(0), {0,NAEA} ));
+  ma::product(H(rotPiu),psiA,rotcPua( rotcPua.extension(0), {0,NAEA} ));
+  if(sys.walker_type == COLLINEAR) {
+    SPComplexMatrix<SpAlloc> psiB({NMO,NAEB},spc_alloc );
+    cuda::copy_n_cast(sys.trialwfn_beta.origin(),sys.trialwfn_beta.num_elements(),psiB.origin());
+    ma::product(H(Piu),psiB,cPua( cPua.extension(0), {NAEA,NAEA+NAEB} ));
+    ma::product(H(rotPiu),psiB,rotcPua( rotcPua.extension(0), {NAEA,NAEA+NAEB} ));
+  }
+#else
   ma::product(H(Piu),sys.trialwfn_alpha,cPua( cPua.extension(0), {0,NAEA} ));
   ma::product(H(rotPiu),sys.trialwfn_alpha,rotcPua( rotcPua.extension(0), {0,NAEA} )); 
-  ma::product(H(Piu),sys.trialwfn_beta,cPua( cPua.extension(0), {NAEA,NAEA+NAEB} ));
-  ma::product(H(rotPiu),sys.trialwfn_beta,rotcPua( rotcPua.extension(0), {NAEA,NAEA+NAEB} ));
-
+  if(sys.walker_type == COLLINEAR) {
+    ma::product(H(Piu),sys.trialwfn_beta,cPua( cPua.extension(0), {NAEA,NAEA+NAEB} ));
+    ma::product(H(rotPiu),sys.trialwfn_beta,rotcPua( rotcPua.extension(0), {NAEA,NAEA+NAEB} ));
+  }
+#endif
   // build the propagator (on the CPU)
   ComplexMatrix<Alloc> H1( {NMO,NMO}, alloc );
   /***************************************/
@@ -229,9 +243,11 @@ inline THCOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, Comple
   }
   /***************************************/
   // rotated 1 body hamiltonians
-  ComplexMatrix<Alloc> haj( {NAEA+NAEB,NMO}, alloc );      // rotated 1-Body Hamiltonian Matrix
-  ma::product(T(sys.trialwfn_alpha),H1,haj( {0, NAEA}, haj.extension(1)));
-  ma::product(T(sys.trialwfn_beta),H1,haj( {NAEA, NAEA+NAEB}, haj.extension(1))); 
+  ComplexMatrix<Alloc> haj( {NEL,NMO}, alloc );      // rotated 1-Body Hamiltonian Matrix
+  ComplexType a = (sys.walker_type==CLOSED)?ComplexType(2.0):ComplexType(1.0);
+  ma::product(a, T(sys.trialwfn_alpha),H1,ComplexType(0.0),haj( {0, NAEA}, haj.extension(1)));
+  if(sys.walker_type == COLLINEAR)
+    ma::product(T(sys.trialwfn_beta),H1,haj( {NAEA, NAEA+NAEB}, haj.extension(1))); 
 
   // Hack for gpu
   // This step must be done on the CPU right now
@@ -267,7 +283,7 @@ inline THCOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, Comple
   dump.pop();
   dump.pop();
 
-  return std::move(THCOps(NMO,NAEA,NAEA,COLLINEAR,std::move(haj),std::move(rotMuv),
+  return std::move(THCOps(NMO,NAEA,NAEA,sys.walker_type,std::move(haj),std::move(rotMuv),
                 std::move(rotPiu),std::move(rotcPua),std::move(Luv),std::move(Piu),
                 std::move(cPua),E0,alloc,nmu0,rotnmu0));
 } 

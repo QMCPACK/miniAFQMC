@@ -667,15 +667,15 @@ namespace BLAS_CPU
   }
 
   // y = beta*y + alpha * dot(a,b)
-  template<typename T>
+  template<typename T, typename Q>
   inline static
-  void adotpby(int n, T const alpha, const T* restrict a, int incx, const T* restrict b, int incy, T const beta, T* result)
+  void adotpby(int n, T const alpha, const T* restrict a, int incx, const T* restrict b, int incy, Q const beta, Q* result)
   {
     
     T res=T(0);
     for(int i=0, ia=0, ib=0; i<n; ++i, ia+=incx, ib+=incy)
       res += a[ia]*b[ib];
-    *result = beta*(*result) + alpha*res;
+    *result = beta*(*result) + static_cast<Q>(alpha*res);
   }
 
 /*

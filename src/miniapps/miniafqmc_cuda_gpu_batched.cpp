@@ -165,6 +165,8 @@ int main(int argc, char **argv)
   using cuda::curand_check;
   using cuda::cusolver_check;
 
+  cuda::cuda_check(cudaSetDevice(0),"cudaSetDevice()");
+
   cublasHandle_t cublas_handle;
   cublasXtHandle_t cublasXt_handle;
   cusolverDnHandle_t cusolverDn_handle;
@@ -197,18 +199,20 @@ int main(int argc, char **argv)
   int NMO;
   int NAEA;
   int NAEB;
+  WALKER_TYPES walker_type;
 
-  std::tie(NMO,NAEA,NAEB) = afqmc::peek(dump);
+  std::tie(NMO,NAEA,NAEB,walker_type) = afqmc::peek(dump);
 
   // Main AFQMC object. Control access to several algorithmic functions.
-  base::afqmc_sys<Alloc> AFQMCSys(NMO,NAEA,um_alloc,um_alloc,nbatch);
+  base::afqmc_sys<Alloc> AFQMCSys(NMO,NAEA,walker_type,um_alloc,um_alloc,nbatch);
   ComplexMatrix<Alloc> Propg1({NMO,NMO}, um_alloc);
 
   THCOps THC(afqmc::Initialize<THCOps,base::afqmc_sys<Alloc>>(dump,dt,AFQMCSys,Propg1));
 
   RealType Eshift = 0;
   int nchol = THC.number_of_cholesky_vectors();            // number of cholesky vectors  
-  int NAK = 2*NAEA*NMO;               // dimensions of linearized "compacted" green function
+  int nspin = (walker_type==COLLINEAR)?2:1;
+  int NAK = nspin*NAEA*NMO;               // dimensions of linearized "compacted" green function
 
   std::cout<<"\n";
   std::cout<<"***********************************************************\n";
@@ -232,7 +236,7 @@ int main(int argc, char **argv)
   ComplexMatrix<Alloc> X( {nchol,nwalk}, um_alloc );         // X(n,nw) = rand(n,nw) ( + vbias(n,nw)) 
   ComplexVector<Alloc> eloc( {nwalk}, um_alloc );         // stores local energies
 
-  WalkerContainer<Alloc> W( {nwalk,2,NMO,NAEA}, um_alloc );
+  WalkerContainer<Alloc> W( {nwalk,nspin,NMO,NAEA}, um_alloc );
   /* 
     0: E1, 
     1: EXX,
@@ -240,7 +244,7 @@ int main(int argc, char **argv)
     3: ovlp_up, 
     4: ovlp_down, 
   */
-  ComplexMatrix<Alloc> W_data( {nwalk,5}, um_alloc );
+  ComplexMatrix<Alloc> W_data( {nwalk,3+nspin}, um_alloc );
   // initialize walkers to trial wave function
   {
     // conj(A) = H( T(A) ) (avoids cuda kernels)
@@ -251,9 +255,11 @@ int main(int argc, char **argv)
     ma::transform(T(AFQMCSys.trialwfn_alpha),PsiT);
     for(int n=0; n<nwalk; n++)
       ma::transform(H(PsiT),W[n][0]);
-    ma::transform(T(AFQMCSys.trialwfn_beta),PsiT);
-    for(int n=0; n<nwalk; n++)
-      ma::transform(H(PsiT),W[n][1]);
+    if(nspin>1) {
+      ma::transform(T(AFQMCSys.trialwfn_beta),PsiT);
+      for(int n=0; n<nwalk; n++)
+        ma::transform(H(PsiT),W[n][1]);
+    }
   }
 
   // initialize overlaps and energy

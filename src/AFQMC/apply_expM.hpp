@@ -159,37 +159,24 @@ inline void apply_expM(MatA& V, MatB& S, MatC& T1, MatC& T2, int order=6)
   CType zero(0.);
   CType one(1.);
   CType im(0.0,1.);
-  MatC* pT1 = &T1;
-  MatC* pT2 = &T2;
 
   cuda::copy_n(S.origin(),nbatch*NMO*NEL,T1.origin());
-  // replace with wrapper to cudaMemcpy2D
-  //for(int p=0; p<nbatch; p++)
-  //  cuda::copy_n(S[p].origin(),NMO*NEL,T1[p].origin());
   for(int n=1; n<=order; n++) {
     CType fact = im*static_cast<CType>(1.0/static_cast<double>(n));
 
-    // ma::product(fact,V,*rT1,zero,*rT2);
     using BLAS_CPU::gemmBatched;
     using BLAS_GPU::gemmBatched;
     // careful with fortan ordering
     gemmBatched('N','N',NEL,NMO,NMO,fact,rT1->data(),ldT,Varray.data(),ldV,zero,
                                          rT2->data(),ldT,nbatch);
-//    for(int p=0; p<nbatch; p++)
-//      ma::product(fact,V[p/2],(*pT1)[p],zero,(*pT2)[p]);
 
     using BLAS_CPU::axpy;
     using BLAS_GPU::axpy;
     // in QMCPACK, loop through matrices and use S[i].origin(), rT2->origin()+i*stride 
     axpy(S.num_elements(), one, (*rT2)[0], 1, S.origin(), 1);
-//    for(int p=0; p<nbatch; p++)
-//      ma::axpy(one,(*pT2)[p],S[p]);
 
     std::swap(rT1,rT2);
-//    std::swap(pT1,pT2);
-
   }
-
 }
 
 }

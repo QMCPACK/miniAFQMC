@@ -224,7 +224,6 @@ inline void Overlap(MatA& conjA_alpha, MatA& conjA_beta, MatB& B, Mat&& TNN3D, I
 
 }
 
-// Serial Implementation
 template< class MatA,
           class MatB,
           class MatC,
@@ -317,6 +316,182 @@ inline void MixedDensityMatrix(MatA& conjA_alpha, MatA& conjA_beta, MatB& B, Mat
 
       nw_++;
       if(nw_ == 2*nwalk) break;
+    }
+
+    using LAPACK_CPU::getriBatched;
+    using LAPACK_GPU::getriBatched;
+    getriBatched(M,NNarray.data(),ldN, IWORK.origin(), workArray.data(), M*M, IWORK.origin()+nbatch*M, Warray.size());    
+
+    // C = T1 * T(B)
+    gemmBatched('T','N',K,M,M,ComplexType(1.0),Warray.data(),ldw,NNarray.data(),ldN,ComplexType(0.0),Carray.data(),ldC,Warray.size());      
+  }
+
+}
+
+// Batched Implementation
+template< class MatA,
+          class MatB,
+          class MatD,
+          class Mat,
+          class IBuffer,
+          class TBuffer
+        >
+// right now limited to NAEA == NAEB
+inline void Overlap(MatA& conjA, MatB& B, Mat&& TNN3D, IBuffer& IWORK, TBuffer& WORK, MatD && W_data)
+{
+  // check dimensions are consistent
+  static_assert( MatB::dimensionality == 4, " MatB::dimensionality == 4" );
+  static_assert( std::decay<Mat>::type::dimensionality == 3, "std::decay<Mat>::type::dimensionality == 3" );
+  assert( B.shape()[1] == 1 );
+  assert( conjA.shape()[0] == B.shape()[2] );
+  assert( conjA.shape()[1] == TNN3D.shape()[2] );
+  assert( B.shape()[3] == TNN3D.shape()[1] );
+  assert( TNN3D.shape()[2] == B.shape()[3] );
+
+  using ma::T;
+  using pointer = typename MatB::allocator_type::pointer;
+  using Type = typename pointer::value_type; 
+
+  int nwalk = B.shape()[0];
+  int nbatch = TNN3D.shape()[0];
+  int M = conjA.shape()[1];
+  int N = B.shape()[3]; 
+  int K = conjA.shape()[0]; 
+  int lda = conjA.strides()[0]; 
+  int ldw = B.strides()[2]; 
+  int ldN = TNN3D[0].strides()[0]; 
+
+  std::vector<pointer> Aarray;
+  std::vector<pointer> Warray;
+  std::vector<pointer> NNarray(nbatch);
+  Warray.reserve(nbatch);
+  Aarray.reserve(nbatch);
+  for(int i=0; i<nbatch; i++)
+    NNarray[i] = TNN3D[i].origin();
+  int nloop = (nwalk + nbatch - 1)/nbatch;
+  for(int nb=0, nw=0; nb<nloop; nb++) {
+
+    int nw_=nw;
+    // create list of pointers
+    Warray.clear();
+    Aarray.clear();
+    for(int i=0; i<nbatch; i++) {
+      Warray.push_back(B[nw][0].origin());
+      Aarray.push_back(conjA.origin());
+      nw++;
+      if(nw == nwalk) break;
+    }
+
+    // T(B)*conj(A)
+    using BLAS_CPU::gemmBatched;
+    using BLAS_GPU::gemmBatched;
+    // careful with fortan ordering
+    gemmBatched('N','T',M,N,K,ComplexType(1.0),Aarray.data(),lda,Warray.data(),ldw,ComplexType(0.0),NNarray.data(),ldN,Warray.size());        
+
+    using LAPACK_CPU::getrfBatched;
+    using LAPACK_GPU::getrfBatched;
+    getrfBatched(M,NNarray.data(),ldN, IWORK.origin(), IWORK.origin()+nbatch*M, Warray.size());
+
+    // determinant
+    for(int i=0; i<nbatch; i++) {
+
+      ma::determinant_from_getrf<Type>(M, NNarray[i], ldN, IWORK.origin()+i*M, 
+                                to_address(W_data[nw_].origin()));
+
+      nw_++;
+      if(nw_ == nwalk) break;
+    }
+  }
+
+}
+
+template< class MatA,
+          class MatB,
+          class MatC,
+          class MatD,
+          class Mat,
+          class IBuffer,
+          class TBuffer
+        >
+inline void MixedDensityMatrix(MatA& conjA, MatB& B, MatC&& C, Mat&& TNN3D, Mat&& TNM3D, IBuffer& IWORK, TBuffer& WORK, MatD && W_data)
+{
+  // check dimensions are consistent
+
+  static_assert( MatB::dimensionality == 4, " MatB::dimensionality == 4" );
+  static_assert( std::decay<MatC>::type::dimensionality == 4, " MatC::dimensionality == 4" );
+  static_assert( std::decay<Mat>::type::dimensionality == 3, "std::decay<Mat>::type::dimensionality == 3" );
+  assert( B.shape()[1] == 1 );
+  assert( C.shape()[1] == 1 );
+  assert( conjA.shape()[0] == B.shape()[2] );
+  assert( conjA.shape()[1] == TNN3D.shape()[2] );
+  assert( B.shape()[3] == TNN3D.shape()[1] );
+  assert( TNN3D.shape()[2] == B.shape()[3] );
+  assert( TNM3D.shape()[1] == TNN3D.shape()[1] );
+  assert( C.shape()[2] == TNN3D.shape()[1] );
+  assert( C.shape()[3] == B.shape()[2] );
+
+  using ma::T;
+  using pointer = typename MatB::allocator_type::pointer;
+  using Type = typename pointer::value_type;
+
+  int nwalk = B.shape()[0];
+  int nbatch = TNN3D.shape()[0];
+  int M = conjA.shape()[1];
+  int N = B.shape()[3];
+  int K = conjA.shape()[0];
+  int lda = conjA.strides()[0];
+  int ldw = B.strides()[2];
+  int ldN = TNN3D[0].strides()[0];
+  int ldC = C.strides()[2];
+
+  assert( WORK.size() >= nbatch*M*M );
+
+  std::vector<pointer> Aarray;
+  std::vector<pointer> Carray;
+  std::vector<pointer> Warray;
+  std::vector<pointer> workArray(nbatch);
+  std::vector<pointer> NNarray(nbatch);
+  Warray.reserve(nbatch);
+  Aarray.reserve(nbatch);
+  Carray.reserve(nbatch);
+  for(int i=0; i<nbatch; i++) {
+    NNarray[i] = TNN3D[i].origin();
+    workArray[i] = WORK.origin()+i*M*M;
+  }
+  int nloop = (nwalk + nbatch - 1)/nbatch;
+  for(int nb=0, nw=0; nb<nloop; nb++) {
+
+    int nw_=nw;
+    // create list of pointers
+    Warray.clear();
+    Aarray.clear();
+    Carray.clear();
+    for(int i=0; i<nbatch; i++) {
+      Warray.push_back(B[nw][0].origin());
+      Carray.push_back(C[nw][0].origin());
+      Aarray.push_back(conjA.origin());
+      nw++;
+      if(nw == nwalk) break;
+    }
+
+    // T(B)*conj(A)
+    using BLAS_CPU::gemmBatched;
+    using BLAS_GPU::gemmBatched;
+    // careful with fortan ordering
+    gemmBatched('N','T',M,N,K,ComplexType(1.0),Aarray.data(),lda,Warray.data(),ldw,ComplexType(0.0),NNarray.data(),ldN,Warray.size());      
+
+    // Ivnert
+    using LAPACK_CPU::getrfBatched;
+    using LAPACK_GPU::getrfBatched;
+    getrfBatched(M,NNarray.data(),ldN, IWORK.origin(), IWORK.origin()+nbatch*M, Warray.size());
+
+    for(int i=0; i<nbatch; i++) {
+
+      ma::determinant_from_getrf<Type>(M, NNarray[i], ldN, IWORK.origin()+i*M,
+                                to_address(W_data[nw_].origin()));
+
+      nw_++;
+      if(nw_ == nwalk) break;
     }
 
     using LAPACK_CPU::getriBatched;
