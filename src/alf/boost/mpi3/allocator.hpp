@@ -1,5 +1,5 @@
 #if COMPILATION_INSTRUCTIONS
-(echo "#include\""$0"\"" > $0x.cpp) && mpic++ -O3 -std=c++14 `#-Wfatal-errors` -D_TEST_BOOST_MPI3_ALLOCATOR $0x.cpp -o $0x.x && time mpirun -np 4 $0x.x $@ && rm -f $0x.x $0x.cpp; exit
+(echo "#include\""$0"\"" > $0x.cpp) && mpic++ -O3 -std=c++14 `#-Wfatal-errors` -D_TEST_BOOST_MPI3_ALLOCATOR $0x.cpp -o $0x.x && time mpirun -n 4 $0x.x $@ && rm -f $0x.x $0x.cpp; exit
 #endif
 #ifndef BOOST_MPI3_ALLOCATOR_HPP
 #define BOOST_MPI3_ALLOCATOR_HPP
@@ -8,8 +8,8 @@
 
 #include<mpi.h>
 
-//#include<boost/container/allocator.hpp>
 #include<limits>
+#include<vector>
 
 namespace boost{
 namespace mpi3{
@@ -49,25 +49,27 @@ struct allocator{
 template<typename T>
 struct uallocator : allocator<T>{
 	template<class U> void construct(U*){
-		static_assert(std::is_trivially_destructible<T>{}, "uallocator cannot be used with non trivial types");
+		static_assert(
+			std::is_trivially_destructible<T>{}, 
+			"uallocator cannot be used with non trivial types"
+		);
 	}
 };
 
-template< class T1, class T2 >
-bool operator==( const allocator<T1>&, const uallocator<T2>& ){return true;}
+template< class T1, class T2 > constexpr 
+bool operator==(allocator<T1> const&, uallocator<T2> const&){return true;}
 
-template< class T1, class T2 >
-bool operator==( const uallocator<T1>&, const allocator<T2>& ){return true;}
+template< class T1, class T2 > constexpr 
+bool operator==(uallocator<T1> const&, allocator<T2> const&){return true;}
 
-
-//template< class T1, class T2 >
-//bool operator!=( const allocator<T1>&, const allocator<T2>& ){return false;}
+template <class T>
+constexpr std::add_const_t<T>& as_const(T& t) noexcept{return t;}
 
 }}
 
 #ifdef _TEST_BOOST_MPI3_ALLOCATOR
 
-#include "alf/boost/mpi3/main.hpp"
+#include "../mpi3/main.hpp"
 
 #include<cassert>
 #include<vector>
@@ -77,11 +79,13 @@ bool operator==( const uallocator<T1>&, const allocator<T2>& ){return true;}
 namespace mpi3 = boost::mpi3;
 using std::cout;
 
-int mpi3::main(int argc, char* argv[], mpi3::communicator& world){
+int mpi3::main(int argc, char* argv[], mpi3::communicator world){
 
 	std::vector<double, mpi3::allocator<double>> v(1000000);
 	std::vector<double, mpi3::uallocator<double>> uv(1000000);
 	std::iota(v.begin(), v.end(), 0.);
+	using boost::mpi3::data;
+	assert( data(uv.begin()) == &*uv.begin() );
 	assert( std::accumulate(v.begin(), v.end(), 0.) == (v.size()*(v.size() - 1))/2 );
 	return 0;
 	

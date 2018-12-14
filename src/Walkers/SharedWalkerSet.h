@@ -441,7 +441,7 @@ class SharedWalkerSet: public AFQMCInfo
     int res=0;
     if(TG.TG_local().root())
       res += tot_num_walkers;
-    return TG.Global().all_reduce_value(res);
+    return (TG.Global() += res);
   }
 
   RealType GlobalWeight() const {
@@ -451,7 +451,7 @@ class SharedWalkerSet: public AFQMCInfo
       for(int i=0; i<tot_num_walkers; i++)
         res += std::abs(W[i][data_displ[WEIGHT]]);
     }
-    return TG.Global().all_reduce_value(res);
+    return (TG.Global() += res);
   }
 
   // population control algorithm

@@ -21,6 +21,9 @@
 #include "boost/variant.hpp"
 
 #include "af_config.h"
+#ifdef QMC_COMPLEX
+#include "HamiltonianOperations/KP3IndexFactorization.hpp"
+#endif
 #include "HamiltonianOperations/SparseTensor.hpp"
 #include "HamiltonianOperations/THCOps.hpp"
 
@@ -55,7 +58,7 @@ class dummy_HOps
   }
  
   template<class MatA, class MatB>
-  void vHS(const MatA& X, MatB&& v, double a=1., double c=0.) 
+  void vHS(MatA& X, MatB&& v, double a=1., double c=0.) 
   {
     throw std::runtime_error("calling visitor on dummy_HOps object");
   }
@@ -115,7 +118,7 @@ class dummy_HOps
 
 #ifdef QMC_COMPLEX
 class HamiltonianOperations: 
-        public boost::variant<dummy::dummy_HOps,THCOps<ValueType>,SparseTensor<ComplexType,ComplexType>>
+        public boost::variant<dummy::dummy_HOps,THCOps<ValueType>,SparseTensor<ComplexType,ComplexType>,KP3IndexFactorization>
 #else
 class HamiltonianOperations: 
         public boost::variant<dummy::dummy_HOps,THCOps<ValueType>,
@@ -140,7 +143,10 @@ class HamiltonianOperations:
     explicit HamiltonianOperations(STRR&& other) : variant(std::move(other)) {}
     explicit HamiltonianOperations(STRC&& other) : variant(std::move(other)) {}
     explicit HamiltonianOperations(STCR&& other) : variant(std::move(other)) {}
+#else
+    explicit HamiltonianOperations(KP3IndexFactorization&& other) : variant(std::move(other)) {}
 #endif
+
     explicit HamiltonianOperations(STCC&& other) : variant(std::move(other)) {}
     explicit HamiltonianOperations(THCOps<ValueType>&& other) : variant(std::move(other)) {}
 
@@ -148,6 +154,8 @@ class HamiltonianOperations:
     explicit HamiltonianOperations(STRR const& other) = delete;
     explicit HamiltonianOperations(STRC const& other) = delete;
     explicit HamiltonianOperations(STCR const& other) = delete;
+#else
+    explicit HamiltonianOperations(KP3IndexFactorization const& other) = delete;
 #endif
     explicit HamiltonianOperations(STCC const& other) = delete;
     explicit HamiltonianOperations(THCOps<ValueType> const& other) = delete;

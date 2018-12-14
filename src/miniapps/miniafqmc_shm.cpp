@@ -118,7 +118,7 @@ int main(int argc, char **argv)
 #endif
 
   mpi3::environment env(argc, argv);
-  auto& world = env.world();
+  auto world = env.world();
 
   TimerManager.set_timer_threshold(timer_level_coarse);
   setup_timers(AFQMCTimers, AFQMCTimerNames,timer_level_coarse);

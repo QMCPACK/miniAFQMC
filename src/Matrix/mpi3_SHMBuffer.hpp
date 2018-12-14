@@ -131,11 +131,15 @@ class mpi3_SHMBuffer
       *this = std::move(other);
     }
 
-    mpi3_SHMBuffer<T>& operator=(mpi3_SHMBuffer<T>&& other) {
+    mpi3_SHMBuffer<T>& operator=(mpi3_SHMBuffer<T>&& other)
+    {
+      assert(comm==other.comm);
       if(this != &other) {
-        comm = other.comm;
-        other.comm = NULL;
-        win = std::move(other.win);
+        // this should be in mpi3 namespace
+        auto tmp = win.impl_;
+        win.impl_ = other.impl_;
+        other.impl_ = tmp;
+        //swap(win.impl_,other.impl_);
         comm->barrier();
       }
       return *this;
@@ -152,7 +156,9 @@ class mpi3_SHMBuffer
           std::copy(this->data(),this->data()+static_cast<size_t>(w0.size(0)),w0.base(0));
       }   
       comm->barrier();
-      win = std::move(w0);
+      auto tmp = win.impl_;
+      win.impl_ = w0.impl_;
+      w0.impl_ = tmp;
       comm->barrier();
     }
 

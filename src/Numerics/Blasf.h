@@ -61,6 +61,7 @@
 #define zgetri zgetri_
 #define cgetrf cgetrf_
 #define cgetri cgetri_
+#define zgesvd zgesvd_
 #define dgesvd dgesvd_
 #define sgesvd sgesvd_
 #define dgeev dgeev_
@@ -81,7 +82,6 @@
 
 #define dsyevr dsyevr_
 #define zheevr zheevr_
-#define zheeex zheevx_
 #define ssyevr ssyevr_
 #define cheevr cheevr_
 #define zhegvx zhegvx_
@@ -112,6 +112,8 @@
 #define scgemv  scgemv_
 #define dzgemm  dzgemm_
 #define scgemm  scgemm_
+typedef enum {CblasRowMajor=101, CblasColMajor=102} CBLAS_LAYOUT;
+typedef enum {CblasNoTrans=111, CblasTrans=112, CblasConjTrans=113} CBLAS_TRANSPOSE;
 #endif
 
 #endif
@@ -241,6 +243,34 @@ extern "C" {
              const std::complex<float>* bv, const int& incx,
              const std::complex<float>& beta, std::complex<float>* cv, const int& incy);
 
+void cblas_sgemm_batch (const CBLAS_LAYOUT Layout, const CBLAS_TRANSPOSE* transa_array,
+            const CBLAS_TRANSPOSE* transb_array, const int* m_array, const int* n_array,
+            const int* k_array, const void *alpha_array, const void **a_array,
+            const int* lda_array, const void **b_array, const int* ldb_array,
+            const void *beta_array, void **c_array, const int* ldc_array,
+            const int group_count, const int* group_size);
+
+void cblas_cgemm_batch (const CBLAS_LAYOUT Layout, const CBLAS_TRANSPOSE* transa_array,
+            const CBLAS_TRANSPOSE* transb_array, const int* m_array, const int* n_array,
+            const int* k_array, const void *alpha_array, const void **a_array,
+            const int* lda_array, const void **b_array, const int* ldb_array,
+            const void *beta_array, void **c_array, const int* ldc_array,
+            const int group_count, const int* group_size);
+
+void cblas_dgemm_batch (const CBLAS_LAYOUT Layout, const CBLAS_TRANSPOSE* transa_array,
+            const CBLAS_TRANSPOSE* transb_array, const int* m_array, const int* n_array,
+            const int* k_array, const void *alpha_array, const void **a_array,
+            const int* lda_array, const void **b_array, const int* ldb_array,
+            const void *beta_array, void **c_array, const int* ldc_array,
+            const int group_count, const int* group_size);
+
+void cblas_zgemm_batch (const CBLAS_LAYOUT Layout, const CBLAS_TRANSPOSE* transa_array,
+            const CBLAS_TRANSPOSE* transb_array, const int* m_array, const int* n_array,
+            const int* k_array, const void *alpha_array, const void **a_array,
+            const int* lda_array, const void **b_array, const int* ldb_array,
+            const void *beta_array, void **c_array, const int* ldc_array,
+            const int group_count, const int* group_size);
+
 #endif
 
   void dsyrk(const char&, const char&, const int&, const int&,
@@ -270,6 +300,11 @@ extern "C" {
 
   void cgetri(const int& n, std::complex<float>* a, const int& n0,
               int const* piv, std::complex<float>* work, const int&, int& st);
+
+  void zgesvd(char *JOBU, char* JOBVT, int *M, int *N,
+              std::complex<double> *A, int *LDA, double *S, std::complex<double> *U,
+              int *LDU, std::complex<double> *VT, int *LDVT, std::complex<double> *work,
+              int *LWORK, double *rwork, int *INFO);
 
   void dgesvd(char *JOBU, char* JOBVT, int *M, int *N,
               double *A, int *LDA, double *S, double *U,
@@ -304,10 +339,6 @@ extern "C" {
   void dsyevr (char &JOBZ, char &RANGE, char &UPLO, int &N, double *A, int &LDA, double &VL, double &VU, int &IL, 
              int &IU, double &ABSTOL, int &M, double *W, double* Z, int &LDZ, int* ISUPPZ, double *WORK, 
              int &LWORK, int* IWORK, int &LIWORK, int &INFO);
-
-  void zheevx (char &JOBZ, char &RANGE, char &UPLO, int &N, std::complex<double> *A, int &LDA, double &VL, double &VU, 
-             int &IL, int &IU, double &ABSTOL, int &M, double *W, std::complex<double>* Z, int &LDZ,  
-             std::complex<double> *WORK, int &LWORK, double* RWORK, int* IWORK, int *IFAIL, int &INFO);
 
   void zheevr (char &JOBZ, char &RANGE, char &UPLO, int &N, std::complex<double> *A, int &LDA, double &VL, double &VU, 
              int &IL, int &IU, double &ABSTOL, int &M, double *W, std::complex<double>* Z, int &LDZ, int* ISUPPZ, 

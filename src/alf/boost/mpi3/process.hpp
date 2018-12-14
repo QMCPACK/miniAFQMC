@@ -1,5 +1,5 @@
 #ifdef COMPILATION_INSTRUCTIONS
-(echo "#include<"$0">" > $0x.cpp) && mpicxx -O3 -std=c++14 -Wall `#-Wfatal-errors` -D_TEST_BOOST_MPI3_PROCESS $0x.cpp -o $0x.x -lboost_serialization && time mpirun -np 2 $0x.x $@ && rm -f $0x.x $0x.cpp; exit
+(echo "#include<"$0">" > $0x.cpp) && mpic++ -O3 -std=c++14 -Wall `#-Wfatal-errors` -D_TEST_BOOST_MPI3_PROCESS $0x.cpp -o $0x.x -lboost_serialization && time mpirun -n 2 $0x.x $@ && rm -f $0x.x $0x.cpp; exit
 #endif
 #ifndef BOOST_MPI3_PROCESS_HPP
 #define BOOST_MPI3_PROCESS_HPP
@@ -24,7 +24,8 @@ struct process{
 	template<class T>
 	std::vector<T> operator|=(T const& t) &&{
 		std::vector<T> ret(comm_.size());
-		comm_.gather_value(t, ret.begin(), rank_);
+		comm_.gather_n(&t, 1, ret.begin(), rank_);
+	//	comm_.gather_value(t, ret.begin(), rank_);
 		return ret;
 	}
 //	template<class T>
@@ -34,7 +35,8 @@ struct process{
 //	}
 	template<class T>
 	process&& operator>>(T& t) &&{
-		comm_.receive_value(t, rank_);
+		comm_.receive_n(&t, 1, rank_);
+	//	comm_.receive_value(t, rank_);
 		return std::move(*this);
 	}
 	template<class T>
@@ -44,10 +46,9 @@ struct process{
 	}
 };
 
-
 template<class T>
-auto operator<<(process&& p, const T& value) -> decltype(std::declval<process&>() << value){
-	return p << value;
+auto operator<<(process&& p, const T& value) -> decltype(std::move(p << value)){
+	return std::move(p << value);
 }
 
 template<class T>
@@ -56,9 +57,9 @@ auto operator>>(process&& p, T&& value) -> decltype(std::declval<process&>() >> 
 }
 
 template<class T>
-process&& operator<<(process& self, T const& t){
+process& operator<<(process& self, T const& t){
 	self.comm_.send_value(t, self.rank_);
-	return std::move(self);
+	return self;
 };
 
 inline process communicator::operator[](int rank){
@@ -66,19 +67,9 @@ inline process communicator::operator[](int rank){
 }
 
 template<class T>
-T operator+=(communicator& comm, T const& t){
-	T val = comm.all_reduce_value(t, std::plus<>{});
-	return val;
-}
-template<class T>
-communicator& operator<<(communicator& comm, T const& t){
-	comm.send_value(t);
-	return comm;
-}
-
-template<class T>
 communicator& operator>>(communicator& comm, T& t){
-	comm.receive_value(t);
+	comm.receive_n(&t, 1);
+//	comm.receive_value(t);
 	return comm;
 }
 template<class T>

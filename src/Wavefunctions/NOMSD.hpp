@@ -50,7 +50,7 @@ class NOMSD: public AFQMCInfo
   using CVector = boost::multi_array<ComplexType,1>;  
   using CMatrix = boost::multi_array<ComplexType,2>;  
   using SHM_Buffer = mpi3_SHMBuffer<ComplexType>;  
-  using shared_mutex = boost::mpi3::mutex;  
+  using shared_mutex = boost::mpi3::shm::mutex;
 
   public:
 
@@ -165,7 +165,7 @@ class NOMSD: public AFQMCInfo
      * v: [NMO^2][nW]
      */
     template<class MatX, class MatA>
-    void vHS(const MatX& X, MatA&& v, double a=1.0) {
+    void vHS(MatX& X, MatA&& v, double a=1.0) {
       assert( X.shape()[0] == HamOp.local_number_of_cholesky_vectors() );
       if(transposed_G_for_vbias_)
         assert( X.shape()[1] == v.shape()[0] );

@@ -248,10 +248,10 @@ void SharedWalkerSet::benchmark(std::string& blist,int maxnW,int delnW,int repea
         for(int i=0; i<repeat; i++) {
 
           if(TG.TG_heads().rank()==0) {
-            MPI_Isend(Cbuff.data(),2*Cbuff.size(),MPI_DOUBLE,1,999,TG.TG_heads().impl_,&req);  
+            MPI_Isend(Cbuff.data(),2*Cbuff.size(),MPI_DOUBLE,1,999,&(TG.TG_heads()),&req);  
             MPI_Wait(&req,&st);
           } else {
-            MPI_Irecv(Cbuff.data(),2*Cbuff.size(),MPI_DOUBLE,0,999,TG.TG_heads().impl_,&req);  
+            MPI_Irecv(Cbuff.data(),2*Cbuff.size(),MPI_DOUBLE,0,999,&(TG.TG_heads()),&req);  
             MPI_Wait(&req,&st);
           }
 

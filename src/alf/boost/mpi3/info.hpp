@@ -1,5 +1,5 @@
 #if COMPILATION_INSTRUCTIONS
-(echo "#include<"$0">" > $0x.cpp) && mpicxx -O3 -std=c++14 `#-Wfatal-errors` -D_TEST_BOOST_MPI3_INFO $0x.cpp -o $0x.x && time mpirun -np 2 $0x.x $@ && rm -f $0x.x $0x.cpp; exit
+(echo "#include\""$0"\"" > $0x.cpp) && mpic++ -O3 -std=c++14 `#-Wfatal-errors` -D_TEST_BOOST_MPI3_INFO $0x.cpp -o $0x.x && time mpirun -np 2 $0x.x $@ && rm -f $0x.x $0x.cpp; exit
 #endif
 #ifndef BOOST_MPI3_INFO_HPP
 #define BOOST_MPI3_INFO_HPP
@@ -12,7 +12,11 @@
 namespace boost{
 namespace mpi3{
 
-struct info : detail::regular_handle<info, MPI_Info, MPI_Info_create, MPI_Info_dup, MPI_Info_free>{
+struct info : 
+	detail::regular_handle<
+		info, MPI_Info, MPI_Info_create, MPI_Info_dup, MPI_Info_free
+	>
+{
 	using base = detail::regular_handle<info, MPI_Info, MPI_Info_create, MPI_Info_dup, MPI_Info_free>;
 	using detail::regular_handle<info, MPI_Info, MPI_Info_create, MPI_Info_dup, MPI_Info_free>::call;
 
@@ -59,13 +63,13 @@ struct info : detail::regular_handle<info, MPI_Info, MPI_Info_create, MPI_Info_d
 
 #ifdef _TEST_BOOST_MPI3_INFO
 
-#include "alf/boost/mpi3/main.hpp"
+#include "../mpi3/main.hpp"
 #include<iostream>
 
 using std::cout;
 using std::endl;
 
-int boost::mpi3::main(int argc, char* argv[], boost::mpi3::communicator& world){
+int boost::mpi3::main(int, char*[], boost::mpi3::communicator world){
 	if(world.rank() == 0){
 		boost::mpi3::info nfo;
 		nfo.set("file", "runfile.txt");

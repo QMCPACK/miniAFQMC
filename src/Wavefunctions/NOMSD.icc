@@ -144,9 +144,9 @@ namespace afqmc
       if(req_Gsend!=MPI_REQUEST_NULL)
           MPI_Request_free(&req_Gsend);
       MPI_Send_init(Gwork.origin()+nak0,(nak1-nak0)*sizeof(ComplexType),MPI_CHAR,
-                    TG.prev_core(),1234,TG.TG().impl_,&req_Gsend);
+                    TG.prev_core(),1234,&(TG.TG()),&req_Gsend);
       MPI_Recv_init(Grecv.origin()+nak0,(nak1-nak0)*sizeof(ComplexType),MPI_CHAR,
-                    TG.next_core(),1234,TG.TG().impl_,&req_Grecv);
+                    TG.next_core(),1234,&(TG.TG()),&req_Grecv);
     }
    
     std::fill_n(eloc2.origin(),3*nnodes*nwalk,ComplexType(0.0)); 
@@ -264,9 +264,9 @@ namespace afqmc
           MPI_Request_free(&req_SMsend);
       // use mpi3 when ready
       MPI_Send_init(SMwork.origin()+nak0,(nak1-nak0)*sizeof(ComplexType),MPI_CHAR,
-                    TG.prev_core(),2345,TG.TG().impl_,&req_SMsend);
+                    TG.prev_core(),2345,&(TG.TG()),&req_SMsend);
       MPI_Recv_init(SMrecv.origin()+nak0,(nak1-nak0)*sizeof(ComplexType),MPI_CHAR,
-                    TG.next_core(),2345,TG.TG().impl_,&req_SMrecv);
+                    TG.next_core(),2345,&(TG.TG()),&req_SMrecv);
     }
    
     std::fill_n(eloc2.origin(),3*nnodes*nwalk,ComplexType(0.0)); 
@@ -570,10 +570,10 @@ namespace afqmc
         // if the overhead of the mutex is too much, invert the loop order (make iw the fast index)
         // and have a mutex for each walker index 
         if(transpose) {
-          std::lock_guard<boost::mpi3::mutex> guard(*mutex);
+          std::lock_guard<shared_mutex> guard(*mutex);
           ma::axpy(ov,G1D_,G[iw]);   
         } else {
-          std::lock_guard<boost::mpi3::mutex> guard(*mutex);
+          std::lock_guard<shared_mutex> guard(*mutex);
           ma::axpy(ov,G1D_,G[indices[range_t()][iw]]);   
         }
         Ov[iw] += ov; 
@@ -616,10 +616,10 @@ namespace afqmc
 
           if(local_group_comm.rank()==0) {
             if(transpose) {
-              std::lock_guard<boost::mpi3::mutex> guard(*mutex);
+              std::lock_guard<shared_mutex> guard(*mutex);
               ma::axpy(ov,G1D_2,G[iw]);
             } else {
-              std::lock_guard<boost::mpi3::mutex> guard(*mutex);
+              std::lock_guard<shared_mutex> guard(*mutex);
               ma::axpy(ov,G1D_2,G[indices[range_t()][iw]]);
             }
             Ov[iw] += ov; 
@@ -658,11 +658,11 @@ namespace afqmc
                                                    GB2D_,compact);
         ov_ *= std::conj(ci[nd]);
         if(transpose) {
-          std::lock_guard<boost::mpi3::mutex> guard(*mutex);
+          std::lock_guard<shared_mutex> guard(*mutex);
           ma::axpy(ov_,GA1D_,G[indices[iw][range_t(0,GAdims.first*GAdims.second)]]);
           ma::axpy(ov_,GB1D_,G[indices[iw][range_t(GAdims.first*GAdims.second,G.shape()[1])]]);
         } else {
-          std::lock_guard<boost::mpi3::mutex> guard(*mutex);
+          std::lock_guard<shared_mutex> guard(*mutex);
           ma::axpy(ov_,GA1D_,G[indices[range_t(0,GAdims.first*GAdims.second)][iw]]);
           ma::axpy(ov_,GB1D_,G[indices[range_t(GAdims.first*GAdims.second,G.shape()[0])][iw]]);
         }
@@ -713,11 +713,11 @@ namespace afqmc
           ov_ *= std::conj(ci[nd]);
           if(local_group_comm.root()) {
             if(transpose) {
-              std::lock_guard<boost::mpi3::mutex> guard(*mutex);
+              std::lock_guard<shared_mutex> guard(*mutex);
               ma::axpy(ov_,GA1D_2,G[indices[iw][range_t(0,GAdims.first*GAdims.second)]]);
               ma::axpy(ov_,GB1D_2,G[indices[iw][range_t(GAdims.first*GAdims.second,G.shape()[1])]]);
             } else {
-              std::lock_guard<boost::mpi3::mutex> guard(*mutex);
+              std::lock_guard<shared_mutex> guard(*mutex);
               ma::axpy(ov_,GA1D_2,G[indices[range_t(0,GAdims.first*GAdims.second)][iw]]);
               ma::axpy(ov_,GB1D_2,G[indices[range_t(GAdims.first*GAdims.second,G.shape()[0])][iw]]);
             }
@@ -907,7 +907,7 @@ namespace afqmc
           else
             detR = SDetOp.Orthogonalize(it->SlaterMatrix(Alpha));
           if(!impSamp) {
-            std::lock_guard<boost::mpi3::mutex> guard(*mutex);
+            std::lock_guard<shared_mutex> guard(*mutex);
             it->weight() *= detR;
           }
         }
@@ -917,7 +917,7 @@ namespace afqmc
           else
             detR = SDetOp.Orthogonalize(it->SlaterMatrix(Beta));
           if(!impSamp) {
-            std::lock_guard<boost::mpi3::mutex> guard(*mutex);
+            std::lock_guard<shared_mutex> guard(*mutex);
             it->weight() *= detR;
           }
         }
@@ -1061,7 +1061,7 @@ namespace afqmc
         }
       }  
       TG.Global().all_reduce_in_place_n(G1D.origin(),G1D.num_elements(),std::plus<>());  
-      ComplexType ov_ = TG.Global().all_reduce_value(ov,std::plus<>());  
+      ComplexType ov_ = ( TG.Global() += ov ); 
       ma::scal(ComplexType(1.0,0.0)/ov_,G1D);
       HamOp.vbias(G1D[indices[range_t(0,Gdims.first*Gdims.second)]],
                   std::forward<Vec>(v));
