@@ -301,10 +301,10 @@ CSR construct_distributed_csr_matrix_from_distributed_containers(Container & Q, 
   int nnodes_per_TG = TG.getNNodesPerTG();  
 
   // 1. Define new communicator for equivalent cores
-  boost::mpi3::communicator eq_cores(TG.Cores().split(node_number)); 
+  boost::mpi3::communicator eq_cores(TG.Cores().split(node_number,TG.Cores().rank())); 
   // this comm is similar to TG.TG, but includes all the cores in the node in the same comm
   // it is used to balance the distribution within the nodes on each TG.TG
-  boost::mpi3::communicator eq_node_group(TG.Global().split(nodeid/nnodes_per_TG)); 
+  boost::mpi3::communicator eq_node_group(TG.Global().split(nodeid/nnodes_per_TG,TG.Global().rank())); 
   
   // 2. count elements
   long nterms_total = (TG.Global() += Q.size()); 

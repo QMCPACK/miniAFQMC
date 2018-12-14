@@ -476,6 +476,7 @@ class KP3IndexFactorization
           }
         }
       }
+//std::cout<<comm->rank() <<" " <<E[0][0] <<" " <<E[0][1] <<" " <<E[0][2] <<std::endl; 
     }
 
     // KEleft and KEright must be in shared memory for this to work correctly  

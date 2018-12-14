@@ -113,9 +113,9 @@ class TaskGroup_
   TaskGroup_(GlobalTaskGroup& gTG, std::string name, int nn, int nc):
         tgname(name),global_(gTG.Global()),
         node_(gTG.Node()),core_(gTG.Cores()),
-        local_tg_(node_.split(node_.rank()/((nc<1)?(1):(std::min(nc,node_.size()))))),
+        local_tg_(node_.split(node_.rank()/((nc<1)?(1):(std::min(nc,node_.size()))),node_.rank())),
         tgrp_(),
-        tg_heads_(global_.split(node_.rank()%((nc<1)?(1):(std::min(nc,node_.size())))))     
+        tg_heads_(global_.split(node_.rank()%((nc<1)?(1):(std::min(nc,node_.size()))),global_.rank()))     
   {
     setup(nn,nc);
   }
@@ -123,9 +123,9 @@ class TaskGroup_
   TaskGroup_(TaskGroup_& other, std::string name, int nn, int nc):
         tgname(name),global_(other.Global()),
         node_(other.Node()),core_(other.Cores()),
-        local_tg_(node_.split(node_.rank()/((nc<1)?(1):(std::min(nc,node_.size()))))),
+        local_tg_(node_.split(node_.rank()/((nc<1)?(1):(std::min(nc,node_.size()))),node_.rank())),
         tgrp_(),
-        tg_heads_(global_.split(node_.rank()%((nc<1)?(1):(std::min(nc,node_.size())))))     
+        tg_heads_(global_.split(node_.rank()%((nc<1)?(1):(std::min(nc,node_.size()))),global_.rank()))     
   {
     setup(nn,nc);
   }
@@ -135,7 +135,7 @@ class TaskGroup_
   TaskGroup_(const TaskGroup_& other) = delete;
   TaskGroup_(TaskGroup_&& other):
         global_(other.global_),node_(other.node_),core_(other.core_),
-        local_tg_(other.node_.split(0)),  // inefficient, but needed to get around lack of 
+        local_tg_(other.node_.split(0,other.node_.rank())), 
                                           // default constructor in shared_communicator
         tgrp_(),tg_heads_()
   {
@@ -277,7 +277,7 @@ app_log()<<nn <<" " <<nc <<std::endl;
     number_of_TGs = nrows*ncols;
 
     // split communicator
-    tgrp_ = global_.split(TG_number);
+    tgrp_ = global_.split(TG_number,global_.rank());
 
     if( tgrp_.rank() != node_in_TG*ncores_per_TG+local_tg_.rank() ) {
       app_error()<<" Error in TG::setup(): Unexpected TG_rank: " <<tgrp_.rank()  <<" " <<node_in_TG <<" " <<local_tg_.rank() <<" " <<node_in_TG*ncores_per_TG+local_tg_.rank() <<std::endl;

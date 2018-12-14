@@ -39,7 +39,7 @@ void AFQMCSharedPropagator::reset_nextra(int nextra)
       }
     }
 #ifndef __bgq__
-    local_group_comm = std::move(shared_communicator(TG.TG_local().split(last_task_index)));
+    local_group_comm = std::move(shared_communicator(TG.TG_local().split(last_task_index,TG.TG_local().rank())));
 #endif
   }
   if(last_task_index < 0 || last_task_index >= nextra)
