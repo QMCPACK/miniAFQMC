@@ -56,6 +56,7 @@ struct afqmc_sys: public AFQMCInfo
     using pointer_ooc = typename Alloc_ooc::pointer;
     using const_pointer_ooc = typename Alloc_ooc::const_pointer;
     using IAlloc_ooc = typename Alloc_ooc::template rebind<int>::other;;
+    using extensions = typename ComplexVector<Alloc>::extensions_type;
     Alloc allocator_;
     IAlloc iallocator_;
     Alloc_ooc allocator_ooc_;
@@ -77,16 +78,17 @@ struct afqmc_sys: public AFQMCInfo
       trialwfn_beta( {nmo_,na}, alloc_ ), 
       NMO(nmo_),
       NAEA(na),  
-      WORK( {0}, alloc_ ),
+      WORK( extensions{1}, alloc_ ),
 // hack for status problem in getr?
-      IWORK({NMO+1}, iallocator_ ),
-      TAU( {NMO}, alloc_ ),
+      IWORK(extensions{NMO+1}, iallocator_ ),
+      TAU( extensions{NMO}, alloc_ ),
       TMat_NN( {NAEA,NAEA}, alloc_ ),
       TMat_NM( {NAEA,NMO}, alloc_ ),
       TMat_MN( {NMO,NAEA}, alloc_ ),
       TMat_MM( {NMO,NMO}, alloc_ ),
-      Gcloc( {0,0}, alloc_ )
+      Gcloc( {1,1}, alloc_ )
     {
+std::cout<<"in afmqc_sys contructor " <<std::endl;
       std::size_t buff = ma::getri_optimal_workspace_size(TMat_NN);
       buff = std::max(buff,std::size_t(ma::geqrf_optimal_workspace_size(TMat_NM)));
       buff = std::max(buff,std::size_t(ma::getrf_optimal_workspace_size(TMat_NN)));
@@ -107,18 +109,25 @@ struct afqmc_sys: public AFQMCInfo
       int nwalk = W.shape()[0];
       int nspin = (walker_type==COLLINEAR?2:1);
       assert(G.num_elements() >= nspin*NAEA*NMO*nwalk);
-      assert(G.shape()[0] == nwalk);
-      assert(G.shape()[1] >= nspin*NAEA*NMO);
+      assert(G.shape()[1] == nwalk);
+      assert(G.shape()[0] >= nspin*NAEA*NMO);
       assert(W_data.shape()[0] >= nwalk);
       assert(W_data.shape()[1] >= 3+nspin);
       int N_ = compact?NAEA:NMO;
-      boost::multi::array_ref<ComplexType,4,pointer> G_4D(G.origin(), {nwalk,nspin,N_,NMO}); 
+      boost::multi::array_ref<ComplexType,2,pointer> DM(TMat_MM.origin(), {N_,NMO});
+      boost::multi::array_ref<ComplexType,4,pointer> G_4D(G.origin(), {nspin,N_,NMO,nwalk}); 
+      using BLAS_CPU::copy;
+      using BLAS_GPU::copy;
       for(int n=0; n<nwalk; n++) {
         base::MixedDensityMatrix<ComplexType>(trialwfn_alpha,W[n][0],
-                       G_4D[n][0],TMat_NN,TMat_NM,IWORK,WORK,&W_data[n][3],compact);
-        if(nspin>1) 
+                       DM,TMat_NN,TMat_NM,IWORK,WORK,&W_data[n][3],compact);
+        // using blas call directly since operator() is buggy
+        copy(N_*NMO, DM.origin(), 1, G_4D[0].origin()+n, nwalk);
+        if(nspin>1) { 
           base::MixedDensityMatrix<ComplexType>(trialwfn_beta,W[n][1],
-                       G_4D[n][1],TMat_NN,TMat_NM,IWORK,WORK,&W_data[n][4],compact);
+                       DM,TMat_NN,TMat_NM,IWORK,WORK,&W_data[n][4],compact);
+          copy(N_*NMO, DM.origin(), 1, G_4D[1].origin()+n, nwalk);
+        }
       }
     }
 

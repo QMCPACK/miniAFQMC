@@ -104,6 +104,34 @@ template<class T> struct cuda_um_allocator{
     p->~U();
   }
 };
+
+template<class T, class F>
+F for_each(cuda_um_ptr<T> first, cuda_um_ptr<T> last, F f){
+  if(first == last) return f;
+  return std::for_each(to_address(first), to_address(last), f);
+}
+
+template<typename T, typename Size, typename... Args>
+cuda_um_ptr<T> fill_n(cuda_um_ptr<T> first, Size n, Args&&...args){
+  if(n == 0) return first;
+  std::fill_n(to_address(first), n, std::forward<Args>(args)...);
+  return first + n;
+}
+
+template<typename T, typename Size, typename... Args>
+cuda_um_ptr<T> uninitialized_fill_n(cuda_um_ptr<T> first, Size n, Args&&...args){
+  if(n == 0) return first;
+  std::uninitialized_fill_n(to_address(first), n, std::forward<Args>(args)...); 
+  return first + n;
+}
+
+template<typename T, typename Size>
+cuda_um_ptr<T> destroy_n(cuda_um_ptr<T> first, Size n){
+  auto first_ptr = to_address(first);
+  for(; n > 0; (void) ++first_ptr, --n) first->~T();
+  return first + n;
+}
+
 }
   
 #endif

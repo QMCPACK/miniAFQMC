@@ -21,6 +21,8 @@
 #include "cublas_v2.h"
 #include "cublasXt.h"
 #include "Numerics/detail/cuda_utilities.hpp"
+#include "Kernels/fill_n.cuh"
+#include "Kernels/uninitialized_fill_n.cuh"
 
 namespace cuda {
 
@@ -123,6 +125,55 @@ template<class T> struct cuda_gpu_allocator{
     //p->~U();
   }
 };
+
+/* Don't know how to implement this on the kernel side, without propagating the 
+ * cuda code upstream due to the template needed to pass the UnaryOperator
+template<class T, class F>
+F for_each(cuda_gpu_ptr<T> first, cuda_gpu_ptr<T> last, F f){
+        if(first == last) return f;
+        return kernels::for_each(to_address(first), to_address(last), f);
+}
+*/
+template<typename T, typename Size>
+cuda_gpu_ptr<T> copy_n(cuda_gpu_ptr<T> const A, Size n, cuda_gpu_ptr<T> B) {
+  if(cudaSuccess != cudaMemcpy(to_address(B),to_address(A),n*sizeof(T),cudaMemcpyDefault))
+   throw std::runtime_error("Error: cudaMemcpy returned error code.");
+  return B+n;
+}
+
+template<typename T, typename Size>
+cuda_gpu_ptr<T> copy_n(T* const A, Size n, cuda_gpu_ptr<T> B) {
+  if(cudaSuccess != cudaMemcpy(to_address(B),A,n*sizeof(T),cudaMemcpyDefault))
+   throw std::runtime_error("Error: cudaMemcpy returned error code.");
+  return B+n;
+}
+
+template<typename T, typename Size>
+T* copy_n(cuda_gpu_ptr<T> const A, Size n, T* B) {
+  if(cudaSuccess != cudaMemcpy(B,to_address(A),n*sizeof(T),cudaMemcpyDefault))
+   throw std::runtime_error("Error: cudaMemcpy returned error code.");
+  return B+n;
+}
+
+template<typename T, typename Size, typename... Args>
+cuda_gpu_ptr<T> fill_n(cuda_gpu_ptr<T> first, Size n, Args&&...args){
+  if(n == 0) return first;
+  kernels::fill_n(to_address(first), n, std::forward<Args>(args)...);
+  return first + n;
+}
+
+template<typename T, typename Size, typename... Args>
+cuda_gpu_ptr<T> uninitialized_fill_n(cuda_gpu_ptr<T> first, Size n, Args&&...args){
+  if(n == 0) return first;
+  kernels::uninitialized_fill_n(to_address(first), n, std::forward<Args>(args)...); 
+  return first + n;
+}
+// NOTE: Not sure what to do here
+template<typename T, typename Size>
+cuda_gpu_ptr<T> destroy_n(cuda_gpu_ptr<T> first, Size n){
+  return first + n;
+}
+
 }
   
 #endif

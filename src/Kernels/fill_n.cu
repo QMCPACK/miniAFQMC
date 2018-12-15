@@ -79,5 +79,21 @@ void fill_n(std::complex<double> * first, int N, int stride, std::complex<double
                     static_cast<thrust::complex<double> const >(value)); }
 
 
+void fill_n(int * first, int N, int const value)
+{ thrust::fill_n(thrust::device_ptr<int>(first),N,value); }
+void fill_n(float * first, int N, float const value)
+{ thrust::fill_n(thrust::device_ptr<float>(first),N,value); }
+void fill_n(double * first, int N, double const value)
+{ thrust::fill_n(thrust::device_ptr<double>(first),N,value); }
+void fill_n(std::complex<float> * first, int N, std::complex<float> const value)
+{ thrust::fill_n(thrust::device_ptr<thrust::complex<float> >(
+                    reinterpret_cast<thrust::complex<float> *>(first)),N,
+                    static_cast<thrust::complex<float> const >(value)); }
+void fill_n(std::complex<double> * first, int N, std::complex<double> const value)
+{ thrust::fill_n(thrust::device_ptr<thrust::complex<double> >(
+                    reinterpret_cast<thrust::complex<double> *>(first)),N,
+                    static_cast<thrust::complex<double> const >(value)); }
+
+
 }
 

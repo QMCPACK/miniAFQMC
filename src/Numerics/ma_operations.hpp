@@ -381,7 +381,7 @@ MultiArray2D exp(MultiArray2D const& A) {
         if(is_hermitian(A)) {
 
           // A = V*M*H(Z)
-          eigSys V = symEig<TVec,TMat>(A);
+          eigSys V(symEig<TVec,TMat>(A));
 
           // exp(A) = V*exp(M)*H(Z) 
           MultiArray2D TA({N,N}, A.get_allocator());

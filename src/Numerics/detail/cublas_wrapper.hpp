@@ -25,6 +25,50 @@ namespace cublas {
   using cuda::cublasOperation;
 
   // Level-1
+  inline cublasStatus_t cublas_copy(cublasHandle_t handle, int n,
+                           float *x, int incx,
+                           float *y, int incy)
+  {
+    cublasStatus_t sucess =
+                cublasScopy(handle,n,x,incx,y,incy);
+    cudaDeviceSynchronize ();
+    return sucess;
+  }
+
+  inline cublasStatus_t cublas_copy(cublasHandle_t handle, int n,
+                           double *x, int incx,
+                           double *y, int incy)
+  {
+    cublasStatus_t sucess =
+                cublasDcopy(handle,n,x,incx,y,incy);
+    cudaDeviceSynchronize ();
+    return sucess;
+  }
+
+  inline cublasStatus_t cublas_copy(cublasHandle_t handle, int n,
+                           std::complex<float> *x, int incx,
+                           std::complex<float> *y, int incy)
+  {
+    cublasStatus_t sucess =
+                cublasCcopy(handle,n,
+                        reinterpret_cast<cuComplex *>(x),incx,
+                        reinterpret_cast<cuComplex *>(y),incy);
+    cudaDeviceSynchronize ();
+    return sucess;
+  }
+
+  inline cublasStatus_t cublas_copy(cublasHandle_t handle, int n,
+                           std::complex<double> *x, int incx,
+                           std::complex<double> *y, int incy)
+  {
+    cublasStatus_t sucess =
+                cublasZcopy(handle,n,
+                        reinterpret_cast<cuDoubleComplex *>(x),incx,
+                        reinterpret_cast<cuDoubleComplex *>(y),incy);
+    cudaDeviceSynchronize ();
+    return sucess;
+  }
+
   inline cublasStatus_t cublas_scal(cublasHandle_t handle, int n,
                            const float alpha, float *x, int incx)
   {

@@ -126,6 +126,7 @@ ENDIF()
     Kernels/determinant.cu 
     Kernels/adotpby.cu
     Kernels/fill_n.cu
+    Kernels/uninitialized_fill_n.cu
     Kernels/axty.cu
     Kernels/adiagApy.cu
     Kernels/sum.cu
@@ -135,6 +136,8 @@ ENDIF()
     Kernels/zero_complex_part.cu
     Kernels/batchedDot.cu
     Kernels/copy_n_cast.cu
+    Kernels/ajw_to_waj.cu 
+    Kernels/dot_wabn_wban.cu 
     ${GITREV_TMP}
     )
 

@@ -270,7 +270,8 @@ std::pair<MultiArray1DR,MultiArray2D> symEig(MultiArray2D const& A) {
         int N = A.shape()[0];
         int LDA = A.strides()[0];
 
-            MultiArray1DR eigVal({N}, RAlloc(A.get_allocator()));
+            using extensions = typename MultiArray1DR::extensions_type;
+            MultiArray1DR eigVal(extensions{N}, RAlloc(A.get_allocator()));
             MultiArray2D eigVec({N,N}, A.get_allocator());
             MultiArray2D A_({N,N}, A.get_allocator());
 // FIX GPU
@@ -286,12 +287,15 @@ std::pair<MultiArray1DR,MultiArray2D> symEig(MultiArray2D const& A) {
             int IU=0;
             RType ABSTOL=0;//DLAMCH( 'Safe minimum' );
             int M; // output: total number of eigenvalues found
-            boost::multi::array<int,1,IAlloc> ISUPPZ( {2*N}, IAlloc(A.get_allocator()));
-            boost::multi::array<Type,1,Alloc> WORK({1}, A.get_allocator()); // set with workspace query
+            using iextensions = typename boost::multi::array<int,1,IAlloc>::extensions_type;
+            boost::multi::array<int,1,IAlloc> ISUPPZ( iextensions{2*N}, IAlloc(A.get_allocator()));
+            using cextensions = typename boost::multi::array<Type,1,Alloc>::extensions_type;
+            boost::multi::array<Type,1,Alloc> WORK(cextensions{1}, A.get_allocator()); // set with workspace query
             int LWORK=-1;
-            boost::multi::array<RType,1,RAlloc> RWORK({1}, RAlloc(A.get_allocator())); // set with workspace query
+            using rextensions = typename boost::multi::array<RType,1,RAlloc>::extensions_type;
+            boost::multi::array<RType,1,RAlloc> RWORK(rextensions{1}, RAlloc(A.get_allocator())); // set with workspace query
             int LRWORK=-1;
-            boost::multi::array<int,1,IAlloc> IWORK({1},IAlloc(A.get_allocator()));
+            boost::multi::array<int,1,IAlloc> IWORK(iextensions{1},IAlloc(A.get_allocator()));
             int LIWORK=-1;
             int INFO;
 

@@ -4,28 +4,38 @@
 #ifndef BOOST_MULTI_ARRAY_REF_HPP
 #define BOOST_MULTI_ARRAY_REF_HPP
 
-#include "../multi/ordering.hpp"
-#include "../multi/index_range.hpp"
+//#include "../multi/index_range.hpp"
+//#include "../multi/ordering.hpp"
 
+#include "./index_range.hpp"
+#include "./ordering.hpp"
+
+#include<iostream>
 #include<algorithm> // transform
 #include<array>
 #include<cassert>
-//#include<iostream> // cerr
 #include<memory>
+#include<vector>
 
 namespace boost{
 namespace multi{
 
-//using std::cerr;
+using difference_type = std::ptrdiff_t;
+using size_type = index;
+using index = difference_type;
 
-using index = std::ptrdiff_t;
-using size_type = std::ptrdiff_t;
+}}
 
-struct strides_t{
-	std::ptrdiff_t val = 1;
-	strides_t const& next;
-	strides_t(std::ptrdiff_t v, strides_t const& n) : val(v), next(n){}
-};
+namespace std{
+template<class T>
+boost::multi::index_range extension(std::vector<T> const& v){return boost::multi::index_range{0, static_cast<boost::multi::index>(v.size())};}
+}
+
+namespace boost{
+namespace multi{
+
+template<class T, std::size_t N> 
+index_range extension(T(&)[N]){return {0, N};}
 
 template<typename T, std::size_t N>
 std::array<T, N-1> tail(std::array<T, N> const& a){
@@ -35,27 +45,50 @@ std::array<T, N-1> tail(std::array<T, N> const& a){
 }
 
 namespace detail{
-//	template<typename T, typename... Ts>
 	template<class Tuple>
-	auto head(
-		Tuple t
-	//	std::tuple<T,Ts...> t
-	)
-	->decltype(std::get<0>(t)){
-		return std::get<0>(t);}
-
-	template<typename Tuple, std::size_t... Ns>//, typename... Ts>
-	auto tail_impl(std::index_sequence<Ns...> , Tuple t){
-		return std::make_tuple(std::get<Ns+1u>(t)...);
+	auto head(Tuple t)->decltype(std::get<0>(t)){return std::get<0>(t);}
+	template<typename Tuple, std::size_t... Ns>
+	auto tail_impl(std::index_sequence<Ns...> , Tuple&& t){
+		return std::make_tuple(std::get<Ns+1u>(std::forward<Tuple>(t))...);
 	}
 	template<typename... Ts>
-	auto tail(std::tuple<Ts...> t){
+	auto tail(std::tuple<Ts...> const& t){
 		return tail_impl( std::make_index_sequence<sizeof...(Ts) - 1u>() , t );
 	}
 }
 
-template<dimensionality_type D>//, dimensionality_type DM = D>
+template<dimensionality_type D>
+struct extents_t{
+	extents_t<D-1> sub;
+	index_range extent_;
+	extents_t<D+1> operator[](index_extension ie) const{
+		return extents_t<D+1>{*this, ie};
+	}
+	friend index_range const& head(extents_t const& self){return head(self.sub);}
+	friend extents_t<D-1> const& tail(extents_t const& self){return self.sub;}
+};
+template<>
+struct extents_t<0u>{
+	extents_t<1u> operator[](index_extension ie) const;//{return {*this, ie};}
+};
+template<>
+struct extents_t<1u>{
+	extents_t<0u> sub;
+	index_range extent_;
+	friend index_range const& head(extents_t const& self){return self.extent_;}
+	friend extents_t<0u> const& tail(extents_t const& self){return self.sub;}
+	extents_t<2u> operator[](index_extension ie) const{
+		return {*this, ie};
+	}
+};
+//template<>
+inline extents_t<1u> extents_t<0u>::operator[](index_extension ie) const{return {*this, ie};}
+
+static constexpr extents_t<0u> extents;
+
+template<dimensionality_type D>
 struct layout_t{
+	static constexpr dimensionality_type dimensionality = D;
 	layout_t<D-1> sub;
 	index stride_;
 	index offset_;
@@ -63,27 +96,74 @@ struct layout_t{
 	using extensions_type = std::array<index_extension, D>;
 	auto operator()(index i) const{return i*stride_ - offset_;}
 	auto origin() const{return -offset_ + sub.origin();}
-	layout_t() : sub{}{}
-//	template<typename ExtList, typename = std::enable_if_t<!std::is_base_of<layout_t, std::decay_t<ExtList>>{}>>
-	constexpr layout_t(extensions_type e) : 
+//	layout_t(layout_t&&) = delete;
+//	explicit layout_t(layout_t const&) = default;
+	constexpr layout_t(index_extension ie, layout_t<D-1> const& s) : 
+		sub{s},
+		stride_{ie.size()*sub.num_elements()!=0?sub.size()*sub.stride():1}, 
+		offset_{0}, 
+		nelems_{ie.size()*sub.num_elements()}
+	{}
+	constexpr layout_t(extensions_type e = {}) : 
 		sub{tail(e)}, 
-		stride_{sub.size()*sub.stride()}, offset_{0}, nelems_{std::get<0>(e).size()*sub.num_elements()} 
+		stride_{std::get<0>(e).size()*sub.num_elements()!=0?sub.size()*sub.stride():1}, 
+		offset_{0}, 
+		nelems_{std::get<0>(e).size()*sub.num_elements()} 
 	{}
-	template<class Extensions, typename = decltype(std::get<0>(Extensions{}))>
-	constexpr layout_t(Extensions e) : sub{detail::tail(e)}, 
-		stride_{sub.size()*sub.stride_}, offset_{0}, nelems_{std::get<0>(e).size()*sub.num_elements()}
+	template<class Extensions, typename = std::enable_if_t<not std::is_base_of<layout_t, std::decay_t<Extensions>>{}> >
+	constexpr layout_t(Extensions&& e) :
+		sub{detail::tail(std::forward<Extensions>(e))},
+		stride_{index_extension(std::get<0>(std::forward<Extensions>(e))).size()*sub.num_elements()!=0?sub.size()*sub.stride():1},
+		offset_{0},
+		nelems_{index_extension(std::get<0>(std::forward<Extensions>(e))).size()*sub.num_elements()}
 	{}
-	bool operator==(layout_t const& other) const{
-		return sub==other.sub && stride_==other.stride_ && offset_==other.offset_ && nelems_==other.nelems_;
+	constexpr layout_t(extents_t<D> e) :
+		stride_{head(e).size()*sub.num_elements()!=0?sub.size()*sub.stride():1}, 
+		offset_{0}, 
+		nelems_{head(e).size()*sub.num_elements()}
+	{}
+#if 0
+	private:
+	template<class Extensions>
+	static extensions_type convert(Extensions const& e){
+		extensions_type ret;
+		auto it2 = ret.begin();
+		for(auto it = e.ranges_.begin(); it != e.ranges_.end(); ++it){
+			*it2 = index_extension{it->start(), it->finish()};
+			++it2;
+		}
+		return ret;
 	}
-	bool operator!=(layout_t const& other) const{return not(*this==other);}
-	friend bool operator!=(layout_t const& self, layout_t const& other){return not(self==other);}
-	constexpr size_type num_elements() const{return nelems_;}
+	public:
+	template<class Extensions, typename = decltype(convert(Extensions{}))>
+	constexpr layout_t(Extensions const& e) : layout_t(convert(e)){}
+#endif
+/*	template<class Extensions, typename = decltype(std::get<0>(Extensions{}))>
+	constexpr layout_t(Extensions e) : 
+		sub{detail::tail(e)}, 
+		stride_{sub.size()*sub.stride_}, 
+		offset_{0}, 
+		nelems_{std::get<0>(e).size()*sub.num_elements()}
+	{
+		std::cerr << "there\n";
+	}*/
+	
+	constexpr auto nelems() const{return nelems_;}
+	friend constexpr auto nelems(layout_t const& self){return self.nelems();}
+	constexpr bool operator==(layout_t const& o) const{
+		return sub==o.sub and stride_==o.stride_ and offset_==o.offset_ and nelems_==o.nelems_;
+	}
+	constexpr bool operator!=(layout_t const& o) const{return not(*this==o);}
+	constexpr size_type num_elements() const{return size()*sub.num_elements();}
+	friend size_type num_elements(layout_t const& s){return s.num_elements();}
+	constexpr bool empty() const{return not nelems_;}
+	friend bool empty(layout_t const& s){return s.empty();}
 	constexpr size_type size() const{
-		assert(stride_ != 0);
-		assert(nelems_%stride_ == 0);
+		if(nelems_ == 0) return 0;
+		assert(stride_ != 0 and nelems_%stride_ == 0 );
 		return nelems_/stride_;
 	}
+	friend constexpr size_type size(layout_t const& l){return l.size();}
 	layout_t& rotate(){
 		using std::swap;
 		swap(stride_, sub.stride_);
@@ -92,23 +172,38 @@ struct layout_t{
 		sub.rotate();
 		return *this;
 	}
+	layout_t& unrotate(){
+		sub.unrotate();
+		using std::swap;
+		swap(stride_, sub.stride_);
+		swap(offset_, sub.offset_);
+		swap(nelems_, sub.nelems_);
+		return *this;
+	}
 	layout_t& rotate(dimensionality_type r){
 		if(r >= 0) while(r){rotate(); --r;}
 		else return rotate(D - r);
 		return *this;
 	}
-/*	template<dimensionality_type DD = 0> 
-	constexpr size_type size() const{
-		if constexpr(DD == 0) return size();
-		else return sub.template size<DD - 1>();
-	}*/
-	constexpr size_type size(dimensionality_type d) const{
-		return d?sub.size(d-1):size();
-	};
-	constexpr index stride(dimensionality_type d = 0) const{
+	size_type size(dimensionality_type d) const{return d?sub.size(d-1):size();}
+	index stride(dimensionality_type d = 0) const{
 		return d?sub.stride(d-1):stride_;
 	}
+	friend constexpr index stride(layout_t const& self){return self.stride();}
+	void offsets_aux(index* it) const{
+		*it = offset();
+		sub.offsets_aux(++it);
+	}
+	auto offsets() const{
+		std::array<index, D> ret;
+		offsets_aux(ret.begin());
+		return ret;
+	}
 	constexpr index offset() const{return offset_;}
+	constexpr index offset(dimensionality_type d) const{
+		return d?sub.offset(d-1):offset_;
+	}
+	friend constexpr index offset(layout_t const& self){return self.offset();}
 	decltype(auto) shape() const{return sizes();}
 	friend decltype(auto) shape(layout_t const& self){return self.shape();}
 	auto sizes() const{
@@ -116,6 +211,7 @@ struct layout_t{
 		sizes_aux(ret.begin());
 		return ret;
 	}
+	friend constexpr auto sizes(layout_t const& self){return self.sizes();}
 	void sizes_aux(size_type* it) const{
 		*it = size(); 
 		sub.sizes_aux(++it);
@@ -125,23 +221,28 @@ struct layout_t{
 		strides_aux(ret.begin());
 		return ret;
 	}
+	friend constexpr auto strides(layout_t const& self){return self.strides();}
 	void strides_aux(size_type* it) const{
 		*it = stride();
 		sub.strides_aux(++it);
+	}
+	constexpr index_extension extension() const{
+		return {offset_/stride_, (offset_ + nelems_)/stride_};
 	}
 	constexpr index_extension extension_aux() const{
 		assert(stride_ != 0 and nelems_%stride_ == 0);
 		return {offset_/stride_, (offset_ + nelems_)/stride_};
 	}
 	template<dimensionality_type DD = 0>
-	constexpr index_extension extension(dimensionality_type d = DD) const{
-		return d?sub.extension(d-1):extension_aux();
+	constexpr index_extension extension(dimensionality_type d) const{
+		return d?sub.extension(d-1):extension();
 	}
-	auto extensions() const{
+	constexpr auto extensions() const{
 		extensions_type ret;
 		extensions_aux(ret.begin());
 		return ret;
 	}
+	friend constexpr auto extensions(layout_t const& self){return self.extensions();}
 	void extensions_aux(index_extension* it) const{
 		*it = extension();
 		++it;
@@ -149,37 +250,66 @@ struct layout_t{
 	}
 };
 
-#if 1
 template<>
-struct layout_t<1>{
+struct layout_t<0u>{
+	static constexpr dimensionality_type dimensionality = 0u;
+};
+
+template<>
+struct layout_t<1u>{
+	static constexpr dimensionality_type dimensionality = 1u;
 	using extensions_type = std::array<index_extension, 1>;
 	index stride_;
 	index offset_;
 	index nelems_;
 	layout_t() = default;
+	constexpr layout_t(index_extension ie, layout_t<0> const&) : 
+		stride_{1}, 
+		offset_{0}, 
+		nelems_{ie.size()}
+	{}
 	template<class Extensions, typename = decltype(std::get<0>(Extensions{}))>
 	constexpr layout_t(Extensions e) : 
 		stride_{1*1}, offset_{0}, nelems_{std::get<0>(e).size()*1}
 	{}
-	constexpr size_type size(dimensionality_type d = 0) const{
+	constexpr auto offset() const{return offset_;}
+	constexpr auto offset(dimensionality_type d) const{
+		(void)d;
+		assert(d==0);
+		return offset_;
+	}
+	constexpr auto nelems() const{return nelems_;}
+	friend constexpr auto nelems(layout_t const& self){return self.nelems();}
+	constexpr size_type size() const{
+		assert(stride_ != 0 and nelems_%stride_ == 0);
+		return nelems_/stride_;
+	}
+	constexpr size_type size(dimensionality_type d) const{
 		(void)d;
 		assert(d == 0 and stride_ != 0 and nelems_%stride_ == 0);
 		return nelems_/stride_;
 	}
+	friend constexpr size_type size(layout_t const& self){return self.size();}
 	auto sizes() const{
 		std::array<size_type, 1> ret;
 		sizes_aux(ret.begin());
 		return ret;
 	}
 	void sizes_aux(size_type* it) const{*it = size();}
-	constexpr index stride(dimensionality_type d = 0) const{assert(d == 0); return stride_;}
+	constexpr index stride(dimensionality_type d = 0) const{(void)d; assert(d == 0); return stride_;}
+	friend constexpr index stride(layout_t const& self){return self.stride();}
 	auto strides() const{
 		std::array<index, 1> ret;
 		strides_aux(ret.begin());
 		return ret;
 	}
+	constexpr auto offsets() const{return std::array<index, 1>{{offset()}};}
+	void offsets_aux(index* it) const{*it = offset();}
 	void strides_aux(size_type* it) const{*it = stride();}
-	constexpr size_type num_elements() const{return nelems_;}
+	constexpr size_type num_elements() const{return size();}
+	friend size_type num_elements(layout_t const& s){return s.num_elements();}
+	constexpr bool empty() const{return not nelems_;}
+	friend bool empty(layout_t const& s){return s.empty();}
 	constexpr index_extension extension(dimensionality_type d = 0) const{
 		(void)d;
 		assert(d == 0);
@@ -187,131 +317,142 @@ struct layout_t<1>{
 		return {offset_/stride_, (offset_ + nelems_)/stride_};
 	}
 	constexpr extensions_type extensions() const{return {extension()};}
+	friend constexpr auto extensions(layout_t const& self){return self.extensions();}
 	void extensions_aux(index_extension* it) const{*it = extension();}
 	constexpr auto operator()(index i) const{return i*stride_ - offset_;}
 	constexpr auto origin() const{return -offset_;}
-	bool operator==(layout_t const& other) const{
+	constexpr bool operator==(layout_t const& other) const{
 		return stride_==other.stride_ and offset_==other.offset_ and nelems_==other.nelems_;
-	} bool operator!=(layout_t const& other) const{return not(*this==other);}
+	} 
+	constexpr bool operator!=(layout_t const& other) const{return not(*this==other);}
 	layout_t& rotate(){return *this;}
+	layout_t& unrotate(){return *this;}
 	decltype(auto) shape() const{return sizes();}
-};
-#endif
-
-template<>
-struct layout_t<0>{
-	using extensions_type = std::array<index_extension, 0>;
-	index stride_ = 1;
-	index nelems_ = 1;
-	index size_ = 1;
-	layout_t() = default;
-	template<class T>
-	layout_t(std::array<T, 0>){}
-	void sizes_aux(size_type*) const{}
-	void strides_aux(size_type*) const{}
-	void extensions_aux(index_extension*) const{};
-	constexpr size_type num_elements() const{return 1;}
-	template<dimensionality_type DD = 0>
-	constexpr size_type size() const{return size_;}
-	constexpr index stride(dimensionality_type = 0) const{return stride_;} // assert(d == -1);
-	layout_t& rotate(){return *this;}
-	bool operator==(layout_t const&) const{return true;}
-	bool operator!=(layout_t const&) const{return false;}
-	size_type size(dimensionality_type) const{return -1;} // assert(d == -1);
-	index_extension extension(dimensionality_type) const{return index_extension{};} // assert(d == -1);
 };
 
 template<typename T, dimensionality_type D, class Alloc = std::allocator<T>>
-class array;
-
-#if 0
-template<class T, dimensionality_type N>
-struct recursive_ilist{
-	using type = typename std::initializer_list<typename recursive_ilist<T, N-1>::type>;
-};
-template<class T>
-struct recursive_ilist<T, 1>{using type = std::initializer_list<T>;};
-template<class T, dimensionality_type N>
-using recursive_ilist_t = typename recursive_ilist<T, N>::type;
-#endif
+struct array;
 
 template<
 	typename T, 
 	dimensionality_type D, 
-	typename ElementPtr = T const*, 
-	class Layout = layout_t<D>
+	typename ElementPtr,// = T const*, 
+	class Layout = layout_t<D>//, class Allocator = std::allocator<T>
 > 
 struct basic_array : Layout{
-	static constexpr dimensionality_type dimensionality = D;
 	using layout_t = Layout;
+	using index = boost::multi::index;
 	using element = T;
-	using element_ptr = ElementPtr;
+	using element_ptr = typename std::decay<ElementPtr>::type;
 	using element_const_ptr = typename std::pointer_traits<element_ptr>::template rebind<element const>;
 	using value_type      = multi::array<element, D-1>;
 	using difference_type = index;
+//	using allocator_type = Allocator;
 	using sub_element_ptr = decltype(std::declval<element_ptr>() + std::declval<Layout>().operator()(0));
-	using const_reference = basic_array<element, D-1, element_const_ptr>; 
+	using const_reference = basic_array<element, D-1, element_const_ptr>;
 	using reference       = basic_array<element, D-1, element_ptr>;
 	friend struct basic_array<element, D+1, element_ptr>;
-//	friend struct basic_array<element, D, element_const_ptr>;
-//	friend struct basic_array<element, D, element_ptr>;
+	friend struct basic_array<element, D+1, element_ptr&>;
 	friend struct basic_array<element, D, typename std::pointer_traits<element_ptr>::template rebind<element>>;
-//	template<class Ptr>
-//	friend struct basic_array<element, D+1, Ptr>;
-// for at least up to 3D, ...layout const> is faster than ...layout const&>
 protected:
 	using initializer_list = std::initializer_list<typename basic_array<T, D-1, ElementPtr>::initializer_list>;
-	element_ptr data_;
-	basic_array() = delete;
-	Layout const& layout() const{return *this;}
-protected:	basic_array(element_ptr data, Layout layout) : Layout(layout), data_(data){}
-private:
-	reference operator_sbracket(index i) const{
-		assert( i < this->extension().last() and i >= this->extension().first() );
-		return {data_ + Layout::operator()(i), Layout::sub};
-	}
+	ElementPtr data_; // TODO call it base_ ?
+	basic_array(ElementPtr data, Layout layout) : Layout{layout}, data_{data}{}
 public:
+	Layout const& layout() const{return *this;}
+	friend Layout const& layout(basic_array const& self){return self.layout();}
+	basic_array(basic_array const& other) : Layout{other.layout()}, data_{other.data_}{}
+	basic_array(basic_array&& other) : Layout{other.layout()}, data_{other.data_}{}
 	operator basic_array<element, D, element_const_ptr>() const{
 		return basic_array<element, D, element_const_ptr>(data_, layout());
 	}
-//	basic_array(multi::basic_array<element, D, element_const_ptr> const& other){}// : Layout(other.layout()), data_(other.data_){}
 	element_ptr origin() const{return data_ + Layout::origin();}
+	element_const_ptr corigin() const{return origin();}
 	friend decltype(auto) origin(basic_array const& self){return self.origin();}
-//	element_ptr origin() &&{return data_ + Layout::origin();}
-//	element_const_ptr origin() const&{return data_ + Layout::origin();}
-	element_const_ptr corigin() const{return data_ + Layout::origin();}
 	friend decltype(auto) corigin(basic_array const& self){return self.corigin();}
-//	const_
-	reference operator[](index i) const{return operator_sbracket(i);}
+	reference operator[](index i) const{ assert(i<this->extension().last() and i>=this->extension().first());
+		return reference{data_ + Layout::operator()(i), Layout::sub};
+	}
+	basic_array sliced(index first, index last) const{
+		layout_t new_layout = *this;
+		(new_layout.nelems_/=Layout::size())*=(last - first);
+		return {data_ + Layout::operator()(first), new_layout};
+	}
+	basic_array sliced(index first, index last, index stride) const{
+		return sliced(first, last).strided(stride);
+	}
 	auto range(index_range const& ir) const{
-		layout_t new_layout = *this; 
-		(new_layout.nelems_/=Layout::size())*=ir.size();
-		return basic_array<T, D, ElementPtr, multi::layout_t<D>>{
-			data_ + Layout::operator()(ir.front()), new_layout
-		};
+		return sliced(ir.front(), ir.front() + ir.size());
 	}
 	auto range(index_range const& ir, dimensionality_type n) const{
 		return rotated(n).range(ir).rotated(-n);
 	}
-	auto operator()(index_range a) const{return range(a);}
+	auto strided(index s) const{
+		layout_t new_layout = *this;
+	//	new_layout.nelems_/=s;
+		new_layout.stride_*=s;
+		return basic_array{data_ + Layout::operator()(this->extension().front()), new_layout};		
+	}
+	auto operator()(index_range const& a) const{return range(a);}
+	//auto operator()(index_range const& a) const{assert(0); return range(a);}
 	auto operator()(index i) const{return operator[](i);}
 	decltype(auto) paren_aux() const{return *this;}
 	template<class... As>
-	auto paren_aux(index_range a, As&&... as) const{return operator()(a).rotated(1).paren_aux(as...);}
-	template<class... As>
-	auto paren_aux(index i, As&&... as) const{return operator[](i).rotated(1).paren_aux(as...);}
-	template<class... As>
-	auto operator()(index_range a, As&&... as) const{return paren_aux(a, as...).rotated(-(1 + sizeof...(As)));}
-	template<class... As>
-	auto operator()(index i, As&&... as) const{return operator[](i).rotated(1)(as...).rotated(-(1 + sizeof...(As)));}
-	auto operator()(index_range const& a, index_range const& ir1) const{return paren_aux(a, ir1).rotated(-2);}
-	auto operator()(index_range const& a, index       const& i1) const{return paren_aux(a, i1).rotated(-2);}
-	auto operator()(index const& a, index_range const& ir1) const{return operator[](a).rotated(1)(ir1).rotated(-2);}
+	auto paren_aux(index_range a, As&&... as) const{return operator()(a).rotated().paren_aux(as...);}
+	auto rotated() const{
+		layout_t new_layout = *this; 
+		new_layout.rotate();
+		return basic_array<T, D, ElementPtr>{data_, new_layout};
+	}
+	auto unrotated() const{
+		layout_t new_layout = *this; 
+		new_layout.unrotate();
+		return basic_array<T, D, ElementPtr>{data_, new_layout};
+	}
 	auto rotated(dimensionality_type i) const{
 		layout_t new_layout = *this; 
 		new_layout.rotate(i);
 		return basic_array<T, D, ElementPtr>{data_, new_layout};
 	}
+	template<class... As>
+	auto paren_aux(index i, As&&... as) const{return operator[](i).rotated().paren_aux(as...);}
+	template<class... As>
+	auto operator()(index_range a, As&&... as) const{
+		return paren_aux(a, as...).rotated(-(1 + sizeof...(As)));
+	}
+	template<class... As>
+	auto operator()(index i, As&&... as) const{
+		return operator[](i)(as...);//.rotated(-(1 + sizeof...(As)));
+	}
+	auto operator()(index_range const& a, index_range const& ir1) const{
+		return paren_aux(a, ir1).rotated(-2);
+	}
+	auto operator()(index_range const& a, index       const& i1) const{
+		return paren_aux(a, i1).rotated(-2);
+	}
+	auto operator()(index const& a, index_range const& ir1) const{
+		return operator[](a).sliced(ir1.first(), ir1.last());
+	}
+#if 0 // TODO implement A[indices[range(2,8)][range(4,16)]] syntax
+	template<class Indices, typename = decltype(Indices{}.ranges_)>//boost::indices
+	auto operator[](Indices const& is) const{
+	//	extensions_type ret;
+	//	auto it2 = ret.begin();
+		auto ret = *this;
+		int n  = 0;
+		for(auto it = is.ranges_.begin(); it != is.ranges_.end(); ++it){
+			ret = ret.rotated(n).sliced(it->start(), it->finish()).rotated(-n);
+		//	if(it->degenerate_){
+				
+		//	}else{
+				
+		//	}
+		//	*it2 = index_extension{it->start(), it->finish()};
+		//	++it2;
+		}
+		return ret;
+	}
+#endif
 	decltype(auto) front(){return *begin();}
 	decltype(auto) back(){return *(begin() + (Layout::size() - 1));}
 	class const_iterator : private const_reference{
@@ -322,11 +463,11 @@ public:
 		friend struct basic_array;
 		explicit operator bool() const{return this->data_;}
 	public:
-		using difference_type = basic_array::difference_type;
-		using value_type = typename basic_array<T, D, ElementPtr>::value_type;
-		using pointer = void*;
+		using difference_type = basic_array::difference_type; //	using value_type = typename basic_array<T, D, ElementPtr>::value_type;
+		using pointer = void;
 		using reference = const_reference;
 		using iterator_category = std::random_access_iterator_tag;
+		using value_type = multi::array<element, D-1>;
 		const_iterator(std::nullptr_t = nullptr) : const_reference{}{}
 		const_iterator(const_iterator const&) = default;
 		const_iterator& operator=(const_iterator const& other) = default;
@@ -345,18 +486,18 @@ public:
 			return (this->data_ - other.data_)/stride_;
 		}
 		bool operator==(const_iterator const& other) const{
-			return this->data_ == other.data_ and this->stride_ == other.stride_;
+			return this->data_==other.data_ and this->stride_==other.stride_;
 		}
 		bool operator!=(const_iterator const& other) const{return not((*this)==other);}
 		bool operator<(const_iterator const& other) const{
 			if(stride_ < 0) return other.data_ - this->data_ < 0;
-			return this->data_ - other.data_ < 0;
+			return this->data_ - other.data_ > 0;
 		}
 	};
 	struct iterator : private reference{
 		index stride_;
-		iterator(basic_array<T, D-1, ElementPtr> const& cr, index stride) : 
-			basic_array<T, D-1, ElementPtr>{cr}, stride_{stride}
+		iterator(basic_array<T, D-1, element_ptr> const& cr, index stride) : 
+			basic_array<T, D-1, element_ptr>{cr}, stride_{stride}
 		{}
 		friend struct basic_array;
 		explicit operator bool() const{return this->data_;}
@@ -367,8 +508,8 @@ public:
 		using difference_type = typename basic_array<T, D, ElementPtr>::difference_type;
 		using value_type = typename basic_array<T, D, ElementPtr>::value_type;
 		using pointer = void*;
-		using reference = typename basic_array<T, D, ElementPtr>::reference; // careful with shadowing reference (there is another one level up)
-		iterator(std::nullptr_t = nullptr) : basic_array<T, D-1, ElementPtr>{}{}
+		using reference = typename basic_array<T, D, element_ptr /*ElementPtr*/>::reference; // careful with shadowing reference (there is another one level up)
+		iterator(std::nullptr_t = nullptr) : basic_array<T, D-1, element_ptr>{}{}
 		using iterator_category = std::random_access_iterator_tag;
 		iterator& operator=(iterator const& other) = default;
 		template<class It>
@@ -398,10 +539,7 @@ public:
 			if(stride_ < 0) return other.data_ - this->data_ < 0;
 			return this->data_ - other.data_ < 0;
 		}
-		friend void iter_swap(iterator const& i1, iterator const& i2){
-			i1->swap(*i2);
-//			return swap(*i1, *i2);
-		}
+		friend void iter_swap(iterator i1, iterator i2){i1->swap(*i2);}
 	};
 	friend size_type size(basic_array const& self){return self.size();}
 	friend auto sizes(basic_array const& self){return self.sizes();}
@@ -440,16 +578,16 @@ public:
 			new_layout.stride_
 		};
 	}
-	const_iterator begin()  const{return {const_reference{data_ + Layout::operator()(this->extension().first()), Layout::sub}, Layout::stride_};}
-	const_iterator end()    const{return {const_reference{data_ + Layout::operator()(this->extension().last()), Layout::sub}, Layout::stride_};}
+//	const_iterator begin()  const{return {const_reference{data_ + Layout::operator()(this->extension().first()), Layout::sub}, Layout::stride_};}
+//	const_iterator end()    const{return {const_reference{data_ + Layout::operator()(this->extension().last()), Layout::sub}, Layout::stride_};}
 	const_iterator cbegin()  const{
 		iterator r = begin();
 		const_iterator cr = r;
 		return r;
 	}
 	const_iterator cend()    const{return end();}
-	iterator begin(){return {reference{data_ + Layout::operator()(this->extension().first()), Layout::sub}, Layout::stride_};}
-	iterator end()  {return {reference{data_ + Layout::operator()(this->extension().last()), Layout::sub}, Layout::stride_};}
+	iterator begin() const{return {reference{data_ + Layout::operator()(this->extension().first()), Layout::sub}, Layout::stride_};}
+	iterator end()   const{return {reference{data_ + Layout::operator()(this->extension().last()), Layout::sub}, Layout::stride_};}
 
 	friend const_iterator begin(basic_array const& self){return self.begin();}
 	friend const_iterator end(basic_array const& self){return self.end();}
@@ -457,12 +595,6 @@ public:
 	friend iterator end(basic_array& self){return self.end();}
 	friend const_iterator cbegin(basic_array const& self){return self.begin();}
 	friend const_iterator cend(basic_array const& self){return self.end();}
-//	size_type num_elements() const{return layout_.num_elements();}
-	friend size_type num_elements(basic_array const& self){return self.num_elements();}
-/*	basic_array& operator=(basic_array const&){
-		assert(0);
-		return *this;
-	}*/
 protected:
 	template<class It>
 	void recursive_assign_(It first, It last){
@@ -481,38 +613,26 @@ protected:
 		) operator[](i).intersection_assign_(other[i]);
 	}
 public:
-	basic_array& operator=(basic_array const& other){
-		assert(this->extension() == other.extension());
-		for(auto i : this->extension()) operator[](i) = other[i];
+	basic_array const& operator=(basic_array const& other) const{
+		return operator=<basic_array>(other);
+	}
+	template<class Array>
+	basic_array const& operator=(Array const& other) const{
+		assert(this->extension() == extension(other));
+		using std::copy; using std::begin; using std::end;
+		copy(begin(other), end(other), this->begin());
 		return *this;
 	}
 	template<class Array>
-	void operator=(Array const& other){
-		assert(this->extension() == other.extension());
-		for(auto i : this->extension()) operator[](i) = other[i];
-	}
-	template<class Array>
-	bool operator<(Array const& other) const{
-		using std::lexicographical_compare;
-		using std::begin; using std::end;
-		return lexicographical_compare(this->begin(), this->end(), begin(other), end(other)); // needs assignable iterator
-	}
-	template<class Array>
-	bool operator<=(Array const& other) const{return (*this)==other or (*this)<other;}
-	template<class Array>
-	bool operator>(Array const& other) const{return not ((*this)<=other);}
-	template<class Array>
-	bool operator>=(Array const& other) const{return not ((*this)<other);}
-	template<class Array>
-	void swap(Array&& other){
+	void swap(Array&& other) const{
 		assert(this->extension() == extension(other));
-		using std::swap_ranges; using std::begin; using std::end;
-		swap_ranges(this->begin(), this->end(), begin(other)); // for(auto i : self.extension()) swap(self[i], other[i]);		
+		using std::swap_ranges; using std::begin;
+		swap_ranges(basic_array::begin(), basic_array::end(), begin(std::forward<Array>(other)));
 	}
-	friend void swap(basic_array& a1, basic_array& a2){return a1.swap(a2);}
-	friend void swap(basic_array& a1, basic_array&& a2){return a1.swap(a2);}
-	friend void swap(basic_array&& a1, basic_array& a2){return a1.swap(a2);}
-	friend void swap(basic_array&& a1, basic_array&& a2){return a1.swap(a2);}
+//	friend void swap(basic_array& a1, basic_array& a2){return a1.swap(a2);}
+//	friend void swap(basic_array& a1, basic_array&& a2){return a1.swap(a2);}
+//	friend void swap(basic_array&& a1, basic_array& a2){return a1.swap(a2);}
+//	friend void swap(basic_array&& a1, basic_array&& a2){return a1.swap(a2);}
 	template<class Array> 
 	bool operator==(Array const& other) const{
 		if(this->extension() != other.extension()) return false;
@@ -522,23 +642,39 @@ public:
 	template<class Array> bool operator!=(Array const& other) const{
 		return not((*this) == other);
 	}
+	template<class Array>
+	bool operator<(Array const& other) const{
+		using std::lexicographical_compare;
+		using std::begin; using std::end;
+		return lexicographical_compare(this->begin(), this->end(), begin(other), end(other)); // needs assignable iterator
+	}
+	template<class Array>
+	bool operator>=(Array const& other) const{return not ((*this)<other);}
+	template<class Array>
+	bool operator<=(Array const& other) const{return (*this)<other or (*this)==other;}
+	template<class Array>
+	bool operator>(Array const& other) const{return not ((*this)<=other);}
 };
 
-template<class T, std::size_t N> 
-index_range extension(T(&)[N]){return {0, N};}
+namespace adl{
+	template<class... As>
+	decltype(auto) extension(As&&... as){
+		using boost::multi::extension;
+		return extension(std::forward<As>(as)...);
+	}
+}
 
 template<typename T, typename ElementPtr, class Layout>
 struct basic_array<T, dimensionality_type{1}, ElementPtr, Layout> : Layout{
 	constexpr static dimensionality_type dimensionality = 1;
 	using value_type = T;
 	using element = value_type;
-	using element_ptr = ElementPtr;
+	using element_ptr = std::decay_t<ElementPtr>;
 	using element_const_ptr = typename std::pointer_traits<element_ptr>::template rebind<element const>;
 	using layout_t = Layout;
 	using const_reference = decltype(*std::declval<element_const_ptr>()); //T const&;
-	using reference = decltype(*std::declval<element_ptr>()); // decltype(*ElementPtr{});
+	using reference = decltype(*std::declval<element_ptr>());
 protected:
-//	using initializer_list = recursive_ilist_t<T, di                                                                                                                               m mensionality>;
 	using initializer_list = std::initializer_list<T>;
 	template<class It>
 	void recursive_assign_(It first, It last){
@@ -555,124 +691,133 @@ protected:
 			i != std::min(basic_array::extension(0).last(), other.extension(0).last()); ++i
 		) operator[](i) = other[i];
 	}
-	Layout const& layout() const{return *this;}
-	element_ptr data_;
-	basic_array() = default;
-	basic_array(element_ptr data, layout_t layout) : Layout{layout}, data_{data}{}
+//	element_ptr data_;
+	ElementPtr data_;
+	basic_array() = delete;
+	basic_array(ElementPtr d, layout_t l) : Layout{l}, data_{d}{}
 	friend struct basic_array<T, dimensionality_type{2}, element_ptr>;
+	friend struct basic_array<T, dimensionality_type{2}, element_ptr&>;
 	friend struct basic_array<T, dimensionality_type{2}, typename std::pointer_traits<element_ptr>::template rebind<element>>;
 	friend struct basic_array<T, dimensionality_type{1}, element_const_ptr>;
 public:
-	basic_array& operator=(basic_array const& other){
-		assert(this->extension() == other.extension());
-		for(auto i : this->extension()) operator[](i) = other[i];
+	Layout const& layout() const{return *this;}
+	friend Layout const& layout(basic_array const& self){return self.layout();}
+	template<class Array>
+	basic_array const& operator=(Array const& other) const{
+		assert(this->extension() == adl::extension(other));
+		using std::copy; using std::begin; using std::end;
+		copy(begin(other), end(other), this->begin());
 		return *this;
 	}
-	template<class Array>
-	void operator=(Array const& other){
-		assert(this->extension() == other.extension());
-		for(auto i : this->extension()) operator[](i) = other[i];
+	basic_array const& operator=(basic_array const& other) const{
+		assert(this->extension() == extension(other));
+		if(Layout::stride() == 1 and other.stride() == 1){
+			using std::copy_n;
+			copy_n(other.data_, other.num_elements(), data_);
+			return *this;
+		}else{
+			//TODO further optimize for strided case
+			return operator=<basic_array>(other);
+		}
 	}
-	basic_array(basic_array<element, 1, typename std::pointer_traits<element_ptr>::template rebind<element>> const& other) : Layout(static_cast<Layout const&>(other)), data_(other.data_){}
-	const_reference operator[](index i) const{
+	basic_array(basic_array<element, 1, typename std::pointer_traits<element_ptr>::template rebind<element>> const& other) : Layout{other}, data_{other.data_}{}
+	reference operator[](index i) const{
 		assert( i < this->extension().last() and i >= this->extension().first() );
-		return *(data_ + Layout::operator()(i));
-	//	return data_[Layout::operator()(i)];
+		return *(data_ + Layout::operator()(i)); //data_[Layout::operator()(i)];
 	}
 	reference operator[](index i){
 		assert( i < this->extension().last() and i >= this->extension().first() );
-		return *(data_ + Layout::operator()(i));
-	//	return data_[Layout::operator()(i)]; // 
+		return *(data_ + Layout::operator()(i));//data_[Layout::operator()(i)];
+	}
+	basic_array sliced(index first, index last) const{
+		layout_t new_layout = *this; 
+		(new_layout.nelems_/=Layout::size())*=(last - first);
+		return {data_ + Layout::operator()(first), new_layout};		
+	}
+	basic_array sliced(index first, index last, index stride) const{
+		return sliced(first, last).strided(stride);
+	}
+	auto strided(index s) const{
+		layout_t new_layout = *this;
+	//	new_layout.nelems_/=s;
+		new_layout.stride_*=s;
+		return basic_array{data_ + Layout::operator()(this->extension().front()), new_layout};		
 	}
 	auto range(index_range const& ir) const{
-		layout_t new_layout = *this; 
-		(new_layout.nelems_/=Layout::size())*=ir.size();
-		return basic_array<T, 1, ElementPtr, multi::layout_t<1>>{
-			data_ + Layout::operator()(ir.front()), new_layout
-		};
+		return sliced(ir.front(), ir.last());
 	}
 	decltype(auto) paren_aux() const{return *this;}
 	template<class... As>
-	auto paren_aux(index_range a, As&&... as) const{return operator()(a).rotated(1).paren_aux(as...);}
+	auto paren_aux(index_range a, As&&... as) const{return operator()(a).rotated().paren_aux(as...);}
 	template<class... As>
-	auto paren_aux(index i, As&&... as) const{return operator[](i).rotated(1).paren_aux(as...);}
+	auto paren_aux(index i, As&&... as) const{return operator[](i).rotated().paren_aux(as...);}
 	auto operator()(index_range const& ir) const{return range(ir);}
 	auto operator()(index i) const{return operator[](i);}
+	decltype(auto) rotated() const{return *this;}
+	decltype(auto) unrotated() const{return *this;}	
 	decltype(auto) rotated(dimensionality_type) const{return *this;}
 	element_ptr origin() const{return data_ + Layout::origin();}
-//	element_ptr origin(){return data_ + Layout::origin();}
-	friend decltype(auto) origin(basic_array const& self){return self.origin();}
-//	friend decltype(auto) corigin(basic_array const& self){return self.origin();}
+	friend element_ptr origin(basic_array const& self){return self.origin();}
 	element_const_ptr corigin() const{return origin();}
+	friend element_const_ptr corigin(basic_array const& s){return s.corigin();}
 	class const_iterator{
 		friend struct basic_array;
-		const_iterator(element_ptr data, index stride) : data_(data), stride_(stride){}
+		const_iterator(element_ptr d, index s) : data_(d), stride_(s){}
 	protected:
 		element_ptr data_;
 		index stride_;
 	public:
 		using difference_type = index;
 		using value_type = T;
-		using pointer = void*;
+		using pointer = element_const_ptr;//void*;
 		using reference = const_reference;
 		using iterator_category = std::random_access_iterator_tag;
 		const_reference operator*() const{return *data_;}
-		element_ptr const* operator->() const{return data_;}
-		const_reference operator[](index i) const{
-			return *(data_ + i*stride_);
-		//	return data_[i*stride_];
-		}
+		element_const_ptr const& operator->() const{return data_;}
+		const_reference operator[](index i) const{return *(data_ + i*stride_);}
 		const_iterator& operator++(){data_ += stride_; return *this;}
 		const_iterator& operator--(){data_ += stride_; return *this;}
-		const_iterator& operator+=(ptrdiff_t d){this->data_ += stride_*d; return *this;}
-		const_iterator operator+(ptrdiff_t d) const{return const_iterator(*this)+=d;}
-		std::ptrdiff_t operator-(const_iterator const& other) const{
+		const_iterator& operator+=(ptrdiff_t d){
+			this->data_ += stride_*d; 
+			return *this;
+		}
+		const_iterator operator+(ptrdiff_t d) const{
+			return const_iterator(*this)+=d;
+		}
+		ptrdiff_t operator-(const_iterator const& other) const{
 			assert(stride_ != 0 and (data_ - other.data_)%stride_ == 0);
 			return (data_ - other.data_)/stride_;
 		}
 		bool operator==(const_iterator const& other) const{
 			return data_ == other.data_ and stride_ == other.stride_;
 		}
-		bool operator!=(const_iterator const& other) const{return not((*this)==other);}
-		bool operator<(const_iterator const& other) const{
+		bool operator!=(const_iterator const& o) const{return not(*this==o);}
+	/*	bool operator<(const_iterator const& other) const{
 			if(stride_ < 0) return other.data_ - this->data_ < 0;
 			return this->data_ - other.data_ < 0;
-		}
+		}*/
+	public:
+		element_const_ptr get() const{return data_;}
 	};
 	struct iterator : const_iterator{
 		friend struct basic_array;
 		using const_iterator::const_iterator;
 		reference operator*() const{return *this->data_;}
-		element_ptr* operator->() const{return this->data_;}
+		element_ptr const& operator->() const{return this->data_;}
 		iterator& operator++(){const_iterator::operator++(); return *this;}
 		iterator& operator+=(ptrdiff_t d){const_iterator::operator+=(d); return *this;}
 		iterator operator+(ptrdiff_t d) const{return iterator(*this)+=d;}
+	public:
+		element_ptr get() const{return const_iterator::data_;}
 	};
-//	size_type num_elements() const{return layout_.num_elements();}
 	friend size_type num_elements(basic_array const& self){return self.num_elements();}
-//	size_type size(dimensionality_type d = 0) const{return layout_.size(d);}
 	friend auto size(basic_array const& self){return self.size();}
-//	index_range extension() const{return layout_.extension();}
 	friend index_range extension(basic_array const& self){return self.extension();}
-private:
-	iterator _begin() const{return {data_ + Layout::operator()(this->extension().first()), Layout::stride_};}
-	iterator _end()   const{return {data_ + Layout::operator()(this->extension().last()), Layout::stride_};}
 public:
-	const_iterator begin() const{return _begin();}
-	const_iterator end()   const{return _end();}
-	iterator begin(){return _begin();}
-	iterator end()  {return _end();}
+	iterator begin() const{return {data_ + Layout::operator()(this->extension().first()), Layout::stride_};}
+	iterator end()   const{return {data_ + Layout::operator()(this->extension().last()), Layout::stride_};}
 	friend auto begin(basic_array const& self){return self.begin();}
 	friend auto end(basic_array const& self){return self.end();}
-//	friend auto begin(basic_array& self){return self.begin();}
-//	friend auto end(basic_array& self){return self.end();}
-	template<class Array, typename = decltype(std::declval<basic_array>()[0] = std::declval<Array>()[0])>
-	basic_array& operator=(Array&& other){
-		assert(this->extension() == other.extension());
-		using std::transform; using std::begin; using std::end;
-		transform(begin(std::forward<Array>(other)), end(std::forward<Array>(other)), this->begin(), [](auto&& e){return e;});
-		return *this;
-	}
 	template<class Array>
 	bool operator==(Array const& other) const{
 		using multi::extension;
@@ -698,55 +843,70 @@ public:
 	template<class Array> void swap(Array&& other){
 		assert(this->extension() == extension(other));
 		using std::swap_ranges; using std::begin; //using std::end;
-		swap_ranges(this->begin(), this->end(), begin(other)); // for(auto i : self.extension()) swap(self[i], other[i]);		
+		swap_ranges(this->begin(), this->end(), begin(other));
 	}
 	friend void swap(basic_array& a1, basic_array& a2){return a1.swap(a2);}
 	friend void swap(basic_array& a1, basic_array&& a2){return a1.swap(a2);}
 	friend void swap(basic_array&& a1, basic_array& a2){return a1.swap(a2);}
 	friend void swap(basic_array&& a1, basic_array&& a2){return a1.swap(a2);}
 };
-/*
-template<class T, dimensionality_type N, class Ptr>
-void swap(basic_array<T, N, Ptr>&& a1, basic_array<T, N, Ptr>&& a2){a1.swap(a2);}
-template<class T, dimensionality_type N, class Ptr>
-void swap(basic_array<T, N, Ptr>& a1, basic_array<T, N, Ptr>& a2){a1.swap(a2);}
-template<class T, dimensionality_type N, class Ptr>
-void swap(basic_array<T, N, Ptr>& a1, basic_array<T, N, Ptr>&& a2){a1.swap(a2);}
-template<class T, dimensionality_type N, class Ptr>
-void swap(basic_array<T, N, Ptr>&& a1, basic_array<T, N, Ptr>& a2){a1.swap(a2);}
-*/
+
+template<typename T, dimensionality_type D, typename ElementPtr = T const*>
+struct array_cref : basic_array<T, D, ElementPtr>{
+	array_cref() = delete;
+	array_cref(array_cref const&) = default;
+	array_cref(array_cref&&) = default;
+	constexpr array_cref(ElementPtr p, typename array_cref::extensions_type e) noexcept
+		: basic_array<T, D, ElementPtr>{p, typename array_cref::layout_t{e}}{}
+	template<class Extensions> constexpr
+	array_cref(ElementPtr p, Extensions e) noexcept 
+		: basic_array<T, D, ElementPtr>{p, typename array_cref::layout_t{e}}{}
+	protected:
+	using basic_array<T, D, ElementPtr>::operator=;
+	public:
+	void operator=(array_cref const&) = delete;
+	typename array_cref::element_ptr        data() const{return array_cref::data_;}
+	typename array_cref::element_const_ptr cdata() const{return data();}
+	friend decltype(auto)  data(array_cref const& self){return self. data();}
+	friend decltype(auto) cdata(array_cref const& self){return self.cdata();}
+};
 
 template<typename T, dimensionality_type D, typename ElementPtr = T const*>
 struct const_array_ref : basic_array<T, D, ElementPtr>{
 	using element_const_ptr = typename const_array_ref::element_const_ptr;
+	using element_ptr = typename const_array_ref::element_ptr;
 	const_array_ref() = delete; // references must be initialized (bound)
 	const_array_ref(const_array_ref const&) = default;
+	const_array_ref(const_array_ref&&) = default;
 	constexpr const_array_ref(
-		typename const_array_ref::element_ptr p, 
+		ElementPtr p, // typename const_array_ref::element_ptr p, 
 		typename const_array_ref::extensions_type e
-	) noexcept : 
-		basic_array<T, D, ElementPtr>{
-			p, 
-			typename const_array_ref::layout_t{e}
-		}
+	) noexcept 
+	: basic_array<T, D, ElementPtr>{p, typename const_array_ref::layout_t{e}}
 	{}
 	template<class Extensions>
-	constexpr const_array_ref(
-		typename const_array_ref::element_ptr p, Extensions e		
-	) noexcept : basic_array<T, D, ElementPtr>{p, typename const_array_ref::layout_t{e}}
+	constexpr const_array_ref(ElementPtr p, Extensions e) noexcept 
+	: basic_array<T, D, ElementPtr>{p, typename const_array_ref::layout_t{e}}
 	{}
-	const_array_ref& operator=(const_array_ref const&) = delete;
-	element_const_ptr cdata() const{return const_array_ref::data_;}
-	element_const_ptr data() const{return cdata();}
+	template<class Extensions>
+	constexpr const_array_ref(ElementPtr p, layout_t<D> const& lo)
+	: basic_array<T, D, ElementPtr>{p, lo}
+	{}
+	protected:
+	using basic_array<T, D, ElementPtr>::operator=;
+	public:
+	void operator=(const_array_ref const&) = delete;
+	element_ptr data() const{return const_array_ref::data_;}
+	element_const_ptr cdata() const{return data();}
 	friend decltype(auto) data(const_array_ref const& self){return self. data();}
 	friend decltype(auto) cdata(const_array_ref const& self){return self.cdata();}
 };
 
-template<typename T, dimensionality_type D, typename ElementPtr = T const*>
-using array_cref = const_array_ref<T, D, ElementPtr>;
+//template<typename T, dimensionality_type D, typename ElementPtr = T const*>
+//using array_cref = const_array_ref<T, D, ElementPtr>;
 
-template<typename T, dimensionality_type D, typename ElementPtr = T const*>
-using carray_cref = array_cref<T, D, ElementPtr>;
+//template<typename T, dimensionality_type D, typename ElementPtr = T const*>
+//using carray_cref = array_cref<T, D, ElementPtr>;
 
 }}
 
@@ -756,17 +916,25 @@ namespace multi{
 template<typename T, dimensionality_type D, typename ElementPtr = T*>
 struct array_ref : const_array_ref<T, D, ElementPtr>{
 	using const_array_ref<T, D, ElementPtr>::const_array_ref;
-	template<class Array>
-	array_ref& operator=(Array&& other){
-		assert(this->extension() == other.extension());
-		for(auto i : this->extension()) this->operator[](i) = std::forward<Array>(other)[i];
+	using const_array_ref<T, D, ElementPtr>::operator=;
+	array_ref(array_ref const&) = default;
+	array_ref(array_ref&&) = default;
+	template<class Array, typename = std::enable_if_t<not std::is_base_of<const_array_ref<T, D, ElementPtr>, std::decay_t<Array>>{}> > array_ref& operator=(Array const& other){
+		const_array_ref<T, D, ElementPtr>::operator=(other);
 		return *this;
 	}
-	array_ref& operator=(array_ref const& o){return operator=<array_ref const&>(o);}
-//	typename array_ref::element_ptr 
-	typename array_ref::element_ptr const& data() const{return this->data_;}
-	typename array_ref::element_ptr origin() const{return this->data_ + array_ref::layout_t::origin();}
-	friend decltype(auto) data(array_ref const& self){return self.data();}
+	array_ref const& operator=(const_array_ref<T, D, ElementPtr> const& other){
+		assert(this->extensions() == other.extensions());
+		using std::copy_n;
+		copy_n(other.data(), other.num_elements(), array_ref::data());
+		return *this;
+	}
+	array_ref const& operator=(array_ref const& other){
+		return operator=(static_cast<const_array_ref<T, D, ElementPtr> const&>(other));
+	}
+//	typename array_ref::element_ptr data() const{return this->data_;}
+//	typename array_ref::element_ptr origin() const{return this->data_ + array_ref::layout_t::origin();}
+//	friend decltype(auto) data(array_ref const& self){return self.data();}
 };
 
 template<typename... A> using carray_ref = array_ref<A...>;

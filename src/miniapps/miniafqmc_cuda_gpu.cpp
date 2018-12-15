@@ -39,7 +39,7 @@
 #include "AFQMC/afqmc_sys.hpp"
 #include "Matrix/initialize_serial.hpp"
 #include "Matrix/peek.hpp"
-#include "AFQMC/THCOps.hpp"
+#include "AFQMC/KP3IndexFactorization.hpp"
 #include "AFQMC/mixed_density_matrix.hpp"
 
 #include "multi/array.hpp"
@@ -155,7 +155,7 @@ int main(int argc, char **argv)
 
   // using Unified Memory allocator
   using Alloc = cuda::cuda_gpu_allocator<ComplexType>;
-  using THCOps = afqmc::THCOps<Alloc>;
+  using HamOps = afqmc::KP3IndexFactorization<Alloc,Alloc>;
   using cuda::cublas_check;
   using cuda::curand_check;
   using cuda::cusolver_check;
@@ -180,7 +180,7 @@ int main(int argc, char **argv)
   cuda::gpu_handles handles{&cublas_handle,&cublasXt_handle,&cusolverDn_handle};
 #endif
 
-  Alloc um_alloc(handles);
+  Alloc gpu_alloc(handles);
 
   TimerManager.set_timer_threshold(timer_level_coarse);
   TimerList_t Timers;
@@ -202,15 +202,16 @@ int main(int argc, char **argv)
   std::tie(NMO,NAEA,NAEB,walker_type) = afqmc::peek(dump);
 
   // Main AFQMC object. Control access to several algorithmic functions.
-  base::afqmc_sys<Alloc> AFQMCSys(NMO,NAEA,walker_type,um_alloc,um_alloc);
-  ComplexMatrix<Alloc> Propg1({NMO,NMO}, um_alloc);
+  base::afqmc_sys<Alloc> AFQMCSys(NMO,NAEA,walker_type,gpu_alloc,gpu_alloc);
+  ComplexMatrix<Alloc> Propg1({NMO,NMO}, gpu_alloc);
 
-  THCOps THC(afqmc::Initialize<THCOps,base::afqmc_sys<Alloc>>(dump,dt,AFQMCSys,Propg1));
+  auto HOps(afqmc::Initialize<HamOps,base::afqmc_sys<Alloc>>(dump,dt,AFQMCSys,Propg1));
 
   RealType Eshift = 0;
-  int nchol = THC.number_of_cholesky_vectors();            // number of cholesky vectors  
+  int nchol = HOps.local_number_of_cholesky_vectors();            // number of cholesky vectors  
   int nspin = (walker_type==COLLINEAR)?2:1;
   int NAK = nspin*NAEA*NMO;               // dimensions of linearized "compacted" green function
+
 
   std::cout<<"\n";
   std::cout<<"***********************************************************\n";
@@ -228,28 +229,28 @@ int main(int argc, char **argv)
            <<"    verbose: " <<std::boolalpha <<verbose <<"\n"
            <<"    # Chol Vectors: " <<nchol <<std::endl;
 
-  ComplexMatrix<Alloc> vbias( {nchol,nwalk}, um_alloc );     // bias potential
-  ComplexMatrix<Alloc> vHS( {nwalk,NMO*NMO}, um_alloc );        // Hubbard-Stratonovich potential
-  ComplexMatrix<Alloc> Gc( {nwalk,NAK}, um_alloc );           // compact density matrix for energy evaluation
-  ComplexMatrix<Alloc> X( {nchol,nwalk}, um_alloc );         // X(n,nw) = rand(n,nw) ( + vbias(n,nw)) 
-  ComplexVector<Alloc> eloc( {nwalk}, um_alloc );         // stores local energies
+  ComplexMatrix<Alloc> vbias( {nchol,nwalk}, gpu_alloc );     // bias potential
+  ComplexMatrix<Alloc> vHS( {nwalk,NMO*NMO}, gpu_alloc );        // Hubbard-Stratonovich potential
+  ComplexMatrix<Alloc> Gc( {NAK,nwalk}, gpu_alloc );           // compact density matrix for energy evaluation
+  ComplexMatrix<Alloc> X( {nchol,nwalk}, gpu_alloc );         // X(n,nw) = rand(n,nw) ( + vbias(n,nw)) 
+  ComplexVector<Alloc> eloc(typename ComplexVector<Alloc>::extensions_type{nwalk}, gpu_alloc );         // stores local energies
 
-  WalkerContainer<Alloc> W( {nwalk,nspin,NMO,NAEA}, um_alloc );
-  /* 
-    0: E1, 
-    1: EXX,
-    2: EJ, 
-    3: ovlp_up, 
-    4: ovlp_down, 
-  */
-  ComplexMatrix<Alloc> W_data( {nwalk,3+nspin}, um_alloc );
+  WalkerContainer<Alloc> W( {nwalk,nspin,NMO,NAEA}, gpu_alloc );
+  // 
+  //  0: E1, 
+  //  1: EXX,
+  //  2: EJ, 
+  //  3: ovlp_up, 
+  //  4: ovlp_down, 
+  //
+  ComplexMatrix<Alloc> W_data( {nwalk,3+nspin}, gpu_alloc );
   // initialize walkers to trial wave function
   {
     // conj(A) = H( T(A) ) (avoids cuda kernels)
     // trick to avoid kernels
     using ma::H;
     using ma::T;
-    ComplexMatrix<Alloc> PsiT( {NAEA,NMO}, um_alloc );
+    ComplexMatrix<Alloc> PsiT( {NAEA,NMO}, gpu_alloc );
     ma::transform(T(AFQMCSys.trialwfn_alpha),PsiT);
     for(int n=0; n<nwalk; n++)
       ma::transform(H(PsiT),W[n][0]);
@@ -262,7 +263,7 @@ int main(int argc, char **argv)
 
   // initialize overlaps and energy
   AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc);
-  RealType Eav = THC.energy(W_data,Gc);
+  RealType Eav = HOps.energy(W_data,Gc);
 
   {
     size_t free_,tot_;
@@ -280,6 +281,7 @@ int main(int argc, char **argv)
 
   cudaProfilerStart();
 
+/*
   Timers[Timer_Total]->start();
   for(int step = 0, step_tot=0; step < nsteps; step++) {
 
@@ -294,7 +296,7 @@ int main(int argc, char **argv)
       Timers[Timer_DM]->stop();
 
       Timers[Timer_vbias]->start();
-      THC.vbias(Gc,vbias,sqrtdt);
+      HOps.vbias(Gc,vbias,sqrtdt);
       Timers[Timer_vbias]->stop();
 
       // 2. calculate X and weight
@@ -311,7 +313,7 @@ int main(int argc, char **argv)
 
       // 3. calculate vHS
       Timers[Timer_vHS]->start();
-      THC.vHS(X,vHS,sqrtdt);
+      HOps.vHS(X,vHS,sqrtdt);
       Timers[Timer_vHS]->stop();
 
       // 4. propagate walker
@@ -337,12 +339,13 @@ int main(int argc, char **argv)
     // Calculate energy
     Timers[Timer_eloc]->start();
     AFQMCSys.calculate_mixed_density_matrix(W,W_data,Gc);
-    Eav = THC.energy(W_data,Gc);
+    Eav = HOps.energy(W_data,Gc);
     std::cout<<step <<"   " <<Eav <<"\n";
     Timers[Timer_eloc]->stop();
 
   }
   Timers[Timer_Total]->stop();
+*/
 
   cudaProfilerStop();
 

@@ -161,6 +161,18 @@ sum(MultiArray2D const& A){
         return sum(A.shape()[1], A.shape()[0], A.origin(), A.strides()[0]);
 }
 
+template<class MultiArray1DX, 
+         class MultiArray1DY, 
+         typename = typename std::enable_if_t<std::decay<MultiArray1DX>::type::dimensionality == 1>, 
+         typename = typename std::enable_if_t<std::decay<MultiArray1DY>::type::dimensionality == 1> 
+        >
+MultiArray1DY copy(MultiArray1DX&& x, MultiArray1DY&& y){
+        using BLAS_CPU::copy;
+        using BLAS_GPU::copy;
+        copy(x.size(), x.origin(), x.strides()[0], y.origin(), y.strides()[0]);
+        return std::forward<MultiArray1DY>(y);
+}
+
 template<class T, class MultiArray1D, typename = typename std::enable_if<std::decay<MultiArray1D>::type::dimensionality == 1>::type >
 MultiArray1D scal(T a, MultiArray1D&& x){
         using BLAS_CPU::scal;

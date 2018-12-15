@@ -49,8 +49,8 @@ inline std::tuple<int,int,int,WALKER_TYPES> peek(hdf_archive& dump)
     app_error()<<" Error in initialize: Group HamiltonianOperations not found. \n";
     APP_ABORT("");
   }
-  if(!dump.push("THCOps",false)) {
-    app_error()<<" Error in initialize: Group THCOps not found. \n";
+  if(!dump.push("KP3IndexFactorization",false)) {
+    app_error()<<" Error in initialize: Group KP3IndexFactorization not found. \n";
     APP_ABORT("");
   }
   if(!dump.read(dims,"dims")) {

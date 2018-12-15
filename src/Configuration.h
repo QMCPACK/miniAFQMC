@@ -84,16 +84,40 @@ namespace qmcplusplus
   using ComplexVector =  boost::multi::array<ComplexType,1,Alloc>;
   template< class Alloc = std::allocator<SPComplexType> >
   using SPComplexVector =  boost::multi::array<SPComplexType,1,Alloc>;
+  template< class Ptr = ComplexType* >
+  using ComplexVector_ref =  boost::multi::array_ref<ComplexType,1,Ptr>;
+  template< class Ptr = SPComplexType* >
+  using SPComplexVector_ref =  boost::multi::array_ref<SPComplexType,1,Ptr>;
 
+  template< class Alloc = std::allocator<int> >
+  using IntegerMatrix =  boost::multi::array<int,2,Alloc>;
   template< class Alloc = std::allocator<ComplexType> >
   using ComplexMatrix =  boost::multi::array<ComplexType,2,Alloc>;
   template< class Alloc = std::allocator<SPComplexType> >
   using SPComplexMatrix =  boost::multi::array<SPComplexType,2,Alloc>;
   template< class Ptr = ComplexType* >
   using ComplexMatrix_ref =  boost::multi::array_ref<ComplexType,2,Ptr>;
+  template< class Ptr = SPComplexType* >
+  using SPComplexMatrix_ref =  boost::multi::array_ref<SPComplexType,2,Ptr>;
+
+  template< class Alloc = std::allocator<ComplexType> >
+  using Complex3Tensor =  boost::multi::array<ComplexType,3,Alloc>;
+  template< class Alloc = std::allocator<SPComplexType> >
+  using SPComplex3Tensor =  boost::multi::array<SPComplexType,3,Alloc>;
+  template< class Ptr = ComplexType* >
+  using Complex3Tensor_ref =  boost::multi::array_ref<ComplexType,3,Ptr>;
+  template< class Ptr = SPComplexType* >
+  using SPComplex3Tensor_ref =  boost::multi::array_ref<SPComplexType,3,Ptr>;
 
   template<std::ptrdiff_t D, class Alloc = std::allocator<ComplexType> >
   using ComplexArray =  boost::multi::array<ComplexType,D,Alloc>;
+  template<std::ptrdiff_t D, class Alloc = std::allocator<SPComplexType> >
+  using SPComplexArray =  boost::multi::array<SPComplexType,D,Alloc>;
+  template<std::ptrdiff_t D, class Ptr = ComplexType* >
+  using ComplexArray_ref =  boost::multi::array_ref<ComplexType,D,Ptr>;
+  template<std::ptrdiff_t D, class Ptr = SPComplexType* > 
+  using SPComplexArray_ref =  boost::multi::array_ref<SPComplexType,D,Ptr>;
+
 /*
 namespace detail {
   inline static int* get(int* ptr) { return ptr; }

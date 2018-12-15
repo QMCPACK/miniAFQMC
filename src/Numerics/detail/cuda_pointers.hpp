@@ -122,6 +122,7 @@ Q* copy_n_cast(T const* A, Size n, Q* B) {
 
 
 /* fill_n */
+/*
 template<class ptrA, class T, 
          typename = typename std::enable_if_t<(ptrA::memory_type!=CPU_OUTOFCARS_POINTER_TYPE)> 
         >
@@ -138,6 +139,7 @@ void fill_n(ptrA A, int n, int stride, const T& value) {
   for(int i=0; i<n; i++, p+=stride)
     *p = static_cast<typename ptrA::value_type>(value);
 }
+*/
 
 template<class T>
 void fill_n(T* p, int n, int stride, const T& value) {

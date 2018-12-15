@@ -34,6 +34,26 @@
 
 namespace BLAS_GPU
 {
+  // copy Specializations
+  template<class ptr,
+           typename = typename std::enable_if_t< (ptr::memory_type != CPU_OUTOFCARS_POINTER_TYPE) >
+          >
+  inline static void copy(int n, ptr x, int incx, ptr y, int incy)
+  {
+    if(CUBLAS_STATUS_SUCCESS != cublas::cublas_copy(*x.handles.cublas_handle,n,to_address(x),incx,to_address(y),incy))
+      throw std::runtime_error("Error: cublas_copy returned error code.");
+  }
+
+  template<class ptr,
+           typename = typename std::enable_if_t< (ptr::memory_type == CPU_OUTOFCARS_POINTER_TYPE) >,
+           typename = void
+          >
+  inline static void copy(int n, ptr x, int incx, ptr y, int incy)
+  {
+    using BLAS_CPU::copy;
+    return copy(n,to_address(x),incx,to_address(y),incy);
+  }
+
   // scal Specializations
   template<class T,
            class ptr,
