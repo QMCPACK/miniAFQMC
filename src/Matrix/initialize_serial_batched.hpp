@@ -67,6 +67,7 @@ inline HOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, ComplexM
   using sp_pointer = typename SpAlloc::pointer;
 
   using SpTensor_ref = SPComplex3Tensor_ref<sp_pointer>;
+  using Sp4Tensor_ref = SPComplexArray_ref<4,sp_pointer>;
 
   Alloc& alloc(sys.allocator_); 
   SpAlloc spalloc(alloc); 
@@ -182,7 +183,6 @@ inline HOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, ComplexM
   devCTensor vn0({nkpts,nmo_max,nmo_max},alloc);
   std::vector<devSpMatrix> LQKikn;
   LQKikn.reserve(nkpts);
-/*
   for(int Q=0; Q<nkpts; Q++)
     if( Q==Q0 )
       LQKikn.emplace_back( devSpMatrix({nkpts,nmo_max*nmo_max*nchol_max},
@@ -193,20 +193,6 @@ inline HOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, ComplexM
     else if(Q < kminus[Q])
       LQKikn.emplace_back( devSpMatrix({nkpts,nmo_max*nmo_max*nchol_max},
                                    dev_spalloc) ); 
-    else // Q > kminus[Q]
-      LQKikn.emplace_back( devSpMatrix({1,1}, dev_spalloc) );
-std::cout<<" max: "  <<nmo_max <<" " <<nchol_max <<" " <<LQKikn[1][3].num_elements() <<std::endl;
-*/
-  for(int Q=0; Q<nkpts; Q++)
-    if( Q==Q0 )
-      LQKikn.emplace_back( devSpMatrix({nkpts,nmo_max*nmo_max*nchol_per_kp[Q]},
-                                   dev_spalloc) );
-    else if( kminus[Q] == Q )   // only storing half of K points and using symmetry 
-      LQKikn.emplace_back( devSpMatrix({nkpts/2,nmo_max*nmo_max*nchol_per_kp[Q]},
-                                   dev_spalloc) );
-    else if(Q < kminus[Q])
-      LQKikn.emplace_back( devSpMatrix({nkpts,nmo_max*nmo_max*nchol_per_kp[Q]},
-                                   dev_spalloc) );
     else // Q > kminus[Q]
       LQKikn.emplace_back( devSpMatrix({1,1}, dev_spalloc) );
 
@@ -225,12 +211,50 @@ std::cout<<" max: "  <<nmo_max <<" " <<nchol_max <<" " <<LQKikn[1][3].num_elemen
       }
       cuda::copy_n(vn0_local.origin(),vn0_local.num_elements(),vn0.origin());
     }
+    devSpMatrix L_;
     for(int Q=0; Q<nkpts; Q++) {
       if(Q > kminus[Q]) continue;
-      if(!dump.read(LQKikn[Q],std::string("L")+std::to_string(Q))) {
+      if(!dump.read(L_,std::string("L")+std::to_string(Q))) {
         app_error()<<" Error in loadKP3IndexFactorization: Problems reading dataset. \n";
         APP_ABORT("");
       }
+      int nchol = nchol_per_kp[Q];  
+      if(Q < kminus[Q] || Q==Q0) {  
+        Sp4Tensor_ref L2(LQKikn[Q].origin(),{nkpts,nmo_max,nmo_max,nchol_max});
+        for(int K=0; K<nkpts; ++K) {        // K is the index of the kpoint pair of (i,k)
+          int QK = QKToK2[Q][K];
+          int ni = nmo_per_kp[K];
+          int nk = nmo_per_kp[QK];
+          Sp3Tensor_ref L1(L_.origin(),{ni,nk,nchol});
+          for(int i=0; i<ni; i++)
+            for(int k=0; k<nk; k++)
+              copy_n(L1[i][k].origin(),nchol,L2[K][i][k].origin());
+        } 
+      } else {
+        Sp4Tensor_ref L2(LQKikn[Q].origin(),{nkpts/2,nmo_max,nmo_max,nchol_max});
+        for(int K_=0; K_<nkpts/2; ++K_) {        // K is the index of the kpoint pair of (i,k)
+          // find the (K,QK) pair on symmetric list
+          int cnt(0);
+          int K=-1;
+          for(int q=0; q<nkpts; q++)
+            if(q < QKToK2[Q][q]) {
+              if(cnt==K_) {
+                K=q;
+                break;
+              }
+              cnt++;
+            }
+          if(K<0)
+            APP_ABORT(" Error: Problems with QK mapping.\n");
+          int QK = QKToK2[Q][K];
+          int ni = nopk[K];
+          int nk = nopk[QK];
+          Sp3Tensor_ref L1(L_.origin(),{ni,nk,nchol});
+          for(int i=0; i<ni; i++)
+            for(int k=0; k<nk; k++)
+              copy_n(L1[i][k].origin(),nchol,L2[K_][i][k].origin());
+        }
+      }  
     }
   }
 

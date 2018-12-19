@@ -312,7 +312,7 @@ int main(int argc, char **argv)
 
       // 3. calculate vHS
       Timers[Timer_vHS]->start();
-      //HOps.vHS(X,vHS,sqrtdt);
+      HOps.vHS(X,vHS,sqrtdt);
       Timers[Timer_vHS]->stop();
 
       // 4. propagate walker

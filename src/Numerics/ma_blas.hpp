@@ -173,6 +173,21 @@ MultiArray1DY copy(MultiArray1DX&& x, MultiArray1DY&& y){
         return std::forward<MultiArray1DY>(y);
 }
 
+template<class MultiArray2DX,
+         class MultiArray2DY,
+         typename = typename std::enable_if_t<std::decay<MultiArray2DX>::type::dimensionality == 2>,
+         typename = typename std::enable_if_t<std::decay<MultiArray2DY>::type::dimensionality == 2>,
+         typename = void
+        >
+MultiArray2DY copy(MultiArray2DX&& x, MultiArray2DY&& y){
+	assert( x.strides()[0] == x.shape()[1] ); // only on contiguous arrays 
+	assert( x.strides()[1] == 1 );            // only on contiguous arrays 
+        using BLAS_CPU::copy;
+        using BLAS_GPU::copy;
+        copy(x.num_elements(), x.origin(), 1, y.origin(), 1);
+        return std::forward<MultiArray2DY>(y);
+}
+
 template<class T, class MultiArray1D, typename = typename std::enable_if<std::decay<MultiArray1D>::type::dimensionality == 1>::type >
 MultiArray1D scal(T a, MultiArray1D&& x){
         using BLAS_CPU::scal;

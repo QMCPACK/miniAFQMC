@@ -13,8 +13,8 @@
 //    Lawrence Livermore National Laboratory 
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef QMCPLUSPLUS_AFQMC_HAMILTONIANOPERATIONS_KP3INDEXFACTORIZATION_HPP
-#define QMCPLUSPLUS_AFQMC_HAMILTONIANOPERATIONS_KP3INDEXFACTORIZATION_HPP
+#ifndef QMCPLUSPLUS_AFQMC_HAMILTONIANOPERATIONS_KP3INDEXFACTORIZATION_BATCHED_HPP
+#define QMCPLUSPLUS_AFQMC_HAMILTONIANOPERATIONS_KP3INDEXFACTORIZATION_BATCHED_HPP
 
 #include <Utilities/NewTimer.h>
 #include <vector>
@@ -30,6 +30,7 @@
 #include "Utilities/type_conversion.hpp"
 #include "Kernels/ajw_to_waj.cuh"
 #include "Kernels/dot_wabn_wban.cuh"
+#include "Kernels/vKKwij_to_vwKiKj.cuh"
 
 namespace qmcplusplus
 {
@@ -49,6 +50,8 @@ class KP3IndexFactorization
   using SpAllocator = typename Allocator::template rebind<SPComplexType>::other;
   using SpAllocator_shared = typename Allocator_shared::template rebind<SPComplexType>::other;
   using IAllocator_shared = typename Allocator_shared::template rebind<int>::other;
+  using BAllocator = typename Allocator::template rebind<bool>::other;
+  using IAllocator = typename Allocator::template rebind<int>::other;
 
   // type defs
   using pointer = typename Allocator::pointer;
@@ -60,6 +63,8 @@ class KP3IndexFactorization
   using sp_pointer_shared = typename SpAllocator_shared::pointer;
   using const_sp_pointer_shared = typename SpAllocator_shared::const_pointer;
 
+  using IVector =  boost::multi::array<int,1,IAllocator>;
+  using BoolMatrix =  boost::multi::array<bool,2,BAllocator>;
   using CVector = ComplexVector<Allocator>;  
   using IMatrix = IntegerMatrix<Allocator>;  
   using CMatrix = ComplexMatrix<Allocator>;  
@@ -79,6 +84,7 @@ class KP3IndexFactorization
   using SpMatrix_ref = SPComplexMatrix_ref<sp_pointer>;
   using Sp3Tensor_ref = SPComplex3Tensor_ref<sp_pointer>;
   using Sp4Tensor_ref = SPComplexArray_ref<4,sp_pointer>;
+  using Sp5Tensor_ref = SPComplexArray_ref<5,sp_pointer>;
 
   using shmCVector = ComplexVector<Allocator_shared>;  
   using shmCMatrix = ComplexMatrix<Allocator_shared>;  
@@ -109,6 +115,7 @@ class KP3IndexFactorization
                  shmCMatrix&& h1, 
                  std::vector<shmSpMatrix>&& vik, 
                  std::vector<shmSpMatrix>&& vak, 
+                 std::vector<shmSpMatrix>&& vakn, 
                  shmC3Tensor&& vn0_, 
                  std::vector<RealType>&& gQ_,
                  int nsampleQ_,
@@ -134,6 +141,7 @@ class KP3IndexFactorization
         QKToK2(std::move(QKToK2_)),
         LQKikn(std::move(vik)),
         LQKank(std::move(vak)),
+        LQKakn(std::move(vakn)),
         vn0(std::move(vn0_)),
         gQ(std::move(gQ_)),
         Qwn({1,1}),
@@ -142,14 +150,14 @@ class KP3IndexFactorization
         nsampleQ(nsampleQ_),
         SM_TMats({1,1},sp_allocator_shared_),
         TMats({1,1},sp_allocator_),
+        KKTransID( {nopk.size(),nopk.size()}, BAllocator{allocator_}),
+        dev_nopk( typename IVector::extensions_type{nopk.size()}, IAllocator{allocator_}),
+        dev_i0pk( typename IVector::extensions_type{nopk.size()}, IAllocator{allocator_}),
         EQ(nopk.size()+2)
 //        mutex(0)
     {
       setup_timers(Timers, THCTimerNames, timer_level_coarse);
       local_nCV = std::accumulate(ncholpQ.begin(),ncholpQ.end(),0); 
-//      mutex.reserve(ncholpQ.size());
-//      for(int nQ=0; nQ<ncholpQ.size(); nQ++)
-//          mutex.emplace_back(std::make_unique<shared_mutex>(*comm));
       std::fill_n(EQ.data(),EQ.size(),0);
       int nkpts = nopk.size(); 
       Q0=-1;  // if K=(0,0,0) exists, store index here
@@ -167,6 +175,85 @@ class KP3IndexFactorization
           }
         }
       }
+      std::vector<int> i0(nkpts);
+      i0[0]=0;
+      for(int i=1; i<nkpts; i++) 
+        i0[i] = i0[i-1]+nopk[i-1];
+      cuda::copy_n(nopk.data(),nkpts,dev_nopk.origin());  
+      cuda::copy_n(i0.data(),nkpts,dev_i0pk.origin());  
+      boost::multi::array<bool,2> KKid({nkpts,nkpts});  
+      // padding of LQKikn
+      int nmo_max = *std::max_element(nopk.begin(),nopk.end());
+      int nchol_max = *std::max_element(ncholpQ.begin(),ncholpQ.end());
+      std::vector<SpMatrix> LQK;
+      LQK.reserve(nkpts);
+      for(int Q=0; Q<nkpts; Q++)
+        if( Q==Q0 )
+          LQK.emplace_back( SpMatrix({nkpts,nmo_max*nmo_max*nchol_max},
+                                   sp_allocator_) );
+        else if( kminus[Q] == Q )   // only storing half of K points and using symmetry 
+          LQK.emplace_back( SpMatrix({nkpts/2,nmo_max*nmo_max*nchol_max},
+                                   sp_allocator_) ); 
+        else if(Q < kminus[Q])
+          LQK.emplace_back( SpMatrix({nkpts,nmo_max*nmo_max*nchol_max},
+                                   sp_allocator_) ); 
+        else // Q > kminus[Q]
+          LQK.emplace_back( SpMatrix({1,1}, sp_allocator_) );
+
+      for( auto& v: LQK) fill_n(v.origin(),v.num_elements(),SPComplexType(0.0));
+
+      for(int Q=0; Q<nkpts; ++Q) {      // momentum conservation index   
+        int nchol = ncholpQ[Q];
+        if(Q < kminus[Q] || Q==Q0) {
+          Sp4Tensor_ref L2(LQK[Q].origin(),{nkpts,nmo_max,nmo_max,nchol_max});
+          for(int K=0; K<nkpts; ++K) {        // K is the index of the kpoint pair of (i,k)
+            int QK = QKToK2[Q][K];
+            KKid[K][QK] = false;
+            int ni = nopk[K];
+            int nk = nopk[QK];
+            Sp3Tensor_ref L1(LQKikn[Q][K].origin(),{ni,nk,nchol});
+            for(int i=0; i<ni; i++)
+              for(int k=0; k<nk; k++)
+                copy_n(L1[i][k].origin(),nchol,L2[K][i][k].origin());
+          }  
+        } else if(Q > kminus[Q]) { // use L(-Q)(ki)*
+          for(int K=0; K<nkpts; ++K) {        // K is the index of the kpoint pair of (i,k)
+            int QK = QKToK2[Q][K];
+            KKid[K][QK] = true;
+          }
+        } else { // Q==(-Q) and Q!=Q0
+          for(int K=0; K<nkpts; ++K) {        // K is the index of the kpoint pair of (i,k)
+            int QK = QKToK2[Q][K];
+            if(K < QK)  KKid[K][QK] = false;
+            else KKid[K][QK] = true;
+          }
+          Sp4Tensor_ref L2(LQK[Q].origin(),{nkpts/2,nmo_max,nmo_max,nchol_max});
+          for(int K_=0; K_<nkpts/2; ++K_) {        // K is the index of the kpoint pair of (i,k)
+            // find the (K,QK) pair on symmetric list
+            int cnt(0); 
+            int K=-1;
+            for(int q=0; q<nkpts; q++)
+              if(q < QKToK2[Q][q]) {
+                if(cnt==K_) {
+                  K=q;
+                  break;     
+                }
+                cnt++;
+              }
+            if(K<0)
+              APP_ABORT(" Error: Problems with QK mapping.\n");
+            int QK = QKToK2[Q][K];
+            int ni = nopk[K];
+            int nk = nopk[QK];
+            Sp3Tensor_ref L1(LQKikn[Q][K_].origin(),{ni,nk,nchol});
+            for(int i=0; i<ni; i++)
+              for(int k=0; k<nk; k++)
+                copy_n(L1[i][k].origin(),nchol,L2[K_][i][k].origin());
+          }
+        }
+      }
+      cuda::copy_n(KKid.origin(),nkpts*nkpts,KKTransID.origin());  
+      LQKikn.swap(LQK);
       //comm->barrier();
     }
 
@@ -895,27 +982,25 @@ class KP3IndexFactorization
       assert(v.num_elements() == nwalk*nmo_tot*nmo_tot);
       SPComplexType one(1.0,0.0);
       SPComplexType im(0.0,1.0);
-      size_t local_memory_needs = std::max(nmo_max*nmo_max*nwalk,nchol_max*nwalk); 
-      if(TMats.num_elements() < local_memory_needs) TMats.reextent({local_memory_needs,1});
-      size_t mem_needs(nkpts*nkpts*nwalk*nmo_max*nmo_max);
+      size_t mem_needs(nkpts*nkpts*nwalk*nmo_max*nmo_max + nwalk*2*nkpts*nchol_max);
       if(SM_TMats.num_elements() < mem_needs) SM_TMats.reextent({mem_needs,1});
 
       Sp3Tensor_ref vKK(SM_TMats.origin(),{nkpts,nkpts,nwalk*nmo_max*nmo_max} );
+      Sp4Tensor_ref XQnw(SM_TMats.origin()+vKK.num_elements(),{nkpts,2,nchol_max,nwalk} );
+      fill_n(XQnw.origin(),XQnw.num_elements(),SPComplexType(0.0));
 
       Timers[Timer_vHS1]->start();
       // "rotate" X  
       //  XIJ = 0.5*a*(Xn+ -i*Xn-), XJI = 0.5*a*(Xn+ +i*Xn-)  
+// transform to single precision
       for(int Q=0, nq=0; Q<nkpts; ++Q) { 
         if(Q != kminus[Q] || Q==Q0) { 
-          SpMatrix_ref Tm(TMats.origin(),{ncholpQ[Q],nwalk}); 
           auto&& Xp(X.sliced(nq,nq+ncholpQ[Q]));
           auto&& Xm(X.sliced(nq+ncholpQ[Q],nq+2*ncholpQ[Q]));
-          ma::copy(Xm,Tm);
-// NOTE: can be done without Tm, just do Xp -= 0.5*ai*Xm, then Xm = 2*a*0.5*im*Xm + Xp 
-          ma::add(ComplexType(0.5*a),Xp,ComplexType(0.5*a*im),Tm,Xm);
-          ma::add(ComplexType(0.5*a),Xp,ComplexType(-0.5*a*im),Tm,Xp);
+          ma::add(ComplexType(0.5*a),Xp,ComplexType(-0.5*a*im),Xm,XQnw[Q][0].sliced(0,ncholpQ[Q]));
+          ma::add(ComplexType(0.5*a),Xp,ComplexType(0.5*a*im),Xm,XQnw[Q][1].sliced(0,ncholpQ[Q]));
         } else {
-          ma::scal(a,X.sliced(nq,nq+ncholpQ[Q]));
+          ma::axpy(a,X.sliced(nq,nq+ncholpQ[Q]),XQnw[Q][0].sliced(0,ncholpQ[Q]));
         }  
         nq+=2*ncholpQ[Q];
       } 
@@ -924,90 +1009,96 @@ class KP3IndexFactorization
       //comm->barrier();     
       //  then combine Q/(-Q) pieces
       //  X(Q)np = (X(Q)np + X(-Q)nm)
-      for(int Q=0, nq=0; Q<nkpts; ++Q) {
+      for(int Q=0; Q<nkpts; ++Q) {
         if(Q != kminus[Q]) {
           int Qm = kminus[Q];
-          int nqm0 = 2*std::accumulate(ncholpQ.begin(),ncholpQ.begin()+Qm,0);
-          ma::axpy(ComplexType(1.0),X.sliced(nqm0+ncholpQ[Q],nqm0+2*ncholpQ[Q]),
-                                    X.sliced(nq,nq+ncholpQ[Q]));
+          ma::axpy(ComplexType(1.0),XQnw[Qm][1],XQnw[Q][0]);
         }
-        nq+=2*ncholpQ[Q];
       }
-/*
-      {
-        // assuming contiguous
-        ma::scal(c,v);
-      }
-*/
+//      {
+//        // assuming contiguous
+//        ma::scal(c,v);
+//      }
       Timers[Timer_vHS2]->stop();
       //comm->barrier();     
         
       Timers[Timer_vHS3]->start();
-      using ma::T;  
-      using ma::H;  
-      size_t nqk=0;  
-      for(int Q=0, nc0=0; Q<nkpts; ++Q) {      // momentum conservation index   
-        for(int K=0; K<nkpts; ++K) {        // K is the index of the kpoint pair of (i,k)
-          //if((nqk++)%comm->size() == comm->rank()) 
-          {
-            int nchol = ncholpQ[Q];
+      using BLAS_CPU::gemmBatched;
+      using BLAS_GPU::gemmBatched;
+      std::vector<pointer> Aarray;
+      std::vector<pointer> Barray;
+      std::vector<pointer> Carray;
+      Aarray.reserve(nkpts*nkpts);
+      Barray.reserve(nkpts*nkpts);
+      Carray.reserve(nkpts*nkpts);
+      for(int Q=0; Q<nkpts; ++Q) {      // momentum conservation index   
+        // v[nw][i(in K)][k(in Q(K))] += sum_n LQK[i][k][n] X[Q][0][n][nw]
+        if(Q < kminus[Q] || Q==Q0) {
+          for(int K=0; K<nkpts; ++K) {        // K is the index of the kpoint pair of (i,k)
             int QK = QKToK2[Q][K];
-            int ni = nopk[K];
-            int ni0 = std::accumulate(nopk.begin(),nopk.begin()+K,0);
-            int nk = nopk[QK];
-            int nk0 = std::accumulate(nopk.begin(),nopk.begin()+QK,0);
-
-            // v[nw][i(in K)][k(in Q(K))] += sum_n LQK[i][k][n] X[Q][n+][nw]
-            if(Q < kminus[Q] || Q==Q0) {
-              SpMatrix_ref vik(vKK[K][QK].origin(),{nwalk,ni*nk});
-              SpMatrix_ref Likn(LQKikn[Q][K].origin(),{ni*nk,nchol});
-              ma::product(T(X.sliced(nc0,nc0+nchol)),T(Likn),vik);
-            } else if(Q > kminus[Q]) { // use L(-Q)(ki)*
-              SpMatrix_ref vki(vKK[K][QK].origin(),{nwalk,nk*ni});
-              SpMatrix_ref Likn(LQKikn[kminus[Q]][QK].origin(),{nk*ni,nchol});
-              ma::product(T(X.sliced(nc0,nc0+nchol)),H(Likn),vki);
-            } else { // Q==(-Q) and Q!=Q0
-              if(K == QK) 
-                APP_ABORT(" Error: Q!=Q0 and K==QK.\n"); 
-              // find the position of (K,QK) pair on symmetric list
-              int kpos(0); 
-              for(int K_=0, kmin=std::min(K,QK); K_<kmin; K_++)
-                if(K_ < QKToK2[Q][K_]) kpos++;
-              if(K < QK) {
-                SpMatrix_ref vik(vKK[K][QK].origin(),{nwalk,ni*nk});
-                SpMatrix_ref Likn(LQKikn[Q][kpos].origin(),{ni*nk,nchol});
-                ma::product(T(X.sliced(nc0,nc0+nchol)),T(Likn),vik);
-              } else {  
-                SpMatrix_ref vki(vKK[K][QK].origin(),{nwalk,nk*ni});
-                SpMatrix_ref Likn(LQKikn[Q][kpos].origin(),{nk*ni,nchol});
-                ma::product(T(X.sliced(nc0,nc0+nchol)),H(Likn),vki);
-              }
+            Aarray.push_back(LQKikn[Q][K].origin());
+            Barray.push_back(XQnw[Q][0].origin());
+            Carray.push_back(vKK[K][QK].origin());
+          }
+        } else if(Q > kminus[Q]) { // use L(-Q)(ki)*
+        } else { // Q==(-Q) and Q!=Q0
+          int kpos(0);
+          for(int K=0; K<nkpts; ++K) {        // K is the index of the kpoint pair of (i,k)
+            if(K < QKToK2[Q][K]) { 
+              int QK = QKToK2[Q][K];
+              Aarray.push_back(LQKikn[Q][kpos].origin());
+              Barray.push_back(XQnw[Q][0].origin());
+              Carray.push_back(vKK[K][QK].origin());
+              kpos++;
             }
           }
         }
-        nc0+=2*ncholpQ[Q];
       }
+      int nmo_max2 = nmo_max*nmo_max;  
+      // C: v = T(X) * T(Lik) --> F: T(Lik) * T(X) = v   
+      gemmBatched('T','T',nmo_max2,nwalk,nchol_max,SPComplexType(1.0),Aarray.data(),nchol_max,Barray.data(),nwalk,
+                                                   SPComplexType(0.0),Carray.data(),nmo_max2,Aarray.size());
 
-      //comm->barrier();
-      // adding second half of Q0
-      nqk=0;
-      if(Q0>=0) {  
-        int nc0 = 2*std::accumulate(ncholpQ.begin(),ncholpQ.begin()+Q0,0);
-        for(int K=0; K<nkpts; ++K) {        // K is the index of the kpoint pair of (i,k)
-          //if((nqk++)%comm->size() == comm->rank()) 
-          {
-            int nchol = ncholpQ[Q0];
-            int ni = nopk[K];
-            int ni0 = std::accumulate(nopk.begin(),nopk.begin()+K,0);
-            int nk = nopk[QKToK2[Q0][K]];
-            int nk0 = std::accumulate(nopk.begin(),nopk.begin()+QKToK2[Q0][K],0);
-            SpMatrix_ref Likn(LQKikn[Q0][K].origin(),{ni*nk,nchol});
-            SpMatrix_ref vik(vKK[K][K].origin(),{nwalk,ni*nk});
-            Sp3Tensor_ref vik3D(TMats.origin(),{nwalk,ni,nk});
-            ma::product(T(X.sliced(nc0+nchol,nc0+2*nchol)),H(Likn),vik);
+      Aarray.clear();  
+      Barray.clear();  
+      Carray.clear();  
+      for(int Q=0; Q<nkpts; ++Q) {      // momentum conservation index   
+        // v[nw][i(in K)][k(in Q(K))] += sum_n LQK[i][k][n] X[Q][0][n][nw]
+        if(Q < kminus[Q] || Q==Q0) {
+        } else if(Q > kminus[Q]) { // use L(-Q)(ki)*
+          for(int K=0; K<nkpts; ++K) {        // K is the index of the kpoint pair of (i,k)
+            int QK = QKToK2[Q][K];
+            Aarray.push_back(LQKikn[kminus[Q]][QK].origin());
+            Barray.push_back(XQnw[Q][0].origin());
+            Carray.push_back(vKK[K][QK].origin());
+          }
+        } else { // Q==(-Q) and Q!=Q0
+          for(int K=0; K<nkpts; ++K) {        // K is the index of the kpoint pair of (i,k)
+            if(K > QKToK2[Q][K]) {
+              int kpos(0);
+              // find (K,QK)
+              for(int q=0, qmin=QKToK2[Q][K]; q<qmin; q++)
+                if(q < QKToK2[Q][q]) kpos++;
+              int QK = QKToK2[Q][K];
+              Aarray.push_back(LQKikn[Q][kpos].origin());
+              Barray.push_back(XQnw[Q][0].origin());
+              Carray.push_back(vKK[K][QK].origin());
+            }
           }
         }
-      }    
+      }
+      if(Q0>=0) {
+        int nc0 = 2*std::accumulate(ncholpQ.begin(),ncholpQ.begin()+Q0,0);
+        for(int K=0; K<nkpts; ++K) {        // K is the index of the kpoint pair of (i,k)
+          Aarray.push_back(LQKikn[Q0][K].origin());
+          Barray.push_back(XQnw[Q0][1].origin());
+          Carray.push_back(vKK[K][K].origin());
+        }
+      }
+      // C: v = T(X) * T(Lik) --> F: T(Lik) * T(X) = v   
+      gemmBatched('C','T',nmo_max2,nwalk,nchol_max,SPComplexType(1.0),Aarray.data(),nchol_max,Barray.data(),nwalk,
+                                                   SPComplexType(0.0),Carray.data(),nmo_max2,Aarray.size());
+
       Timers[Timer_vHS3]->stop();
       Timers[Timer_vHS4]->start();
       Sp3Tensor_ref v3D(v.origin(),{nwalk,nmo_tot,nmo_tot});
@@ -1078,13 +1169,11 @@ class KP3IndexFactorization
         // assuming contiguous
         ma::scal(c,v);
       }
-      //comm->barrier();
 
       size_t nqk=0;  // start count at 1 to "offset" the calcuation of E1 done at root
       for(int K=0; K<nkpts; ++K) {        // K is the index of the kpoint pair of (a,k)
         for(int Q=0; Q<nkpts; ++Q) {      // momentum conservation index   
           bool haveV=false;
-          //if((nqk++)%comm->size() == comm->rank()) 
           {
             haveV=true;
             int nchol = ncholpQ[Q];
@@ -1102,13 +1191,10 @@ class KP3IndexFactorization
 
           }
           if(walker_type==COLLINEAR) {
-            //if((nqk++)%comm->size() == comm->rank()) {
-                APP_ABORT(" Error: Finish UHF vbias.\n");
-            //}
+            APP_ABORT(" Error: Finish UHF vbias.\n");
           }
           if(haveV) {
             {
-//              std::lock_guard<shared_mutex> guard(*mutex[Q]);
               int nc0 = 2*std::accumulate(ncholpQ.begin(),ncholpQ.begin()+Q,0);
               // v+ = 0.5*a*(v1+v2) 
               ma::axpy(halfa,vlocal.sliced(0,ncholpQ[Q]),v.sliced(nc0,nc0+ncholpQ[Q]));
@@ -1118,7 +1204,6 @@ class KP3IndexFactorization
             int Qm = kminus[Q];
             int nc0 = 2*std::accumulate(ncholpQ.begin(),ncholpQ.begin()+Qm,0);
             if(Q != Q0) {
-//              std::lock_guard<shared_mutex> guard(*mutex[Qm]);
               // v+ = 0.5*a*(v1+v2) 
               ma::axpy(halfa,vlocal.sliced(0,ncholpQ[Qm]),v.sliced(nc0,nc0+ncholpQ[Qm]));
               // v- = -0.5*a*i*(v1-v2) 
@@ -1133,7 +1218,6 @@ class KP3IndexFactorization
       if(Q0 >= 0) {  
         for(int K=0; K<nkpts; ++K) {        // K is the index of the kpoint pair of (a,k)
           bool haveV=false;
-          //if((nqk++)%comm->size() == comm->rank()) 
           {
             haveV=true;
             int nchol = ncholpQ[Q0];
@@ -1151,14 +1235,10 @@ class KP3IndexFactorization
 
           }
           if(walker_type==COLLINEAR) {
-            //if((nqk++)%comm->size() == comm->rank()) 
-            {
-                APP_ABORT(" Error: Finish UHF vbias.\n");
-            }
+            APP_ABORT(" Error: Finish UHF vbias.\n");
           }
           if(haveV) {
             {
-//              std::lock_guard<shared_mutex> guard(*mutex[Q0]);
               int nc0 = 2*std::accumulate(ncholpQ.begin(),ncholpQ.begin()+Q0,0);
               // v+ = 0.5*a*(v1+v2) 
               ma::axpy(halfa,vlocal.sliced(0,ncholpQ[Q0]),v.sliced(nc0,nc0+ncholpQ[Q0]));
@@ -1237,6 +1317,9 @@ class KP3IndexFactorization
     // half-tranformed Cholesky tensor
     std::vector<shmSpMatrix> LQKank;
 
+    // half-tranformed Cholesky tensor
+    std::vector<shmSpMatrix> LQKakn;
+
     // one-body piece of Hamiltonian factorization
     shmC3Tensor vn0;
 
@@ -1250,6 +1333,10 @@ class KP3IndexFactorization
     // using matrix since there are issues with vectors
     shmSpMatrix SM_TMats;
     SpMatrix TMats;
+
+    BoolMatrix KKTransID;
+    IVector dev_nopk;
+    IVector dev_i0pk;
 
 //    std::vector<std::unique_ptr<shared_mutex>> mutex;
 
@@ -1296,44 +1383,14 @@ class KP3IndexFactorization
     template<class MatA, class MatB>
     void vKKwij_to_vwKiKj(MatA const& vKK, MatB && vKiKj)
     {
+      int nmo_max = *std::max_element(nopk.begin(),nopk.end());
       int nwalk = vKiKj.shape()[0];
       int nmo_tot = vKiKj.shape()[1];
       int nkpts = nopk.size();
 
-      using ma::T;
-      using ma::H;
-      for(int Q=0, nc0=0; Q<nkpts; ++Q) {      // momentum conservation index   
-        for(int K=0; K<nkpts; ++K) {        // K is the index of the kpoint pair of (i,k)
-          int QK = QKToK2[Q][K];
-          int ni = nopk[K];
-          int ni0 = std::accumulate(nopk.begin(),nopk.begin()+K,0);
-          int nj = nopk[QK];
-          int nj0 = std::accumulate(nopk.begin(),nopk.begin()+QK,0);
-
-          if(Q < kminus[Q] || Q==Q0 || (Q==kminus[Q] && K<QK)) {
-            Sp3Tensor_ref vij(vKK[K][QK].origin(),{nwalk,ni,nj});   
-            for(int n=0; n<nwalk; n++) {
-              auto&& v(vKiKj[n]({ni0,ni0+ni},{nj0,nj0+nj}));
-#if defined(MIXED_PRECISION) 
-#error
-#else
-              ma::add(ComplexType(1.0),v,ComplexType(1.0),vij[n],v);  
-#endif
-            }
-          } else { 
-            Sp3Tensor_ref vji(vKK[K][QK].origin(),{nwalk,nj,ni});
-            for(int n=0; n<nwalk; n++) {
-              auto&& v(vKiKj[n]({ni0,ni0+ni},{nj0,nj0+nj}));
-#if defined(MIXED_PRECISION) 
-#error
-#else
-              ma::add(ComplexType(1.0),v,ComplexType(1.0),ma::T(vji[n]),v);
-#endif
-            }
-          }
-        }        
-      }
-      //comm->barrier();  
+      kernels::vKKwij_to_vwKiKj(nwalk,nkpts,nmo_max,nmo_tot,to_address(KKTransID.origin()),
+                                to_address(dev_nopk.origin()),to_address(dev_i0pk.origin()),
+                                to_address(vKK.origin()),to_address(vKiKj.origin()));  
     }
 
     enum THCTimers

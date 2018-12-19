@@ -56,6 +56,7 @@ struct afqmc_sys: public AFQMCInfo
     using pointer_ooc = typename Alloc_ooc::pointer; 
     using const_pointer_ooc = typename Alloc_ooc::const_pointer; 
     using IAlloc_ooc = typename Alloc_ooc::template rebind<int>::other;; 
+    using extensions = typename ComplexVector<Alloc>::extensions_type;
     Alloc allocator_;
     IAlloc iallocator_;
     Alloc_ooc allocator_ooc_;
@@ -77,15 +78,15 @@ struct afqmc_sys: public AFQMCInfo
       trialwfn_beta( {((wtype==COLLINEAR)?(nmo_):(0)),na}, alloc_ ), 
       NMO(nmo_),
       NAEA(na),  
-      WORK( {0}, alloc_ ),
+      WORK( extensions{1}, alloc_ ),
 // hack for status problem in getr?
-      IWORK({nbatch*(NMO+1)}, iallocator_ ),
-      TAU( {NMO}, alloc_ ),
+      IWORK(extensions{nbatch*(NMO+1)}, iallocator_ ),
+      TAU( extensions{NMO}, alloc_ ),
       TMat3D_NN( {nbatch,NAEA,NAEA}, alloc_ ),
       TMat3D_NM( {nbatch,NAEA,NMO}, alloc_ ),
       TMat3D_MN( {nbatch,NMO,NAEA}, alloc_ ),
       TMat3D_MN2( {nbatch,NMO,NAEA}, alloc_ ),
-      Gcloc( {0,0}, alloc_ )
+      TVec( extensions{1}, alloc_ )
     {
       if(nbatch%2==1)
         APP_ABORT(" Error: nbatch%2==1.\n");
@@ -116,16 +117,20 @@ struct afqmc_sys: public AFQMCInfo
       int nspin = (walker_type==COLLINEAR?2:1);
       int nwalk = W.shape()[0];
       assert(G.num_elements() >= nspin*NAEA*NMO*nwalk);
-      assert(G.shape()[0] == nwalk);
-      assert(G.shape()[1] >= nspin*NAEA*NMO);
       assert(W_data.shape()[0] >= nwalk);
       assert(W_data.shape()[1] >= 3+nspin);
+      if(TVec.num_elements() < nwalk*nspin*NAEA*NMO) TVec.reextent({nwalk*nspin*NAEA*NMO}); 
       int N_ = NAEA; // compact?NAEA:NMO;
-      boost::multi::array_ref<ComplexType,4,pointer> G_4D(G.origin(), {nwalk,nspin,N_,NMO}); 
+      assert(G.shape()[1] == nwalk);
+      assert(G.shape()[0] == nspin*N_*NMO);
+      // calculate [nwalk][..] and then tranpose  
+      boost::multi::array_ref<ComplexType,4,pointer> G_4D(TVec.origin(), {nwalk,nspin,N_,NMO}); 
+      boost::multi::array_ref<ComplexType,2,pointer> G_2D(G_4D.origin(), {nwalk,nspin*N_*NMO}); 
       if(nspin==1) 
         batched::MixedDensityMatrix(trialwfn_alpha,W,G_4D,TMat3D_NN,TMat3D_NM,IWORK,WORK,W_data(W_data.extension(0),{3,5}));
       else
         batched::MixedDensityMatrix(trialwfn_alpha,trialwfn_beta,W,G_4D,TMat3D_NN,TMat3D_NM,IWORK,WORK,W_data(W_data.extension(0),{3,5}));
+      ma::transpose(G_2D,G);
     }
 
     template<class WSet, class Mat>
@@ -133,9 +138,9 @@ struct afqmc_sys: public AFQMCInfo
     {
       int nspin = (walker_type==COLLINEAR?2:1);
       assert(W_data.shape()[0] >= W.shape()[0]);
-      assert(W_data.shape()[1] >= 5);
+      assert(W_data.shape()[1] >= 3+nspin);
       if(nspin==1) 
-        batched::Overlap(trialwfn_alpha,W,TMat3D_NN,IWORK,WORK,W_data(W_data.extension(0),{3,5}));
+        batched::Overlap(trialwfn_alpha,W,TMat3D_NN,IWORK,WORK,W_data(W_data.extension(0),{3,4}));
       else  
         batched::Overlap(trialwfn_alpha,trialwfn_beta,W,TMat3D_NN,IWORK,WORK,W_data(W_data.extension(0),{3,5}));
     }
@@ -232,7 +237,7 @@ struct afqmc_sys: public AFQMCInfo
     ComplexArray<3,Alloc> TMat3D_MN2;
 
     //! storage for contraction of 2-electron integrals with density matrix
-    ComplexMatrix<Alloc> Gcloc;
+    ComplexVector<Alloc> TVec;
 };
 
 }

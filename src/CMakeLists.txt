@@ -138,6 +138,7 @@ ENDIF()
     Kernels/copy_n_cast.cu
     Kernels/ajw_to_waj.cu 
     Kernels/dot_wabn_wban.cu 
+    Kernels/vKKwij_to_vwKiKj.cu 
     ${GITREV_TMP}
     )
 

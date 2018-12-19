@@ -37,6 +37,11 @@ __global__ void kernel_uninitialized_fill_n(int N, T* x, T const a)
    __syncthreads();
 }
 
+void uninitialized_fill_n(bool * first, int N, bool const value)
+{
+  kernel_uninitialized_fill_n<<<1,256>>>(N,first,value);
+}
+
 void uninitialized_fill_n(int * first, int N, int const value)
 { 
   kernel_uninitialized_fill_n<<<1,256>>>(N,first,value);

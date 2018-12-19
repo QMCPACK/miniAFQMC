@@ -23,6 +23,7 @@
 namespace kernels 
 {
 
+void uninitialized_fill_n(bool * first, int N, bool const value);
 void uninitialized_fill_n(int * first, int N, int const value);
 void uninitialized_fill_n(float * first, int N,  float const value);
 void uninitialized_fill_n(double * first, int N,  double const value);
