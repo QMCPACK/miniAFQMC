@@ -16,8 +16,6 @@
 #define AFQMC_DETERMINANT_KERNELS_HPP
 
 #include<cassert>
-#include<cuda.h>
-#include<cuda_runtime.h>
 #include <complex>
 
 namespace kernels 

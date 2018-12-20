@@ -37,7 +37,7 @@
 #include "io/hdf_archive.h"
 
 #include "AFQMC/afqmc_sys_batched.hpp"
-#include "Matrix/initialize_serial.hpp"
+#include "Matrix/initialize_serial_batched.hpp"
 #include "Matrix/peek.hpp"
 #include "AFQMC/KP3IndexFactorization_batched.hpp"
 #include "AFQMC/mixed_density_matrix.hpp"

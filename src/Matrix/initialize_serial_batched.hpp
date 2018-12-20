@@ -28,6 +28,7 @@
 #include "Matrix/hdfcsr2ma.hpp"
 #include "Numerics/ma_blas.hpp"
 #include "Utilities/kp_utilities.hpp"
+#include "Utilities/rotate_padded.hpp"
 #include "Utilities/rotate.hpp"
 
 //#include "AFQMC/KP3IndexFactorization.hpp"
@@ -196,6 +197,9 @@ inline HOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, ComplexM
     else // Q > kminus[Q]
       LQKikn.emplace_back( devSpMatrix({1,1}, dev_spalloc) );
 
+  for( auto& v: LQKikn ) fill_n(v.origin(),v.num_elements(),SPComplexType(0.0));
+
+
   ComplexMatrix<stdAlloc> H1_local({nkpts,nmo_max*nmo_max});
   ComplexMatrix<stdAlloc> vn0_local({nkpts,nmo_max*nmo_max});
   {
@@ -211,7 +215,7 @@ inline HOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, ComplexM
       }
       cuda::copy_n(vn0_local.origin(),vn0_local.num_elements(),vn0.origin());
     }
-    devSpMatrix L_;
+    devSpMatrix L_({1,1}, dev_spalloc);
     for(int Q=0; Q<nkpts; Q++) {
       if(Q > kminus[Q]) continue;
       if(!dump.read(L_,std::string("L")+std::to_string(Q))) {
@@ -220,24 +224,26 @@ inline HOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, ComplexM
       }
       int nchol = nchol_per_kp[Q];  
       if(Q < kminus[Q] || Q==Q0) {  
+        assert(L_.shape()[0] == nkpts);
         Sp4Tensor_ref L2(LQKikn[Q].origin(),{nkpts,nmo_max,nmo_max,nchol_max});
         for(int K=0; K<nkpts; ++K) {        // K is the index of the kpoint pair of (i,k)
-          int QK = QKToK2[Q][K];
+          int QK = QKtok2[Q][K];
           int ni = nmo_per_kp[K];
           int nk = nmo_per_kp[QK];
-          Sp3Tensor_ref L1(L_.origin(),{ni,nk,nchol});
+          SpTensor_ref L1(L_[K].origin(),{ni,nk,nchol});
           for(int i=0; i<ni; i++)
             for(int k=0; k<nk; k++)
               copy_n(L1[i][k].origin(),nchol,L2[K][i][k].origin());
         } 
       } else {
+        assert(L_.shape()[0] == nkpts/2);
         Sp4Tensor_ref L2(LQKikn[Q].origin(),{nkpts/2,nmo_max,nmo_max,nchol_max});
         for(int K_=0; K_<nkpts/2; ++K_) {        // K is the index of the kpoint pair of (i,k)
           // find the (K,QK) pair on symmetric list
           int cnt(0);
           int K=-1;
           for(int q=0; q<nkpts; q++)
-            if(q < QKToK2[Q][q]) {
+            if(q < QKtok2[Q][q]) {
               if(cnt==K_) {
                 K=q;
                 break;
@@ -246,10 +252,10 @@ inline HOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, ComplexM
             }
           if(K<0)
             APP_ABORT(" Error: Problems with QK mapping.\n");
-          int QK = QKToK2[Q][K];
-          int ni = nopk[K];
-          int nk = nopk[QK];
-          Sp3Tensor_ref L1(L_.origin(),{ni,nk,nchol});
+          int QK = QKtok2[Q][K];
+          int ni = nmo_per_kp[K];
+          int nk = nmo_per_kp[QK];
+          SpTensor_ref L1(L_[K_].origin(),{ni,nk,nchol});
           for(int i=0; i<ni; i++)
             for(int k=0; k<nk; k++)
               copy_n(L1[i][k].origin(),nchol,L2[K_][i][k].origin());
@@ -323,14 +329,20 @@ inline HOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, ComplexM
         LQKank.emplace_back(devSpMatrix({nkpts,ank_max},dev_spalloc));
       }
     }
-  for(int Q=0; Q<(nkpts+1); Q++) {
-    for(int K=0; K<nkpts; K++) {
-      cuda::fill_n(LQKank[Q][K].origin(),LQKank[Q][K].num_elements(),SPComplexType(0.0));
-      if(type==COLLINEAR) {
-        cuda::fill_n(LQKank[nkpts+1+Q][K].origin(),LQKank[nkpts+1+Q][K].num_elements(),SPComplexType(0.0));
+  for( auto& v: LQKank ) fill_n(v.origin(),v.num_elements(),SPComplexType(0.0)); 
+
+  std::vector<devSpMatrix> LQKakn;
+  LQKakn.reserve(ndet*nspins*(nkpts+1));  
+    for(int Q=0; Q<(nkpts+1); Q++) {
+      LQKakn.emplace_back(devSpMatrix({nkpts,ank_max},dev_spalloc));
+    }
+    if(type==COLLINEAR) {
+      for(int Q=0; Q<(nkpts+1); Q++) {
+        LQKakn.emplace_back(devSpMatrix({nkpts,ank_max},dev_spalloc));
       }
     }
-  }
+  for( auto& v: LQKakn ) fill_n(v.origin(),v.num_elements(),SPComplexType(0.0)); 
+
   SPComplexMatrix<SpAlloc> buff({nmo_max,nchol_max},spalloc);
   double scl(2.0);
   if(type==COLLINEAR) scl=1.0;
@@ -384,13 +396,22 @@ inline HOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, ComplexM
               for(int K_=0; K_<K; K_++)
                 if(K_ < QKtok2[Q][K_]) kpos++;
             }
-            SpTensor_ref Likn(LQKikn[Q][kpos].origin(),{ni,nk,nchol});
+            SpTensor_ref Likn(LQKikn[Q][kpos].origin(),{nmo_max,nmo_max,nchol_max});
+
             SpTensor_ref Lank(LQKank[Q][K].origin(),{na,nchol,nk});
-            ma_rotate::getLank(spPsi,Likn,Lank,buff);
+            ma_rotate_padded::getLank(spPsi,Likn,Lank,buff);
             if(Q==Q0) {
               assert(K==QK);
               SpTensor_ref Lank(LQKank[nkpts][K].origin(),{na,nchol,nk});
-              ma_rotate::getLank_from_Lkin(spPsi,Likn,Lank,buff);
+              ma_rotate_padded::getLank_from_Lkin(spPsi,Likn,Lank,buff);
+            }
+
+            SpTensor_ref Lakn(LQKakn[Q][K].origin(),{nocc_max,nmo_max,nchol_max});
+            ma_rotate_padded::getLakn(spPsi,Likn,Lakn,buff);
+            if(Q==Q0) {
+              assert(K==QK);
+              SpTensor_ref Lakn(LQKakn[nkpts][K].origin(),{nocc_max,nmo_max,nchol_max});
+              ma_rotate_padded::getLakn_from_Lkin(spPsi,Likn,Lakn,buff);
             }
           } else {
             int kpos = QK;
@@ -399,9 +420,11 @@ inline HOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, ComplexM
               for(int K_=0; K_<QK; K_++)
                 if(K_ < QKtok2[Q][K_]) kpos++;
             }
-            SpTensor_ref Lkin(LQKikn[Qm][QK].origin(),{nk,ni,nchol});
+            SpTensor_ref Lkin(LQKikn[Qm][QK].origin(),{nmo_max,nmo_max,nchol_max});
             SpTensor_ref Lank(LQKank[Q][K].origin(),{na,nchol,nk});
-            ma_rotate::getLank_from_Lkin(spPsi,Lkin,Lank,buff);
+            ma_rotate_padded::getLank_from_Lkin(spPsi,Lkin,Lank,buff);
+            SpTensor_ref Lakn(LQKakn[Q][K].origin(),{nocc_max,nmo_max,nchol_max});
+            ma_rotate_padded::getLakn_from_Lkin(spPsi,Lkin,Lakn,buff);
           }
         }
         { // Beta 
@@ -412,14 +435,24 @@ inline HOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, ComplexM
               for(int K_=0; K_<K; K_++)
                 if(K_ < QKtok2[Q][K_]) kpos++;
             }
-            SpTensor_ref Likn(LQKikn[Q][kpos].origin(),{ni,nk,nchol});
+            SpTensor_ref Likn(LQKikn[Q][kpos].origin(),{nmo_max,nmo_max,nchol_max});
+
             SpTensor_ref Lank(LQKank[nkpts+1+Q][K].origin(),{nb,nchol,nk});
-            ma_rotate::getLank(spPsib,Likn,Lank,buff);
+            ma_rotate_padded::getLank(spPsib,Likn,Lank,buff);
             if(Q==Q0) {
               assert(K==QK);
               SpTensor_ref Lank(LQKank[nkpts+1+nkpts][K].origin(),{nb,nchol,nk});
-              ma_rotate::getLank_from_Lkin(spPsib,Likn,Lank,buff);
+              ma_rotate_padded::getLank_from_Lkin(spPsib,Likn,Lank,buff);
             }
+
+            SpTensor_ref Lakn(LQKakn[nkpts+1+Q][K].origin(),{nocc_max,nmo_max,nchol_max});
+            ma_rotate_padded::getLakn(spPsib,Likn,Lakn,buff);
+            if(Q==Q0) {
+              assert(K==QK);
+              SpTensor_ref Lakn(LQKakn[nkpts+1+nkpts][K].origin(),{nocc_max,nmo_max,nchol_max});
+              ma_rotate_padded::getLakn_from_Lkin(spPsib,Likn,Lakn,buff);
+            }
+
           } else {
             int kpos = QK;
             if( Q==Qm ) { //find position in symmetric list  
@@ -427,9 +460,11 @@ inline HOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, ComplexM
               for(int K_=0; K_<QK; K_++)
                 if(K_ < QKtok2[Q][K_]) kpos++;
             }
-            SpTensor_ref Lkin(LQKikn[Qm][QK].origin(),{nk,ni,nchol});
+            SpTensor_ref Lkin(LQKikn[Qm][QK].origin(),{nmo_max,nmo_max,nchol_max});
             SpTensor_ref Lank(LQKank[nkpts+1+Q][K].origin(),{nb,nchol,nk});
-            ma_rotate::getLank_from_Lkin(spPsib,Lkin,Lank,buff);
+            ma_rotate_padded::getLank_from_Lkin(spPsib,Lkin,Lank,buff);
+            SpTensor_ref Lakn(LQKakn[nkpts+1+Q][K].origin(),{nocc_max,nmo_max,nchol_max});
+            ma_rotate_padded::getLakn_from_Lkin(spPsib,Lkin,Lakn,buff);
           }
         }
       } else {
@@ -440,14 +475,24 @@ inline HOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, ComplexM
             for(int K_=0; K_<K; K_++)
               if(K_ < QKtok2[Q][K_]) kpos++;
           }
-          SpTensor_ref Likn(LQKikn[Q][kpos].origin(),{ni,nk,nchol});
+          SpTensor_ref Likn(LQKikn[Q][kpos].origin(),{nmo_max,nmo_max,nchol_max});
+
           SpTensor_ref Lank(LQKank[Q][K].origin(),{na,nchol,nk});
-          ma_rotate::getLank(spPsi,Likn,Lank,buff);
+          ma_rotate_padded::getLank(spPsi,Likn,Lank,buff);
           if(Q==Q0) {
             assert(K==QK);
             SpTensor_ref Lank(LQKank[nkpts][K].origin(),{na,nchol,nk});
-            ma_rotate::getLank_from_Lkin(spPsi,Likn,Lank,buff);
+            ma_rotate_padded::getLank_from_Lkin(spPsi,Likn,Lank,buff);
           }
+
+          SpTensor_ref Lakn(LQKakn[Q][K].origin(),{nocc_max,nmo_max,nchol_max});
+          ma_rotate_padded::getLakn(spPsi,Likn,Lakn,buff);
+          if(Q==Q0) {
+            assert(K==QK);
+            SpTensor_ref Lakn(LQKakn[nkpts][K].origin(),{nocc_max,nmo_max,nchol_max});
+            ma_rotate_padded::getLakn_from_Lkin(spPsi,Likn,Lakn,buff);
+          }
+
         } else {
           int kpos = QK;
           if( Q==Qm ) { //find position in symmetric list  
@@ -455,9 +500,11 @@ inline HOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, ComplexM
             for(int K_=0; K_<QK; K_++)
               if(K_ < QKtok2[Q][K_]) kpos++;
           }
-          SpTensor_ref Lkin(LQKikn[Qm][kpos].origin(),{nk,ni,nchol});
+          SpTensor_ref Lkin(LQKikn[Qm][kpos].origin(),{nmo_max,nmo_max,nchol_max});
           SpTensor_ref Lank(LQKank[Q][K].origin(),{na,nchol,nk});
-          ma_rotate::getLank_from_Lkin(spPsi,Lkin,Lank,buff);
+          ma_rotate_padded::getLank_from_Lkin(spPsi,Lkin,Lank,buff);
+          SpTensor_ref Lakn(LQKakn[Q][K].origin(),{nocc_max,nmo_max,nchol_max});
+          ma_rotate_padded::getLakn_from_Lkin(spPsi,Lkin,Lakn,buff);
         }
       }
     }
@@ -490,65 +537,8 @@ inline HOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, ComplexM
   return HOps(type,std::move(nmo_per_kp),
             std::move(nchol_per_kp),std::move(kminus),std::move(nocc_per_kp),
             std::move(QKtok2),std::move(H1),std::move(haj),std::move(LQKikn),
-            std::move(LQKank),std::move(vn0),std::move(gQ),nsampleQ,E0,
+            std::move(LQKank),std::move(LQKakn),std::move(vn0),std::move(gQ),nsampleQ,E0,
             alloc,alloc,global_ncvecs);
-
-/*
-  // half-rotated Pia
-  // simple
-  using ma::H;
-  using ma::T;
-  // cPua = H(Piu) * conj(A)
-#ifdef MIXED_PRECISION
-  SPComplexMatrix<SpAlloc> psiA({NMO,NAEA},spc_alloc );
-  cuda::copy_n_cast(sys.trialwfn_alpha.origin(),sys.trialwfn_alpha.num_elements(),psiA.origin());
-  ma::product(H(Piu),psiA,cPua( cPua.extension(0), {0,NAEA} ));
-  ma::product(H(rotPiu),psiA,rotcPua( rotcPua.extension(0), {0,NAEA} )); 
-  if(sys.walker_type == COLLINEAR) {
-    SPComplexMatrix<SpAlloc> psiB({NMO,NAEB},spc_alloc );
-    cuda::copy_n_cast(sys.trialwfn_beta.origin(),sys.trialwfn_beta.num_elements(),psiB.origin());
-    ma::product(H(Piu),psiB,cPua( cPua.extension(0), {NAEA,NAEA+NAEB} ));
-    ma::product(H(rotPiu),psiB,rotcPua( rotcPua.extension(0), {NAEA,NAEA+NAEB} ));
-  }
-#else 
-  ma::product(H(Piu),sys.trialwfn_alpha,cPua( cPua.extension(0), {0,NAEA} ));
-  ma::product(H(rotPiu),sys.trialwfn_alpha,rotcPua( rotcPua.extension(0), {0,NAEA} )); 
-  if(sys.walker_type == COLLINEAR) {
-    ma::product(H(Piu),sys.trialwfn_beta,cPua( cPua.extension(0), {NAEA,NAEA+NAEB} ));
-    ma::product(H(rotPiu),sys.trialwfn_beta,rotcPua( rotcPua.extension(0), {NAEA,NAEA+NAEB} ));
-  }
-#endif
-
-  // rotated 1 body hamiltonians
-  ComplexMatrix<Alloc> haj( {NEL,NMO}, alloc );      // rotated 1-Body Hamiltonian Matrix
-  ComplexType a = (sys.walker_type==CLOSED)?ComplexType(2.0):ComplexType(1.0);
-  ma::product(a, T(sys.trialwfn_alpha),H1,ComplexType(0.0),haj( {0, NAEA}, haj.extension(1)));
-  if(sys.walker_type == COLLINEAR) 
-    ma::product(T(sys.trialwfn_beta),H1,haj( {NAEA, NAEA+NAEB}, haj.extension(1))); 
-
-  // Hack for gpu
-  // This step must be done on the CPU right now
-  // this will not work with GPU memory!!! Need to call a routine!
-// implement ma::conjugate_transpose(A) using geam on the GPU  
-  ComplexMatrix<stdAlloc> buff( {NMO,NMO}, stdAlloc{});
-  cuda::copy_n(H1.origin(),H1.num_elements(),buff.origin());
-  ComplexMatrix<stdAlloc> v0( {NMO,NMO}, stdAlloc{} );
-  for(int i=0; i<NMO; i++) {
-   buff[i][i] = -0.5*dt*(buff[i][i] + v0[i][i]);
-   for(int j=i+1; j<NMO; j++) {
-     using std::conj;
-     buff[i][j] += v0[i][j];
-     buff[j][i] += v0[j][i];
-     buff[i][j] = -0.5*dt*(0.5*(buff[i][j]+conj(buff[j][i])));
-     buff[j][i] = conj(buff[i][j]);
-   }
-  }
-  v0 = ma::exp(buff);
-  //Propg1.reextent( {NMO,NMO} );
-  // need specialized copy routine
-  using std::copy_n;
-  cuda::copy_n(v0.origin(),v0.num_elements(),Propg1.origin());
-*/
 
 } 
 
