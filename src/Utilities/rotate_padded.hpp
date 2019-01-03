@@ -34,8 +34,7 @@ namespace afqmc
 namespace ma_rotate_padded
 {
 
-// Likn is padded to nmo_max and nchol_max
-// Lank is not padded
+// Likn and Lank are padded to nmo_max and nchol_max
 template< class MultiArray2DA, class MultiArray3DB, class MultiArray3DC, class MultiArray2D>
 void getLank(MultiArray2DA&& Aia, MultiArray3DB&& Likn, 
                                 MultiArray3DC&& Lank, MultiArray2D && buff)  
@@ -43,19 +42,15 @@ void getLank(MultiArray2DA&& Aia, MultiArray3DB&& Likn,
   int na = Aia.shape()[1];
   int ni = Aia.shape()[0];
 
-  assert(Lank.shape()[0]==na);
-  int nchol = Lank.shape()[1];
-  int nk = Lank.shape()[2];
-
-  int nmo,nchol_max;
-/*
-  int nmo =  Likn.shape()[0]; 
-  int nchol_max =  Likn.shape()[2]; 
+  int nmo =  Likn.shape()[0];
+  int nchol =  Likn.shape()[2];
   assert(Likn.shape()[1]==nmo);
 
+  assert(Lank.shape()[1]==nchol);
+  assert(Lank.shape()[2]==nmo);
+
   assert(buff.shape()[0] >= nmo);
-  assert(buff.shape()[1] >= nchol_max);
-*/
+  assert(buff.shape()[1] >= nchol);
 
   // later on check that all element types are consistent!!!
   using ptrB = typename std::decay<MultiArray3DB>::type::element_ptr;
@@ -68,36 +63,14 @@ void getLank(MultiArray2DA&& Aia, MultiArray3DB&& Likn,
   using elm2 = typename std::decay<MultiArray2D>::type::element;
 
 
-  using Alloc = typename std::decay<MultiArray2D>::type::allocator_type;
-  boost::multi::array<elm2,3,Alloc> Likn_({ni,nk,nchol},Alloc(buff.get_allocator()));
-  for(int i=0; i<ni; i++)
-    for(int k=0; k<nk; k++)
-      cuda::copy_n(Likn[i][k].origin(),nchol,Likn_[i][k].origin());
+  boost::multi::array_ref<elmB,2,ptrB> Li_kn(Likn.origin(),{ni,nmo*nchol});      
+  boost::multi::array_ref<elm2,1,ptr2> buff1D(buff.origin(),{nmo*nchol});
+  boost::multi::array_ref<elm2,2,ptr2> buff2D(buff.origin(),{nmo,nchol});
 
-  boost::multi::array_ref<elmB,2,ptrB> Li_kn_(Likn_.origin(),{ni,nk*nchol});
-  boost::multi::array_ref<elmC,2,ptrC> La_kn(Lank.origin(),{na,nk*nchol});
-
-  ma::product(ma::T(Aia),Li_kn_,La_kn);
   for(int a=0; a<na; a++) {
-    boost::multi::array_ref<elmC,2,ptrC> Lkn(Lank[a].origin(),{nk,nchol});
-    boost::multi::array_ref<elmC,2,ptrC> Lnk(Lank[a].origin(),{nchol,nk});
-    for(int k=0; k<nk; k++)
-      cuda::copy_n(Lkn[k].origin(),nchol,buff[k].origin());
-    ma::transpose(buff({0,nk},{0,nchol}),Lnk);
-  }
-  return;
-
-  boost::multi::array_ref<elmB,2,ptrB> Li_kn(Likn.origin(),{ni,nmo*nchol_max});      
-  boost::multi::array_ref<elm2,1,ptr2> buff1D(buff.origin(),{nmo*nchol_max});
-  boost::multi::array_ref<elm2,2,ptr2> buff2D(buff.origin(),{nmo,nchol_max});
-
-  boost::multi::array<elm2,2,Alloc> Aai({na,ni},Alloc(buff.get_allocator()));
-  ma::transpose(Aia,Aai);
-  for(int a=0; a<na; a++) {
-    ma::product(ma::T(Li_kn),Aai[a],buff1D);
-    //ma::product(ma::T(Li_kn),Aia({0,ni},{a,a+1}),buff1D);
-    boost::multi::array_ref<elmC,2,ptrC> Lnk(Lank[a].origin(),{nchol,nk});
-    ma::transpose(buff2D({0,nk},{0,nchol}),Lank[a]);
+    ma::product(ma::T(Li_kn),Aia({0,ni},a),buff1D);
+    boost::multi::array_ref<elmC,2,ptrC> Lnk(Lank[a].origin(),{nchol,nmo});
+    ma::transpose(buff2D({0,nmo},{0,nchol}),Lank[a]);
   }
 }
 
@@ -110,15 +83,14 @@ void getLank_from_Lkin(MultiArray2DA&& Aia, MultiArray3DB&& Lkin,
   int na = Aia.shape()[1];
   int ni = Aia.shape()[0];
 
-  assert(Lank.shape()[0]==na);
-  int nchol = Lank.shape()[1];
-  int nk = Lank.shape()[2];
-
   int nmo =  Lkin.shape()[0];
-  int nchol_max =  Lkin.shape()[2];
+  int nchol =  Lkin.shape()[2];
   assert(Lkin.shape()[1]==nmo);
 
-  assert(buff.num_elements() >= na*nchol_max);
+  assert(Lank.shape()[1]==nchol);
+  assert(Lank.shape()[2]==nmo);
+
+  assert(buff.num_elements() >= na*nchol);
 
   using ptrB = typename std::decay<MultiArray3DB>::type::element_ptr;
   using elmB = typename std::decay<MultiArray3DB>::type::element;
@@ -129,9 +101,9 @@ void getLank_from_Lkin(MultiArray2DA&& Aia, MultiArray3DB&& Lkin,
   using ptr2 = typename std::decay<MultiArray2D>::type::element_ptr;
   using elm2 = typename std::decay<MultiArray2D>::type::element;
 
-  boost::multi::array_ref<elm2,2,ptr2> bna(buff.origin(),{nchol_max,na});      
+  boost::multi::array_ref<elm2,2,ptr2> bna(buff.origin(),{nchol,na});      
   // Lank[a][n][k] = sum_i Aia[i][a] conj(Lkin[k][i][n])
-  for(int k=0; k<nk; k++) {
+  for(int k=0; k<nmo; k++) {
     ma::product(ma::H(Lkin[k].sliced(0,ni)),Aia,bna);
     for(int n=0; n<nchol; n++) {
       using BLAS_CPU::copy;

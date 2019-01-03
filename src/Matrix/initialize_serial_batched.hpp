@@ -378,13 +378,13 @@ inline HOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, ComplexM
       assert(Psi.shape()[1] == na);
       assert(Psib.shape()[1] == nb);
       if(Q==0) {
-        ComplexMatrix_ref<pointer> haj_r(haj[K].origin(),{na,ni});
+        ComplexMatrix_ref<pointer> haj_r(haj[K].origin(),{nocc_max,nmo_max});
         ma::product(ComplexType(scl),ma::T(Psi),H1[K]({0,ni},{0,ni}),
-                    ComplexType(0.0),haj_r);
+                    ComplexType(0.0),haj_r({0,na},{0,ni}));
         if(type==COLLINEAR) {
-          ComplexMatrix_ref<pointer> haj_r(haj[K].origin()+na*ni,{nb,ni});
+          ComplexMatrix_ref<pointer> haj_r(haj[K].origin()+nocc_max*nmo_max,{nocc_max,nmo_max});
           ma::product(ComplexType(scl),ma::T(Psib),H1[K]({0,ni},{0,ni}),
-                    ComplexType(0.0),haj_r);
+                    ComplexType(0.0),haj_r({0,nb},{0,ni}));
         }
       }
       if(type==COLLINEAR) {
@@ -398,11 +398,11 @@ inline HOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, ComplexM
             }
             SpTensor_ref Likn(LQKikn[Q][kpos].origin(),{nmo_max,nmo_max,nchol_max});
 
-            SpTensor_ref Lank(LQKank[Q][K].origin(),{na,nchol,nk});
+            SpTensor_ref Lank(LQKank[Q][K].origin(),{nocc_max,nchol_max,nmo_max});
             ma_rotate_padded::getLank(spPsi,Likn,Lank,buff);
             if(Q==Q0) {
               assert(K==QK);
-              SpTensor_ref Lank(LQKank[nkpts][K].origin(),{na,nchol,nk});
+              SpTensor_ref Lank(LQKank[nkpts][K].origin(),{nocc_max,nchol_max,nmo_max});
               ma_rotate_padded::getLank_from_Lkin(spPsi,Likn,Lank,buff);
             }
 
@@ -421,7 +421,7 @@ inline HOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, ComplexM
                 if(K_ < QKtok2[Q][K_]) kpos++;
             }
             SpTensor_ref Lkin(LQKikn[Qm][QK].origin(),{nmo_max,nmo_max,nchol_max});
-            SpTensor_ref Lank(LQKank[Q][K].origin(),{na,nchol,nk});
+            SpTensor_ref Lank(LQKank[Q][K].origin(),{nocc_max,nchol_max,nmo_max});
             ma_rotate_padded::getLank_from_Lkin(spPsi,Lkin,Lank,buff);
             SpTensor_ref Lakn(LQKakn[Q][K].origin(),{nocc_max,nmo_max,nchol_max});
             ma_rotate_padded::getLakn_from_Lkin(spPsi,Lkin,Lakn,buff);
@@ -477,11 +477,11 @@ inline HOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, ComplexM
           }
           SpTensor_ref Likn(LQKikn[Q][kpos].origin(),{nmo_max,nmo_max,nchol_max});
 
-          SpTensor_ref Lank(LQKank[Q][K].origin(),{na,nchol,nk});
+          SpTensor_ref Lank(LQKank[Q][K].origin(),{nocc_max,nchol_max,nmo_max});
           ma_rotate_padded::getLank(spPsi,Likn,Lank,buff);
           if(Q==Q0) {
             assert(K==QK);
-            SpTensor_ref Lank(LQKank[nkpts][K].origin(),{na,nchol,nk});
+            SpTensor_ref Lank(LQKank[nkpts][K].origin(),{nocc_max,nchol_max,nmo_max});
             ma_rotate_padded::getLank_from_Lkin(spPsi,Likn,Lank,buff);
           }
 
@@ -501,7 +501,7 @@ inline HOps Initialize(hdf_archive& dump, const double dt, af_sys& sys, ComplexM
               if(K_ < QKtok2[Q][K_]) kpos++;
           }
           SpTensor_ref Lkin(LQKikn[Qm][kpos].origin(),{nmo_max,nmo_max,nchol_max});
-          SpTensor_ref Lank(LQKank[Q][K].origin(),{na,nchol,nk});
+          SpTensor_ref Lank(LQKank[Q][K].origin(),{nocc_max,nchol_max,nmo_max});
           ma_rotate_padded::getLank_from_Lkin(spPsi,Lkin,Lank,buff);
           SpTensor_ref Lakn(LQKakn[Q][K].origin(),{nocc_max,nmo_max,nchol_max});
           ma_rotate_padded::getLakn_from_Lkin(spPsi,Lkin,Lakn,buff);

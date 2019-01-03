@@ -141,6 +141,9 @@ ENDIF()
     Kernels/vKKwij_to_vwKiKj.cu 
     Kernels/KaKjw_to_QKajw.cu
     Kernels/vbias_from_v1.cu
+    Kernels/KaKjw_to_KKwaj.cu
+    Kernels/batched_dot_wabn_wban.cu
+    Kernels/batched_Tab_to_Klr.cu
     ${GITREV_TMP}
     )
 

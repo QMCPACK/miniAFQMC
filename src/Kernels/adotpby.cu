@@ -17,6 +17,8 @@
 #include<cuda.h>
 #include <thrust/complex.h>
 #include<cuda_runtime.h>
+#define QMC_CUDA 1
+#include "Numerics/detail/cuda_utilities.hpp"
 
 namespace kernels 
 {
@@ -87,6 +89,7 @@ void adotpby(int N, double const alpha, double const* x, int const incx,
                     double const beta, double* res) 
 {
   kernel_adotpby<<<1,256>>>(N,alpha,x,incx,y,incy,beta,res);
+  cuda::cuda_check(cudaDeviceSynchronize());
 }
 
 void adotpby(int N, std::complex<double> const alpha, 
@@ -100,6 +103,7 @@ void adotpby(int N, std::complex<double> const alpha,
                             reinterpret_cast<thrust::complex<double> const*>(y),incy,
                             static_cast<thrust::complex<double> const>(beta),
                             reinterpret_cast<thrust::complex<double> *>(res));
+  cuda::cuda_check(cudaDeviceSynchronize());
 }
 
 void adotpby(int N, float const alpha, float const* x, int const incx,
@@ -107,6 +111,7 @@ void adotpby(int N, float const alpha, float const* x, int const incx,
                     float const beta, float* res)
 {
   kernel_adotpby<<<1,256>>>(N,alpha,x,incx,y,incy,beta,res);
+  cuda::cuda_check(cudaDeviceSynchronize());
 }
 
 void adotpby(int N, std::complex<float> const alpha, 
@@ -120,6 +125,7 @@ void adotpby(int N, std::complex<float> const alpha,
                             reinterpret_cast<thrust::complex<float> const*>(y),incy,
                             static_cast<thrust::complex<float> const>(beta),
                             reinterpret_cast<thrust::complex<float> *>(res));
+  cuda::cuda_check(cudaDeviceSynchronize());
 }
 
 void adotpby(int N, float const alpha, float const* x, int const incx,
@@ -127,6 +133,7 @@ void adotpby(int N, float const alpha, float const* x, int const incx,
                     double const beta, double* res)
 {
   kernel_adotpby<<<1,256>>>(N,alpha,x,incx,y,incy,beta,res);
+  cuda::cuda_check(cudaDeviceSynchronize());
 }
 
 void adotpby(int N, std::complex<float> const alpha,
@@ -140,6 +147,7 @@ void adotpby(int N, std::complex<float> const alpha,
                             reinterpret_cast<thrust::complex<float> const*>(y),incy,
                             static_cast<thrust::complex<double> const>(beta),
                             reinterpret_cast<thrust::complex<double> *>(res));
+  cuda::cuda_check(cudaDeviceSynchronize());
 }
 
 }

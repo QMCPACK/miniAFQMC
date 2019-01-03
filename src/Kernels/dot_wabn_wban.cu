@@ -18,6 +18,8 @@
 #include <thrust/complex.h>
 #include<cuda_runtime.h>
 #include "Kernels/cuda_settings.h"
+#define QMC_CUDA 1
+#include "Numerics/detail/cuda_utilities.hpp"
 
 namespace kernels 
 {
@@ -92,6 +94,7 @@ void dot_wabn_wban( int nw, int na, int nb, int nc,
 {
   int n_=nw*na*nb;
   kernel_dot_wabn_wban<<<n_,DOT_BLOCK_SIZE>>>(nw,na,nb,nc,alpha,A,B,y,incy);
+  cuda::cuda_check(cudaDeviceSynchronize());
 }
 
 void dot_wabn_wban( int nw, int na, int nb, int nc,
@@ -99,6 +102,7 @@ void dot_wabn_wban( int nw, int na, int nb, int nc,
 {
   int n_=nw*na*nb;
   kernel_dot_wabn_wban<<<n_,DOT_BLOCK_SIZE>>>(nw,na,nb,nc,alpha,A,B,y,incy);
+  cuda::cuda_check(cudaDeviceSynchronize());
 }
 
 void dot_wabn_wban( int nw, int na, int nb, int nc,
@@ -111,6 +115,7 @@ void dot_wabn_wban( int nw, int na, int nb, int nc,
                                    reinterpret_cast<thrust::complex<double> const*>(A),
                                    reinterpret_cast<thrust::complex<double> const*>(B),
                                    reinterpret_cast<thrust::complex<double> *>(y),incy);
+  cuda::cuda_check(cudaDeviceSynchronize());
 }
 
 void dot_wabn_wban( int nw, int na, int nb, int nc,
@@ -123,6 +128,7 @@ void dot_wabn_wban( int nw, int na, int nb, int nc,
                                    reinterpret_cast<thrust::complex<float> const*>(A),
                                    reinterpret_cast<thrust::complex<float> const*>(B),
                                    reinterpret_cast<thrust::complex<double> *>(y),incy);
+  cuda::cuda_check(cudaDeviceSynchronize());
 }
 
 }

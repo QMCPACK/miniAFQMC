@@ -21,6 +21,9 @@
 
 #ifdef QMC_CUDA
 #include<cassert>
+#include<cstdlib>
+#include<iostream>
+#include<stdexcept>
 #include <cuda_runtime.h>
 #include "cublas_v2.h"
 #include "cublasXt.h"

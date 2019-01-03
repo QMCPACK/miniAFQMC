@@ -18,6 +18,8 @@
 #include <thrust/complex.h>
 #include <thrust/device_ptr.h>
 #include <thrust/fill.h>
+#define QMC_CUDA 1
+#include "Numerics/detail/cuda_utilities.hpp"
 //#include "Kernels/strided_range.hpp"
 
 namespace kernels 
